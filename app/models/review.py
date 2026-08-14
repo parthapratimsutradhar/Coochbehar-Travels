@@ -1,5 +1,3 @@
-# app/models/review.py
-
 import uuid
 from datetime import datetime
 
@@ -33,6 +31,12 @@ class Review(Base):
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
+    )
+    
+    review_code: Mapped[str] = mapped_column(
+        String(20),
+        unique=True,
+        index=True,
     )
 
     package_id: Mapped[uuid.UUID] = mapped_column(

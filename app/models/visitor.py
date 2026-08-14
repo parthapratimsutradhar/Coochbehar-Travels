@@ -1,9 +1,7 @@
-# app/models/visitor.py
-
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, func, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,11 +17,17 @@ class Visitor(Base):
         default=uuid.uuid4,
     )
 
+    visitor_code: Mapped[str] = mapped_column(
+        String(20),
+        unique=True,
+        index=True,
+    )
+
     fingerprint: Mapped[str | None] = mapped_column(
         String(255),
         unique=True,
-        nullable=True,
         index=True,
+        nullable=True,
     )
 
     ip_address: Mapped[str | None] = mapped_column(
@@ -57,7 +61,12 @@ class Visitor(Base):
     lead_score: Mapped[int] = mapped_column(
         Integer,
         default=0,
-        nullable=False,
+    )
+
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("leads.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     first_seen: Mapped[datetime] = mapped_column(
@@ -68,16 +77,16 @@ class Visitor(Base):
     last_seen: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-    )
-
-    lead_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("leads.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
+        onupdate=func.now(),
     )
 
     lead = relationship(
         "Lead",
         back_populates="visitors",
+    )
+
+    sessions = relationship(
+        "VisitorSession",
+        back_populates="visitor",
+        cascade="all, delete-orphan",
     )

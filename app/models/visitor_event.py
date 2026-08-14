@@ -1,10 +1,8 @@
-# app/models/visitor_event.py
-
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, JSON, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -19,37 +17,43 @@ class VisitorEvent(Base):
         default=uuid.uuid4,
     )
 
+    event_code: Mapped[str] = mapped_column(
+        String(20),
+        unique=True,
+        index=True,
+    )
+
     visitor_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("visitors.id", ondelete="CASCADE"),
-        nullable=False,
         index=True,
     )
 
     session_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("visitor_sessions.id", ondelete="CASCADE"),
-        nullable=False,
         index=True,
     )
 
     event_name: Mapped[str] = mapped_column(
         String(100),
-        nullable=False,
         index=True,
     )
 
     page: Mapped[str | None] = mapped_column(
         Text,
-        nullable=True,
     )
 
     event_metadata: Mapped[dict | None] = mapped_column(
         "metadata",
-        JSON,
+        JSONB,
         nullable=True,
     )
-
+    
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        index=True,
+    )
+
+    session = relationship(
+        "VisitorSession",
+        back_populates="events",
     )

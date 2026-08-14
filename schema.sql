@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict lZl2X9cTWUc1Tpj7wZjKnDxMLF1XY6xMp2iddUUoODWqh23DfS8V9XSoxIM6usW
+\restrict 4yRbprUsjvL7rnhCD2hx6qSS4drYR0M8F5Wulm0Du4uUPVXWZGSskd0djxKXdOQ
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -18,6 +18,45 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
+
+--
+-- Name: booking_status; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.booking_status AS ENUM (
+    'PENDING',
+    'CONFIRMED',
+    'CANCELLED',
+    'COMPLETED'
+);
+
+
+ALTER TYPE public.booking_status OWNER TO postgres;
+
+--
+-- Name: booking_type; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.booking_type AS ENUM (
+    'TOUR_PACKAGE',
+    'CUSTOM_TOUR',
+    'ROOM_BOOKING'
+);
+
+
+ALTER TYPE public.booking_type OWNER TO postgres;
+
+--
+-- Name: user_role; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.user_role AS ENUM (
+    'ADMIN',
+    'STAFF'
+);
+
+
+ALTER TYPE public.user_role OWNER TO postgres;
 
 SET default_tablespace = '';
 
@@ -35,20 +74,42 @@ CREATE TABLE public.alembic_version (
 ALTER TABLE public.alembic_version OWNER TO postgres;
 
 --
+-- Name: bookings; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.bookings (
+    id uuid NOT NULL,
+    booking_code character varying(20) NOT NULL,
+    customer_id uuid NOT NULL,
+    booking_type public.booking_type NOT NULL,
+    status public.booking_status NOT NULL,
+    total_amount numeric(12,2) NOT NULL,
+    remarks character varying(500),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.bookings OWNER TO postgres;
+
+--
 -- Name: custom_tour_requests; Type: TABLE; Schema: public; Owner: postgres
 --
 
 CREATE TABLE public.custom_tour_requests (
     id uuid NOT NULL,
+    request_code character varying(20) NOT NULL,
     visitor_id uuid,
     name character varying(100) NOT NULL,
     mobile character varying(20) NOT NULL,
     destination character varying(150) NOT NULL,
     travel_date date,
-    adults integer NOT NULL,
-    children integer NOT NULL,
-    budget numeric(10,2),
-    requirements text,
+    travel_duration character varying(50),
+    pax_no integer NOT NULL,
+    no_room integer NOT NULL,
+    vehicle_type character varying(50),
+    meal_plan character varying(50),
+    special_requirements text,
     status character varying(30) NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
@@ -58,19 +119,39 @@ CREATE TABLE public.custom_tour_requests (
 ALTER TABLE public.custom_tour_requests OWNER TO postgres;
 
 --
+-- Name: customers; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.customers (
+    id uuid NOT NULL,
+    customer_code character varying(20) NOT NULL,
+    lead_id uuid,
+    name character varying(100) NOT NULL,
+    mobile character varying(20),
+    email character varying(255),
+    address character varying(255),
+    emergency_contact_name character varying(100),
+    emergency_contact_mobile character varying(20),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.customers OWNER TO postgres;
+
+--
 -- Name: leads; Type: TABLE; Schema: public; Owner: postgres
 --
 
 CREATE TABLE public.leads (
     id uuid NOT NULL,
-    visitor_id uuid,
+    lead_code character varying(20) NOT NULL,
     full_name character varying(100) NOT NULL,
-    mobile character varying(20) NOT NULL,
+    mobile character varying(20),
     email character varying(255),
     whatsapp_opt_in boolean NOT NULL,
     lead_score integer NOT NULL,
     status character varying(30) NOT NULL,
-    assigned_to character varying(100),
     notes text,
     last_contacted_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -86,6 +167,7 @@ ALTER TABLE public.leads OWNER TO postgres;
 
 CREATE TABLE public.reviews (
     id uuid NOT NULL,
+    review_code character varying(20) NOT NULL,
     package_id uuid NOT NULL,
     visitor_id uuid,
     name character varying(100) NOT NULL,
@@ -105,18 +187,13 @@ ALTER TABLE public.reviews OWNER TO postgres;
 --
 
 CREATE TABLE public.room_bookings (
-    id uuid NOT NULL,
+    booking_id uuid NOT NULL,
+    room_booking_code character varying(20) NOT NULL,
     room_id uuid NOT NULL,
-    customer_name character varying(100) NOT NULL,
-    mobile character varying(20) NOT NULL,
     check_in date NOT NULL,
     check_out date NOT NULL,
     adults integer NOT NULL,
-    children integer NOT NULL,
-    total_amount numeric(10,2),
-    status character varying(30) NOT NULL,
-    notes text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    children integer NOT NULL
 );
 
 
@@ -128,75 +205,39 @@ ALTER TABLE public.room_bookings OWNER TO postgres;
 
 CREATE TABLE public.rooms (
     id uuid NOT NULL,
-    room_number character varying(50) NOT NULL,
-    room_type character varying(50) NOT NULL,
-    capacity integer NOT NULL,
+    room_code character varying(20),
+    room_number character varying(20),
+    room_type character varying(50),
+    capacity integer,
     price_per_night numeric(10,2),
-    is_available boolean NOT NULL,
     description text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    is_active boolean,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
 ALTER TABLE public.rooms OWNER TO postgres;
 
 --
--- Name: tour_departures; Type: TABLE; Schema: public; Owner: postgres
+-- Name: tour_details; Type: TABLE; Schema: public; Owner: postgres
 --
 
-CREATE TABLE public.tour_departures (
-    id uuid NOT NULL,
-    tour_package_id uuid NOT NULL,
-    departure_date date NOT NULL,
-    status character varying(30) NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+CREATE TABLE public.tour_details (
+    variant_id uuid NOT NULL,
+    tour_detail_code character varying(20) NOT NULL,
+    banner jsonb NOT NULL,
+    gallery jsonb NOT NULL,
+    highlights jsonb NOT NULL,
+    inclusions jsonb NOT NULL,
+    exclusions jsonb NOT NULL,
+    departures_dates jsonb NOT NULL,
+    itinerary jsonb NOT NULL,
+    route_stops jsonb NOT NULL
 );
 
 
-ALTER TABLE public.tour_departures OWNER TO postgres;
-
---
--- Name: tour_gallery; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.tour_gallery (
-    id uuid NOT NULL,
-    tour_package_id uuid NOT NULL,
-    image_url text NOT NULL,
-    sort_order integer NOT NULL
-);
-
-
-ALTER TABLE public.tour_gallery OWNER TO postgres;
-
---
--- Name: tour_highlights; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.tour_highlights (
-    id uuid NOT NULL,
-    tour_package_id uuid NOT NULL,
-    title character varying(255) NOT NULL,
-    sort_order integer NOT NULL
-);
-
-
-ALTER TABLE public.tour_highlights OWNER TO postgres;
-
---
--- Name: tour_itinerary_days; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.tour_itinerary_days (
-    id uuid NOT NULL,
-    tour_package_id uuid NOT NULL,
-    day_number integer NOT NULL,
-    title character varying(255) NOT NULL,
-    description text NOT NULL
-);
-
-
-ALTER TABLE public.tour_itinerary_days OWNER TO postgres;
+ALTER TABLE public.tour_details OWNER TO postgres;
 
 --
 -- Name: tour_packages; Type: TABLE; Schema: public; Owner: postgres
@@ -204,18 +245,14 @@ ALTER TABLE public.tour_itinerary_days OWNER TO postgres;
 
 CREATE TABLE public.tour_packages (
     id uuid NOT NULL,
-    title character varying(255) NOT NULL,
-    slug character varying(255) NOT NULL,
+    tour_code character varying(20) NOT NULL,
+    slug character varying(200) NOT NULL,
+    title character varying(200) NOT NULL,
     destination character varying(150) NOT NULL,
-    duration_days integer NOT NULL,
-    duration_nights integer NOT NULL,
-    price numeric(10,2) NOT NULL,
+    type character varying(20) NOT NULL,
     description text,
-    featured boolean NOT NULL,
+    is_featured boolean NOT NULL,
     is_active boolean NOT NULL,
-    code character varying(50) NOT NULL,
-    season character varying(100),
-    image text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -224,19 +261,29 @@ CREATE TABLE public.tour_packages (
 ALTER TABLE public.tour_packages OWNER TO postgres;
 
 --
--- Name: tour_route_stops; Type: TABLE; Schema: public; Owner: postgres
+-- Name: tour_variants; Type: TABLE; Schema: public; Owner: postgres
 --
 
-CREATE TABLE public.tour_route_stops (
+CREATE TABLE public.tour_variants (
     id uuid NOT NULL,
-    tour_package_id uuid NOT NULL,
-    location character varying(150) NOT NULL,
-    nights integer NOT NULL,
-    sort_order integer NOT NULL
+    package_id uuid NOT NULL,
+    variant_code character varying(30) NOT NULL,
+    name character varying(100) NOT NULL,
+    season_name character varying(100),
+    valid_from date NOT NULL,
+    valid_to date NOT NULL,
+    duration_days integer NOT NULL,
+    duration_nights integer NOT NULL,
+    base_price numeric(10,2) NOT NULL,
+    seats integer,
+    is_default boolean NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
-ALTER TABLE public.tour_route_stops OWNER TO postgres;
+ALTER TABLE public.tour_variants OWNER TO postgres;
 
 --
 -- Name: users; Type: TABLE; Schema: public; Owner: postgres
@@ -244,11 +291,16 @@ ALTER TABLE public.tour_route_stops OWNER TO postgres;
 
 CREATE TABLE public.users (
     id uuid NOT NULL,
+    user_code character varying(20) NOT NULL,
     name character varying(100) NOT NULL,
     email character varying(255) NOT NULL,
-    role character varying(30) NOT NULL,
+    mobile character varying(20) NOT NULL,
+    password_hash character varying(255) NOT NULL,
+    role public.user_role NOT NULL,
     is_active boolean NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    last_login timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -259,18 +311,12 @@ ALTER TABLE public.users OWNER TO postgres;
 --
 
 CREATE TABLE public.vehicle_bookings (
-    id uuid NOT NULL,
+    booking_id uuid NOT NULL,
     vehicle_id uuid NOT NULL,
-    customer_name character varying(100) NOT NULL,
-    mobile character varying(20) NOT NULL,
     start_date date NOT NULL,
     end_date date NOT NULL,
     adults integer NOT NULL,
-    children integer NOT NULL,
-    total_amount numeric(10,2),
-    status character varying(30) NOT NULL,
-    notes text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    children integer NOT NULL
 );
 
 
@@ -282,14 +328,14 @@ ALTER TABLE public.vehicle_bookings OWNER TO postgres;
 
 CREATE TABLE public.vehicles (
     id uuid NOT NULL,
+    vehicle_code character varying(20) NOT NULL,
     name character varying(100) NOT NULL,
-    vehicle_type character varying(50) NOT NULL,
-    registration_number character varying(50),
+    registration_number character varying(50) NOT NULL,
     capacity integer NOT NULL,
-    price_per_day numeric(10,2),
-    is_available boolean NOT NULL,
-    description text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    price_per_day numeric(10,2) NOT NULL,
+    is_active boolean NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -301,11 +347,12 @@ ALTER TABLE public.vehicles OWNER TO postgres;
 
 CREATE TABLE public.visitor_events (
     id uuid NOT NULL,
+    event_code character varying(20) NOT NULL,
     visitor_id uuid NOT NULL,
     session_id uuid NOT NULL,
     event_name character varying(100) NOT NULL,
     page text,
-    metadata json,
+    metadata jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
@@ -318,18 +365,19 @@ ALTER TABLE public.visitor_events OWNER TO postgres;
 
 CREATE TABLE public.visitor_sessions (
     id uuid NOT NULL,
+    session_code character varying(20) NOT NULL,
     visitor_id uuid NOT NULL,
-    started_at timestamp with time zone DEFAULT now() NOT NULL,
-    ended_at timestamp with time zone,
-    duration integer NOT NULL,
     landing_page text,
     exit_page text,
-    page_views integer NOT NULL,
     referrer text,
     utm_source character varying(100),
     utm_medium character varying(100),
     utm_campaign character varying(100),
-    utm_term character varying(100)
+    utm_term character varying(100),
+    page_views integer NOT NULL,
+    duration_seconds integer NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    ended_at timestamp with time zone
 );
 
 
@@ -341,6 +389,7 @@ ALTER TABLE public.visitor_sessions OWNER TO postgres;
 
 CREATE TABLE public.visitors (
     id uuid NOT NULL,
+    visitor_code character varying(20) NOT NULL,
     fingerprint character varying(255),
     ip_address character varying(45),
     country character varying(100),
@@ -350,6 +399,7 @@ CREATE TABLE public.visitors (
     os character varying(100),
     device character varying(100),
     lead_score integer NOT NULL,
+    lead_id uuid,
     first_seen timestamp with time zone DEFAULT now() NOT NULL,
     last_seen timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -366,11 +416,27 @@ ALTER TABLE ONLY public.alembic_version
 
 
 --
+-- Name: bookings bookings_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.bookings
+    ADD CONSTRAINT bookings_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: custom_tour_requests custom_tour_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.custom_tour_requests
     ADD CONSTRAINT custom_tour_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: customers customers_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.customers
+    ADD CONSTRAINT customers_pkey PRIMARY KEY (id);
 
 
 --
@@ -394,7 +460,7 @@ ALTER TABLE ONLY public.reviews
 --
 
 ALTER TABLE ONLY public.room_bookings
-    ADD CONSTRAINT room_bookings_pkey PRIMARY KEY (id);
+    ADD CONSTRAINT room_bookings_pkey PRIMARY KEY (booking_id);
 
 
 --
@@ -414,35 +480,11 @@ ALTER TABLE ONLY public.rooms
 
 
 --
--- Name: tour_departures tour_departures_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: tour_details tour_details_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.tour_departures
-    ADD CONSTRAINT tour_departures_pkey PRIMARY KEY (id);
-
-
---
--- Name: tour_gallery tour_gallery_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.tour_gallery
-    ADD CONSTRAINT tour_gallery_pkey PRIMARY KEY (id);
-
-
---
--- Name: tour_highlights tour_highlights_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.tour_highlights
-    ADD CONSTRAINT tour_highlights_pkey PRIMARY KEY (id);
-
-
---
--- Name: tour_itinerary_days tour_itinerary_days_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.tour_itinerary_days
-    ADD CONSTRAINT tour_itinerary_days_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.tour_details
+    ADD CONSTRAINT tour_details_pkey PRIMARY KEY (variant_id);
 
 
 --
@@ -454,11 +496,11 @@ ALTER TABLE ONLY public.tour_packages
 
 
 --
--- Name: tour_route_stops tour_route_stops_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: tour_variants tour_variants_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.tour_route_stops
-    ADD CONSTRAINT tour_route_stops_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.tour_variants
+    ADD CONSTRAINT tour_variants_pkey PRIMARY KEY (id);
 
 
 --
@@ -474,7 +516,7 @@ ALTER TABLE ONLY public.users
 --
 
 ALTER TABLE ONLY public.vehicle_bookings
-    ADD CONSTRAINT vehicle_bookings_pkey PRIMARY KEY (id);
+    ADD CONSTRAINT vehicle_bookings_pkey PRIMARY KEY (booking_id);
 
 
 --
@@ -518,17 +560,38 @@ ALTER TABLE ONLY public.visitors
 
 
 --
--- Name: ix_custom_tour_requests_status; Type: INDEX; Schema: public; Owner: postgres
+-- Name: ix_bookings_booking_code; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX ix_custom_tour_requests_status ON public.custom_tour_requests USING btree (status);
+CREATE UNIQUE INDEX ix_bookings_booking_code ON public.bookings USING btree (booking_code);
 
 
 --
--- Name: ix_custom_tour_requests_visitor_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: ix_bookings_customer_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX ix_custom_tour_requests_visitor_id ON public.custom_tour_requests USING btree (visitor_id);
+CREATE INDEX ix_bookings_customer_id ON public.bookings USING btree (customer_id);
+
+
+--
+-- Name: ix_custom_tour_requests_request_code; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX ix_custom_tour_requests_request_code ON public.custom_tour_requests USING btree (request_code);
+
+
+--
+-- Name: ix_customers_customer_code; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX ix_customers_customer_code ON public.customers USING btree (customer_code);
+
+
+--
+-- Name: ix_customers_lead_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX ix_customers_lead_id ON public.customers USING btree (lead_id);
 
 
 --
@@ -536,6 +599,13 @@ CREATE INDEX ix_custom_tour_requests_visitor_id ON public.custom_tour_requests U
 --
 
 CREATE INDEX ix_leads_email ON public.leads USING btree (email);
+
+
+--
+-- Name: ix_leads_lead_code; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX ix_leads_lead_code ON public.leads USING btree (lead_code);
 
 
 --
@@ -553,17 +623,17 @@ CREATE INDEX ix_leads_status ON public.leads USING btree (status);
 
 
 --
--- Name: ix_leads_visitor_id; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX ix_leads_visitor_id ON public.leads USING btree (visitor_id);
-
-
---
 -- Name: ix_reviews_package_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX ix_reviews_package_id ON public.reviews USING btree (package_id);
+
+
+--
+-- Name: ix_reviews_review_code; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX ix_reviews_review_code ON public.reviews USING btree (review_code);
 
 
 --
@@ -574,59 +644,31 @@ CREATE INDEX ix_reviews_visitor_id ON public.reviews USING btree (visitor_id);
 
 
 --
--- Name: ix_room_bookings_room_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: ix_room_bookings_room_booking_code; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX ix_room_bookings_room_id ON public.room_bookings USING btree (room_id);
-
-
---
--- Name: ix_room_bookings_status; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX ix_room_bookings_status ON public.room_bookings USING btree (status);
+CREATE UNIQUE INDEX ix_room_bookings_room_booking_code ON public.room_bookings USING btree (room_booking_code);
 
 
 --
--- Name: ix_tour_departures_departure_date; Type: INDEX; Schema: public; Owner: postgres
+-- Name: ix_rooms_room_code; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX ix_tour_departures_departure_date ON public.tour_departures USING btree (departure_date);
-
-
---
--- Name: ix_tour_departures_tour_package_id; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX ix_tour_departures_tour_package_id ON public.tour_departures USING btree (tour_package_id);
+CREATE UNIQUE INDEX ix_rooms_room_code ON public.rooms USING btree (room_code);
 
 
 --
--- Name: ix_tour_gallery_tour_package_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: ix_tour_details_tour_detail_code; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX ix_tour_gallery_tour_package_id ON public.tour_gallery USING btree (tour_package_id);
-
-
---
--- Name: ix_tour_highlights_tour_package_id; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX ix_tour_highlights_tour_package_id ON public.tour_highlights USING btree (tour_package_id);
+CREATE UNIQUE INDEX ix_tour_details_tour_detail_code ON public.tour_details USING btree (tour_detail_code);
 
 
 --
--- Name: ix_tour_itinerary_days_tour_package_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: ix_tour_packages_destination; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX ix_tour_itinerary_days_tour_package_id ON public.tour_itinerary_days USING btree (tour_package_id);
-
-
---
--- Name: ix_tour_packages_code; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX ix_tour_packages_code ON public.tour_packages USING btree (code);
+CREATE INDEX ix_tour_packages_destination ON public.tour_packages USING btree (destination);
 
 
 --
@@ -637,10 +679,24 @@ CREATE UNIQUE INDEX ix_tour_packages_slug ON public.tour_packages USING btree (s
 
 
 --
--- Name: ix_tour_route_stops_tour_package_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: ix_tour_packages_tour_code; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX ix_tour_route_stops_tour_package_id ON public.tour_route_stops USING btree (tour_package_id);
+CREATE UNIQUE INDEX ix_tour_packages_tour_code ON public.tour_packages USING btree (tour_code);
+
+
+--
+-- Name: ix_tour_variants_package_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX ix_tour_variants_package_id ON public.tour_variants USING btree (package_id);
+
+
+--
+-- Name: ix_tour_variants_variant_code; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX ix_tour_variants_variant_code ON public.tour_variants USING btree (variant_code);
 
 
 --
@@ -651,24 +707,31 @@ CREATE UNIQUE INDEX ix_users_email ON public.users USING btree (email);
 
 
 --
--- Name: ix_vehicle_bookings_status; Type: INDEX; Schema: public; Owner: postgres
+-- Name: ix_users_mobile; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX ix_vehicle_bookings_status ON public.vehicle_bookings USING btree (status);
-
-
---
--- Name: ix_vehicle_bookings_vehicle_id; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX ix_vehicle_bookings_vehicle_id ON public.vehicle_bookings USING btree (vehicle_id);
+CREATE UNIQUE INDEX ix_users_mobile ON public.users USING btree (mobile);
 
 
 --
--- Name: ix_visitor_events_created_at; Type: INDEX; Schema: public; Owner: postgres
+-- Name: ix_users_user_code; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX ix_visitor_events_created_at ON public.visitor_events USING btree (created_at);
+CREATE UNIQUE INDEX ix_users_user_code ON public.users USING btree (user_code);
+
+
+--
+-- Name: ix_vehicles_vehicle_code; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX ix_vehicles_vehicle_code ON public.vehicles USING btree (vehicle_code);
+
+
+--
+-- Name: ix_visitor_events_event_code; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX ix_visitor_events_event_code ON public.visitor_events USING btree (event_code);
 
 
 --
@@ -693,10 +756,10 @@ CREATE INDEX ix_visitor_events_visitor_id ON public.visitor_events USING btree (
 
 
 --
--- Name: ix_visitor_sessions_started_at; Type: INDEX; Schema: public; Owner: postgres
+-- Name: ix_visitor_sessions_session_code; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX ix_visitor_sessions_started_at ON public.visitor_sessions USING btree (started_at);
+CREATE UNIQUE INDEX ix_visitor_sessions_session_code ON public.visitor_sessions USING btree (session_code);
 
 
 --
@@ -714,6 +777,28 @@ CREATE UNIQUE INDEX ix_visitors_fingerprint ON public.visitors USING btree (fing
 
 
 --
+-- Name: ix_visitors_lead_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX ix_visitors_lead_id ON public.visitors USING btree (lead_id);
+
+
+--
+-- Name: ix_visitors_visitor_code; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX ix_visitors_visitor_code ON public.visitors USING btree (visitor_code);
+
+
+--
+-- Name: bookings bookings_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.bookings
+    ADD CONSTRAINT bookings_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id);
+
+
+--
 -- Name: custom_tour_requests custom_tour_requests_visitor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -722,11 +807,11 @@ ALTER TABLE ONLY public.custom_tour_requests
 
 
 --
--- Name: leads leads_visitor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: customers customers_lead_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.leads
-    ADD CONSTRAINT leads_visitor_id_fkey FOREIGN KEY (visitor_id) REFERENCES public.visitors(id) ON DELETE SET NULL;
+ALTER TABLE ONLY public.customers
+    ADD CONSTRAINT customers_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES public.leads(id) ON DELETE RESTRICT;
 
 
 --
@@ -746,51 +831,43 @@ ALTER TABLE ONLY public.reviews
 
 
 --
+-- Name: room_bookings room_bookings_booking_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.room_bookings
+    ADD CONSTRAINT room_bookings_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id) ON DELETE CASCADE;
+
+
+--
 -- Name: room_bookings room_bookings_room_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.room_bookings
-    ADD CONSTRAINT room_bookings_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id) ON DELETE RESTRICT;
+    ADD CONSTRAINT room_bookings_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id);
 
 
 --
--- Name: tour_departures tour_departures_tour_package_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: tour_details tour_details_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.tour_departures
-    ADD CONSTRAINT tour_departures_tour_package_id_fkey FOREIGN KEY (tour_package_id) REFERENCES public.tour_packages(id) ON DELETE CASCADE;
-
-
---
--- Name: tour_gallery tour_gallery_tour_package_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.tour_gallery
-    ADD CONSTRAINT tour_gallery_tour_package_id_fkey FOREIGN KEY (tour_package_id) REFERENCES public.tour_packages(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.tour_details
+    ADD CONSTRAINT tour_details_variant_id_fkey FOREIGN KEY (variant_id) REFERENCES public.tour_variants(id) ON DELETE CASCADE;
 
 
 --
--- Name: tour_highlights tour_highlights_tour_package_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: tour_variants tour_variants_package_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.tour_highlights
-    ADD CONSTRAINT tour_highlights_tour_package_id_fkey FOREIGN KEY (tour_package_id) REFERENCES public.tour_packages(id) ON DELETE CASCADE;
-
-
---
--- Name: tour_itinerary_days tour_itinerary_days_tour_package_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.tour_itinerary_days
-    ADD CONSTRAINT tour_itinerary_days_tour_package_id_fkey FOREIGN KEY (tour_package_id) REFERENCES public.tour_packages(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.tour_variants
+    ADD CONSTRAINT tour_variants_package_id_fkey FOREIGN KEY (package_id) REFERENCES public.tour_packages(id) ON DELETE CASCADE;
 
 
 --
--- Name: tour_route_stops tour_route_stops_tour_package_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: vehicle_bookings vehicle_bookings_booking_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.tour_route_stops
-    ADD CONSTRAINT tour_route_stops_tour_package_id_fkey FOREIGN KEY (tour_package_id) REFERENCES public.tour_packages(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.vehicle_bookings
+    ADD CONSTRAINT vehicle_bookings_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id) ON DELETE CASCADE;
 
 
 --
@@ -798,7 +875,7 @@ ALTER TABLE ONLY public.tour_route_stops
 --
 
 ALTER TABLE ONLY public.vehicle_bookings
-    ADD CONSTRAINT vehicle_bookings_vehicle_id_fkey FOREIGN KEY (vehicle_id) REFERENCES public.vehicles(id) ON DELETE RESTRICT;
+    ADD CONSTRAINT vehicle_bookings_vehicle_id_fkey FOREIGN KEY (vehicle_id) REFERENCES public.vehicles(id);
 
 
 --
@@ -826,8 +903,16 @@ ALTER TABLE ONLY public.visitor_sessions
 
 
 --
+-- Name: visitors visitors_lead_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.visitors
+    ADD CONSTRAINT visitors_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES public.leads(id) ON DELETE SET NULL;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict lZl2X9cTWUc1Tpj7wZjKnDxMLF1XY6xMp2iddUUoODWqh23DfS8V9XSoxIM6usW
+\unrestrict 4yRbprUsjvL7rnhCD2hx6qSS4drYR0M8F5Wulm0Du4uUPVXWZGSskd0djxKXdOQ
 

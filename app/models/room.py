@@ -1,16 +1,14 @@
-# app/models/room.py
-
 import uuid
-from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+from app.models.mixins import TimestampMixin
 
 
-class Room(Base):
+class Room(Base, TimestampMixin):
     __tablename__ = "rooms"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -19,42 +17,34 @@ class Room(Base):
         default=uuid.uuid4,
     )
 
-    room_number: Mapped[str] = mapped_column(
-        String(50),
+    room_code = mapped_column(
+        String(20),
         unique=True,
-        nullable=False,
+        index=True,
     )
 
-    room_type: Mapped[str] = mapped_column(
+    room_number = mapped_column(
+        String(20),
+        unique=True,
+    )
+
+    room_type = mapped_column(
         String(50),
-        nullable=False,
     )
 
-    capacity: Mapped[int] = mapped_column(
+    capacity = mapped_column(
         Integer,
-        default=2,
-        nullable=False,
     )
 
-    price_per_night: Mapped[float | None] = mapped_column(
-        Numeric(10, 2),
-        nullable=True,
+    price_per_night = mapped_column(
+        Numeric(10,2),
     )
 
-    is_available: Mapped[bool] = mapped_column(
+    description = mapped_column(Text)
+
+    is_active = mapped_column(
         Boolean,
         default=True,
-        nullable=False,
-    )
-
-    description: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
     )
 
     bookings = relationship(

@@ -1,22 +1,12 @@
-# app/models/custom_tour_request.py
-
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import (
-    Date,
-    DateTime,
-    ForeignKey,
-    Integer,
-    Numeric,
-    String,
-    Text,
-    func,
-)
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
+from app.core.enums import MealPlan, VehicleType
 
 
 class CustomTourRequest(Base):
@@ -28,59 +18,52 @@ class CustomTourRequest(Base):
         default=uuid.uuid4,
     )
 
-    visitor_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("visitors.id", ondelete="SET NULL"),
-        nullable=True,
+    request_code: Mapped[str] = mapped_column(
+        String(20),
+        unique=True,
         index=True,
     )
 
-    name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-    )
-
-    mobile: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-    )
-
-    destination: Mapped[str] = mapped_column(
-        String(150),
-        nullable=False,
-    )
-
-    travel_date: Mapped[date | None] = mapped_column(
-        Date,
+    visitor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("visitors.id", ondelete="SET NULL"),
         nullable=True,
     )
 
-    adults: Mapped[int] = mapped_column(
+    name: Mapped[str] = mapped_column(String(100))
+
+    mobile: Mapped[str] = mapped_column(String(20))
+
+    destination: Mapped[str] = mapped_column(String(150))
+
+    travel_date: Mapped[date | None] = mapped_column(Date)
+    
+    travel_duration: Mapped[str | None] = mapped_column(String(50))
+
+    pax_no: Mapped[int] = mapped_column(
         Integer,
-        default=1,
-        nullable=False,
+        default=4,
     )
 
-    children: Mapped[int] = mapped_column(
+    no_room: Mapped[int] = mapped_column(
         Integer,
-        default=0,
-        nullable=False,
+        default=2,
+    )
+    
+    vehicle_type: Mapped[VehicleType | None] = mapped_column(
+        String(50),
+        default=VehicleType.SIX_SEATER,
     )
 
-    budget: Mapped[float | None] = mapped_column(
-        Numeric(10, 2),
-        nullable=True,
+    meal_plan: Mapped[MealPlan | None] = mapped_column(
+        String(50),
+        default=MealPlan.MAP,
     )
 
-    requirements: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
+    special_requirements: Mapped[str | None] = mapped_column(Text)
 
     status: Mapped[str] = mapped_column(
         String(30),
         default="NEW",
-        nullable=False,
-        index=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(

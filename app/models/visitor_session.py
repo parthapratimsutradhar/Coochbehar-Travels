@@ -1,5 +1,3 @@
-# app/models/visitor_session.py
-
 import uuid
 from datetime import datetime
 
@@ -19,16 +17,58 @@ class VisitorSession(Base):
         default=uuid.uuid4,
     )
 
+    session_code: Mapped[str] = mapped_column(
+        String(20),
+        unique=True,
+        index=True,
+    )
+
     visitor_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("visitors.id", ondelete="CASCADE"),
-        nullable=False,
         index=True,
+    )
+
+    landing_page: Mapped[str | None] = mapped_column(
+        Text,
+    )
+
+    exit_page: Mapped[str | None] = mapped_column(
+        Text,
+    )
+
+    referrer: Mapped[str | None] = mapped_column(
+        Text,
+    )
+
+    utm_source: Mapped[str | None] = mapped_column(
+        String(100),
+    )
+
+    utm_medium: Mapped[str | None] = mapped_column(
+        String(100),
+    )
+
+    utm_campaign: Mapped[str | None] = mapped_column(
+        String(100),
+    )
+
+    utm_term: Mapped[str | None] = mapped_column(
+        String(100),
+    )
+
+    page_views: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+    )
+
+    duration_seconds: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
     )
 
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        index=True,
     )
 
     ended_at: Mapped[datetime | None] = mapped_column(
@@ -36,30 +76,13 @@ class VisitorSession(Base):
         nullable=True,
     )
 
-    duration: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        nullable=False,
+    visitor = relationship(
+        "Visitor",
+        back_populates="sessions",
     )
 
-    landing_page: Mapped[str | None] = mapped_column(Text)
-
-    exit_page: Mapped[str | None] = mapped_column(Text)
-
-    page_views: Mapped[int] = mapped_column(
-        Integer,
-        default=1,
-        nullable=False,
+    events = relationship(
+        "VisitorEvent",
+        back_populates="session",
+        cascade="all, delete-orphan",
     )
-
-    referrer: Mapped[str | None] = mapped_column(Text)
-
-    utm_source: Mapped[str | None] = mapped_column(String(100))
-
-    utm_medium: Mapped[str | None] = mapped_column(String(100))
-
-    utm_campaign: Mapped[str | None] = mapped_column(String(100))
-
-    utm_term: Mapped[str | None] = mapped_column(String(100))
-
-    visitor = relationship("Visitor")
