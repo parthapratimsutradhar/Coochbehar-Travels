@@ -70,12 +70,43 @@ class TourVariant(Base, TimestampMixin):
     )
 
     base_price: Mapped[float] = mapped_column(
-        Numeric(10,2),
+        Numeric(10, 2),
         nullable=False,
     )
 
     seats: Mapped[int | None] = mapped_column(
         Integer,
+    )
+
+    key: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    display_order: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        default=1,
+    )
+
+    badge: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    season_type: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    currency: Mapped[str | None] = mapped_column(
+        String(10),
+        default="INR",
+    )
+
+    availability: Mapped[str | None] = mapped_column(
+        String(20),
+        default="AVAILABLE",
     )
 
     is_default: Mapped[bool] = mapped_column(

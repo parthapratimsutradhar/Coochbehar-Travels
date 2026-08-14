@@ -78,3 +78,8 @@ class Lead(Base):
         "Visitor",
         back_populates="lead",
     )
+
+    customer = relationship(
+        "Customer",
+        back_populates="lead"
+    )

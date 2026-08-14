@@ -78,4 +78,5 @@ class TourPackage(Base, TimestampMixin):
     reviews = relationship(
         "Review",
         back_populates="tour_package",
+        cascade="all, delete-orphan",
     )

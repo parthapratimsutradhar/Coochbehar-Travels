@@ -45,8 +45,8 @@ class Review(Base):
         index=True,
     )
 
-    visitor_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("visitors.id", ondelete="SET NULL"),
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -86,4 +86,8 @@ class Review(Base):
     tour_package = relationship(
         "TourPackage",
         back_populates="reviews",
+    )
+
+    customer = relationship(
+        "Customer",
     )

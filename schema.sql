@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 4yRbprUsjvL7rnhCD2hx6qSS4drYR0M8F5Wulm0Du4uUPVXWZGSskd0djxKXdOQ
+\restrict gvwHsYoxLAe4amVmHWnMbTt3z5Rhap7qSosCAPvGv1f7crVmoRAJV7vKeY0IHAS
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -169,13 +169,13 @@ CREATE TABLE public.reviews (
     id uuid NOT NULL,
     review_code character varying(20) NOT NULL,
     package_id uuid NOT NULL,
-    visitor_id uuid,
     name character varying(100) NOT NULL,
     rating integer NOT NULL,
     review text NOT NULL,
     is_verified boolean NOT NULL,
     is_published boolean NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    customer_id uuid,
     CONSTRAINT ck_reviews_rating CHECK (((rating >= 1) AND (rating <= 5)))
 );
 
@@ -279,7 +279,13 @@ CREATE TABLE public.tour_variants (
     is_default boolean NOT NULL,
     is_active boolean NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    key character varying(50),
+    display_order integer,
+    badge character varying(50),
+    season_type character varying(50),
+    currency character varying(10) DEFAULT 'INR'::character varying,
+    availability character varying(20) DEFAULT 'AVAILABLE'::character varying
 );
 
 
@@ -623,6 +629,13 @@ CREATE INDEX ix_leads_status ON public.leads USING btree (status);
 
 
 --
+-- Name: ix_reviews_customer_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX ix_reviews_customer_id ON public.reviews USING btree (customer_id);
+
+
+--
 -- Name: ix_reviews_package_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -634,13 +647,6 @@ CREATE INDEX ix_reviews_package_id ON public.reviews USING btree (package_id);
 --
 
 CREATE UNIQUE INDEX ix_reviews_review_code ON public.reviews USING btree (review_code);
-
-
---
--- Name: ix_reviews_visitor_id; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX ix_reviews_visitor_id ON public.reviews USING btree (visitor_id);
 
 
 --
@@ -815,19 +821,19 @@ ALTER TABLE ONLY public.customers
 
 
 --
+-- Name: reviews reviews_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.reviews
+    ADD CONSTRAINT reviews_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id) ON DELETE SET NULL;
+
+
+--
 -- Name: reviews reviews_package_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.reviews
     ADD CONSTRAINT reviews_package_id_fkey FOREIGN KEY (package_id) REFERENCES public.tour_packages(id) ON DELETE CASCADE;
-
-
---
--- Name: reviews reviews_visitor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.reviews
-    ADD CONSTRAINT reviews_visitor_id_fkey FOREIGN KEY (visitor_id) REFERENCES public.visitors(id) ON DELETE SET NULL;
 
 
 --
@@ -914,5 +920,5 @@ ALTER TABLE ONLY public.visitors
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 4yRbprUsjvL7rnhCD2hx6qSS4drYR0M8F5Wulm0Du4uUPVXWZGSskd0djxKXdOQ
+\unrestrict gvwHsYoxLAe4amVmHWnMbTt3z5Rhap7qSosCAPvGv1f7crVmoRAJV7vKeY0IHAS
 

@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from scalar_fastapi import get_scalar_api_reference
 
+from app.api.v1.enduser.tour_packages import router as tour_packages_router
+
 app = FastAPI(
     title="Coochbehar Travels API",
     description="Tour Marketing, Visitor Analytics & Lead Generation System",
@@ -8,6 +10,9 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
 )
+
+# ── API v1 routers ───────────────────────────────────────────────────
+app.include_router(tour_packages_router, prefix="/api/v1")
 
 
 @app.get("/", tags=["Health"])
