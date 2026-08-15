@@ -6,7 +6,7 @@ from alembic import context
 
 from app.core.config import settings
 import app.models  # Ensures all models are registered with Base.metadata
-from app.models.base import Base
+from app.models.base import *
 from app.db.database import engine
 
 # this is the Alembic Config object, which provides

@@ -5,17 +5,11 @@ from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base
+from app.models.base import UUIDEntity
 
 
-class VisitorEvent(Base):
+class VisitorEvent(UUIDEntity):
     __tablename__ = "visitor_events"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
 
     event_code: Mapped[str] = mapped_column(
         String(20),
@@ -51,6 +45,11 @@ class VisitorEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
+    )
+
+    visitor = relationship(
+        "Visitor",
+        back_populates="events",
     )
 
     session = relationship(

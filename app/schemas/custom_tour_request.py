@@ -1,0 +1,36 @@
+from datetime import date, datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class CustomTourRequestBase(BaseModel):
+    name: str = Field(..., max_length=100)
+    mobile: str = Field(..., max_length=20)
+    destination: str = Field(..., max_length=150)
+    travel_date: date | None = None
+    travel_duration: str | None = Field(default=None, max_length=50)
+    pax_no: int = Field(default=4, ge=1)
+    no_room: int = Field(default=2, ge=1)
+    vehicle_type: str | None = Field(default=None, max_length=50)
+    meal_plan: str | None = Field(default=None, max_length=50)
+    special_requirements: str | None = None
+
+
+class CustomTourRequestCreate(CustomTourRequestBase):
+    enquiry_id: UUID | None = None
+    visitor_id: UUID | None = None
+    customer_id: UUID | None = None
+
+
+class CustomTourRequestResponse(CustomTourRequestBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    request_code: str
+    enquiry_id: UUID | None
+    visitor_id: UUID | None
+    customer_id: UUID | None
+    status: str
+    created_at: datetime
+    updated_at: datetime

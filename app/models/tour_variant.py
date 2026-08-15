@@ -1,5 +1,4 @@
 import uuid
-
 from sqlalchemy import Boolean
 from sqlalchemy import Date
 from sqlalchemy import ForeignKey
@@ -10,19 +9,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
-
-from app.models.base import Base
-from app.models.mixins import TimestampMixin
+from app.models.base import ActiveEntity
 
 
-class TourVariant(Base, TimestampMixin):
+class TourVariant(ActiveEntity):
     __tablename__ = "tour_variants"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
 
     package_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey(
@@ -114,11 +105,6 @@ class TourVariant(Base, TimestampMixin):
         default=False,
     )
 
-    is_active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
-    )
-
     package = relationship(
         "TourPackage",
         back_populates="variants",
@@ -129,4 +115,9 @@ class TourVariant(Base, TimestampMixin):
         back_populates="variant",
         uselist=False,
         cascade="all, delete-orphan",
+    )
+
+    enquiries = relationship(
+        "Enquiry",
+        back_populates="variant",
     )

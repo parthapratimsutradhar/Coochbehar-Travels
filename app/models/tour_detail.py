@@ -7,10 +7,10 @@ from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
 
-from app.models.base import Base
+from app.models.base import UUIDEntity
 
 
-class TourDetail(Base):
+class TourDetail(UUIDEntity):
     __tablename__ = "tour_details"
 
     variant_id: Mapped[uuid.UUID] = mapped_column(

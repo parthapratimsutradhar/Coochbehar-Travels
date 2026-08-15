@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime
-
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -13,11 +12,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.models.base import BaseEntity
 
-from app.models.base import Base
 
-
-class Review(Base):
+class Review(BaseEntity):
     __tablename__ = "reviews"
 
     __table_args__ = (
@@ -27,11 +25,6 @@ class Review(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
     
     review_code: Mapped[str] = mapped_column(
         String(20),
@@ -78,11 +71,6 @@ class Review(Base):
         nullable=False,
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-    )
-
     tour_package = relationship(
         "TourPackage",
         back_populates="reviews",
@@ -90,4 +78,5 @@ class Review(Base):
 
     customer = relationship(
         "Customer",
+        back_populates="reviews",
     )

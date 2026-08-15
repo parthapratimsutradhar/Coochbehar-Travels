@@ -1,23 +1,13 @@
 import uuid
-
 from sqlalchemy import Boolean, Enum, String, DateTime
-
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
-
 from app.core.enums import UserRole
-from app.models.base import Base
-from app.models.mixins import TimestampMixin
+from app.models.base import ActiveEntity
 
 
-class User(Base, TimestampMixin):
+class User(ActiveEntity):
     __tablename__ = "users"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        primary_key=True,
-        default=uuid.uuid4,
-    )
 
     user_code: Mapped[str] = mapped_column(
         String(20),
@@ -45,24 +35,18 @@ class User(Base, TimestampMixin):
         nullable=False,
     )
 
-    password_hash: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-    )
-
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role"),
         default=UserRole.ADMIN,
-        nullable=False,
-    )
-
-    is_active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
         nullable=False,
     )
     
     last_login: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+
+    lead_activities = relationship(
+        "LeadActivity",
+        back_populates="user",
     )

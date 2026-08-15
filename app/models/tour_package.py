@@ -1,23 +1,14 @@
 import string
 import uuid
-
 from sqlalchemy import Boolean, Enum, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from app.core.enums import TourType
-from app.models.base import Base
-from app.models.mixins import TimestampMixin
+from app.models.base import ActiveEntity
 
 
-class TourPackage(Base, TimestampMixin):
+class TourPackage(ActiveEntity):
     __tablename__ = "tour_packages"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
 
     tour_code: Mapped[str] = mapped_column(
         String(20),
@@ -64,11 +55,6 @@ class TourPackage(Base, TimestampMixin):
         default=False,
     )
 
-    is_active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
-    )
-
     variants = relationship(
         "TourVariant",
         back_populates="package",
@@ -79,4 +65,9 @@ class TourPackage(Base, TimestampMixin):
         "Review",
         back_populates="tour_package",
         cascade="all, delete-orphan",
+    )
+
+    enquiries = relationship(
+        "Enquiry",
+        back_populates="package",
     )

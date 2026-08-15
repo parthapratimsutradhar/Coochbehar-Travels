@@ -1,23 +1,13 @@
 import uuid
-
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import Boolean, Enum, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
-
-from app.models.base import Base
-from app.models.mixins import TimestampMixin
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.core.enums import LeadSource
+from app.models.base import BaseEntity
 
 
-class Customer(Base, TimestampMixin):
+class Customer(BaseEntity):
     __tablename__ = "customers"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
 
     customer_code: Mapped[str] = mapped_column(
         String(20),
@@ -26,26 +16,21 @@ class Customer(Base, TimestampMixin):
         nullable=False,
     )
 
-    lead_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("leads.id", ondelete="RESTRICT"),
-        unique=True,
-        nullable=True,
-        index=True,
-    )
-    
     name: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
     )
-    
+
     mobile: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
+        index=True,
     )
-    
+
     email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
+        index=True,
     )
 
     address: Mapped[str | None] = mapped_column(
@@ -63,8 +48,19 @@ class Customer(Base, TimestampMixin):
         nullable=True,
     )
 
-    lead = relationship(
-        "Lead",
-        back_populates="customer",
-        uselist=False,
+    source: Mapped[LeadSource] = mapped_column(
+        Enum(LeadSource, name="lead_source"),
+        nullable=False,
+        default=LeadSource.WEBSITE,
     )
+
+    is_imported: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    visitors = relationship("Visitor", back_populates="customer")
+    enquiries = relationship("Enquiry", back_populates="customer")
+    leads = relationship("Lead", back_populates="customer")
+    reviews = relationship("Review", back_populates="customer")
