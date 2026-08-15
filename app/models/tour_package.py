@@ -1,7 +1,4 @@
-import string
-import uuid
 from sqlalchemy import Boolean, Enum, String, Text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.enums import TourType
 from app.models.base import ActiveEntity

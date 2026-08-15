@@ -13,6 +13,7 @@ class CustomerBase(BaseModel):
     address: str | None = Field(default=None, max_length=255)
     emergency_contact_name: str | None = Field(default=None, max_length=100)
     emergency_contact_mobile: str | None = Field(default=None, max_length=20)
+    profile_pic: str | None = Field(default=None, max_length=500, description="Customer avatar image URL")
     source: LeadSource = LeadSource.WEBSITE
     is_imported: bool = False
 
@@ -28,6 +29,7 @@ class CustomerUpdate(BaseModel):
     address: str | None = Field(default=None, max_length=255)
     emergency_contact_name: str | None = Field(default=None, max_length=100)
     emergency_contact_mobile: str | None = Field(default=None, max_length=20)
+    profile_pic: str | None = Field(default=None, max_length=500)
     source: LeadSource | None = None
     is_imported: bool | None = None
 

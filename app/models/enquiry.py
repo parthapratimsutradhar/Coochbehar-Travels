@@ -1,7 +1,6 @@
 import uuid
 from sqlalchemy import Enum, ForeignKey, String, Text, Date, Integer
 from datetime import date
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType
 from app.models.base import BaseEntity
@@ -79,14 +78,38 @@ class Enquiry(BaseEntity):
         nullable=True,
     )
 
-    destination: Mapped[str | None] = mapped_column(String(150), nullable=True)
-    travel_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    travel_duration: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    pax_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    no_room: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    vehicle_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    meal_plan: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    special_requirements: Mapped[str | None] = mapped_column(Text, nullable=True)
+    destination: Mapped[str | None] = mapped_column(
+        String(150),
+        nullable=True
+    )
+    travel_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True
+    )
+    travel_duration: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True
+    )
+    pax_no: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True
+    )
+    no_room: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True
+    )
+    vehicle_type: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True
+    )
+    meal_plan: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True
+        )
+    special_requirements: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True
+    )
 
     visitor = relationship("Visitor", back_populates="enquiries")
     customer = relationship("Customer", back_populates="enquiries")

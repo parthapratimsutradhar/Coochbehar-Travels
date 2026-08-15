@@ -1,15 +1,8 @@
 import uuid
-from sqlalchemy import Boolean
-from sqlalchemy import Date
-from sqlalchemy import ForeignKey
-from sqlalchemy import Integer
-from sqlalchemy import Numeric
-from sqlalchemy import String
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import ActiveEntity
+from decimal import Decimal
 
 
 class TourVariant(ActiveEntity):
@@ -60,7 +53,7 @@ class TourVariant(ActiveEntity):
         nullable=False,
     )
 
-    base_price: Mapped[float] = mapped_column(
+    base_price: Mapped[Decimal] = mapped_column(
         Numeric(10, 2),
         nullable=False,
     )

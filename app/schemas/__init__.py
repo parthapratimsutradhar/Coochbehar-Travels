@@ -1,5 +1,15 @@
-"""Pydantic schemas for request/response serialization."""
-
+from app.schemas.auth import (
+    AdminTokenResponse,
+    AuthSessionResponse,
+    CustomerTokenResponse,
+    GoogleAuthSchema,
+    MessageResponse,
+    OtpRequestResponse,
+    OtpRequestSchema,
+    OtpVerifySchema,
+    RefreshResponse,
+    UserResponse,
+)
 from app.schemas.custom_tour_request import (
     CustomTourRequestCreate,
     CustomTourRequestResponse,
@@ -13,6 +23,7 @@ from app.schemas.lead import (
     LeadResponse,
     LeadUpdate,
 )
+from app.schemas.upload import FileUploadResponse
 from app.schemas.visitor import (
     VisitorCreate,
     VisitorEventCreate,
@@ -23,6 +34,12 @@ from app.schemas.visitor import (
 )
 
 __all__ = [
+    "AuthSessionResponse",
+    "LoginRequest",
+    "MessageResponse",
+    "RefreshResponse",
+    "TokenResponse",
+    "UserResponse",
     "CustomTourRequestCreate",
     "CustomTourRequestResponse",
     "CustomerCreate",
@@ -36,6 +53,7 @@ __all__ = [
     "LeadCreate",
     "LeadResponse",
     "LeadUpdate",
+    "FileUploadResponse",
     "VisitorCreate",
     "VisitorEventCreate",
     "VisitorEventResponse",

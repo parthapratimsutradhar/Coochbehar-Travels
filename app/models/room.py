@@ -1,8 +1,7 @@
-import uuid
+
+from sqlalchemy import  Integer, String, Text, Numeric
 from decimal import Decimal
-from sqlalchemy import Boolean, Integer, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import ActiveEntity
 
 
@@ -30,7 +29,7 @@ class Room(ActiveEntity):
 
     price_per_night: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2),
+        nullable=True,
     )
 
     description: Mapped[str | None] = mapped_column(Text)
-

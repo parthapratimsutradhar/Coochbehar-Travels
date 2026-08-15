@@ -165,6 +165,7 @@ CREATE TABLE public.customers (
     address character varying(255),
     emergency_contact_name character varying(100),
     emergency_contact_mobile character varying(20),
+    profile_pic character varying(500),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     source public.lead_source NOT NULL,
@@ -470,12 +471,34 @@ CREATE TABLE public.users (
     role public.user_role NOT NULL,
     is_active boolean NOT NULL,
     last_login timestamp with time zone,
+    profile_pic character varying(500),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
 ALTER TABLE public.users OWNER TO postgres;
+
+--
+-- Name: auth_sessions; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.auth_sessions (
+    id uuid NOT NULL,
+    user_id uuid,
+    customer_id uuid,
+    actor_type character varying(20) DEFAULT 'USER'::character varying NOT NULL,
+    refresh_token_hash character varying(255) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_used_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    revoked_at timestamp with time zone,
+    user_agent character varying(500),
+    ip_address character varying(45)
+);
+
+
+ALTER TABLE public.auth_sessions OWNER TO postgres;
 
 --
 -- Name: vehicles; Type: TABLE; Schema: public; Owner: postgres
@@ -568,6 +591,14 @@ ALTER TABLE public.visitors OWNER TO postgres;
 
 ALTER TABLE ONLY public.alembic_version
     ADD CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num);
+
+
+--
+-- Name: auth_sessions auth_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.auth_sessions
+    ADD CONSTRAINT auth_sessions_pkey PRIMARY KEY (id);
 
 
 --

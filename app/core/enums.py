@@ -4,6 +4,10 @@ from enum import Enum
 class UserRole(str, Enum):
     ADMIN = "ADMIN"
     STAFF = "STAFF"
+    
+class ActorType(str, Enum):
+    USER = "USER"
+    CUSTOMER = "CUSTOMER"
 
 
 class LeadStatus(str, Enum):
@@ -73,3 +77,9 @@ class VehicleType(str, Enum):
     FOUR_SEATER = "4-seater"
     SIX_SEATER = "6-seater"
     TEMPO = "Tempo"
+
+
+class OauthPurpose(str, Enum):
+    ADMIN_LOGIN = "ADMIN_LOGIN"
+    CUSTOMER_LOGIN = "CUSTOMER_LOGIN"
+    CUSTOMER_LINK = "CUSTOMER_LINK"

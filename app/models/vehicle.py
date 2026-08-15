@@ -1,8 +1,7 @@
-import uuid
-from sqlalchemy import Boolean, Integer, Numeric, String
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Integer, Numeric, String
+from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import ActiveEntity
+from decimal import Decimal
 
 
 class Vehicle(ActiveEntity):
@@ -27,7 +26,7 @@ class Vehicle(ActiveEntity):
         Integer,
     )
 
-    price_per_day: Mapped[float] = mapped_column(
-        Numeric(10,2),
+    price_per_day: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2),
+        nullable=False,
     )
-

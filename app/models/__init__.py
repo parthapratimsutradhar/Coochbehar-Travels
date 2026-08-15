@@ -1,3 +1,4 @@
+from app.models.auth_session import AuthSession
 from app.models.base import UUIDEntity, BaseEntity, ActiveEntity
 from app.models.customer import Customer
 from app.models.enquiry import Enquiry
@@ -21,6 +22,7 @@ __all__ = [
     "UUIDEntity",
     "BaseEntity",
     "ActiveEntity",
+    "AuthSession",
     "Customer",
     "Enquiry",
     "GoogleOAuthState",

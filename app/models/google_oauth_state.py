@@ -1,9 +1,9 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import UUIDEntity
+from app.core.enums import OauthPurpose
 
 
 class GoogleOAuthState(UUIDEntity):
@@ -20,20 +20,18 @@ class GoogleOAuthState(UUIDEntity):
         String(255),
         unique=True,
         nullable=False,
-        index=True,
-        comment="Random CSRF state token",
+        index=True
     )
 
-    purpose: Mapped[str] = mapped_column(
-        String(30),
+    purpose: Mapped[OauthPurpose] = mapped_column(
+        Enum(OauthPurpose, name="oauth_purpose"),
         nullable=False,
-        comment="ADMIN_LOGIN, CUSTOMER_LOGIN, CUSTOMER_LINK",
+        default=OauthPurpose.CUSTOMER_LOGIN
     )
 
     redirect_uri: Mapped[str | None] = mapped_column(
         Text,
-        nullable=True,
-        comment="Where to redirect after auth",
+        nullable=True
     )
 
     visitor_id: Mapped[uuid.UUID | None] = mapped_column(

@@ -1,5 +1,4 @@
-import uuid
-from sqlalchemy import Boolean, Enum, String, DateTime
+from sqlalchemy import Enum, String, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from app.core.enums import UserRole
@@ -46,7 +45,18 @@ class User(ActiveEntity):
         nullable=True,
     )
 
+    profile_pic: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
     lead_activities = relationship(
         "LeadActivity",
         back_populates="user",
+    )
+
+    auth_sessions = relationship(
+        "AuthSession",
+        back_populates="user",
+        cascade="all, delete-orphan",
     )

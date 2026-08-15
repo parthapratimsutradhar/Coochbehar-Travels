@@ -1,11 +1,15 @@
 from fastapi import FastAPI
 from scalar_fastapi import get_scalar_api_reference
 
+from app.api.v1.admin.auth import router as admin_auth_router
 from app.api.v1.admin.enquiries import router as admin_enquiries_router
 from app.api.v1.admin.leads import router as admin_leads_router
+from app.api.v1.auth import router as auth_router
+from app.api.v1.enduser.auth import router as enduser_auth_router
 from app.api.v1.enduser.enquiries import router as enquiries_router
 from app.api.v1.enduser.tour_packages import router as tour_packages_router
 from app.api.v1.enduser.visitors import router as visitors_router
+from app.api.v1.uploads import router as uploads_router
 
 app = FastAPI(
     title="Coochbehar Travels API",
@@ -15,12 +19,16 @@ app = FastAPI(
     redoc_url=None,
 )
 
-# ── API v1 routers ───────────────────────────────────────────────────
+# ── API routers ───────────────────────────────────────────────────────
+app.include_router(auth_router)  # /auth/otp/request, /auth/otp/verify, /auth/refresh, etc.
+app.include_router(admin_auth_router, prefix="/api/v1")  # /api/v1/admin/auth/otp/*
+app.include_router(enduser_auth_router, prefix="/api/v1")  # /api/v1/enduser/auth/otp/*
 app.include_router(tour_packages_router, prefix="/api/v1")
 app.include_router(enquiries_router, prefix="/api/v1")
 app.include_router(visitors_router, prefix="/api/v1")
 app.include_router(admin_leads_router, prefix="/api/v1")
 app.include_router(admin_enquiries_router, prefix="/api/v1")
+app.include_router(uploads_router, prefix="/api/v1")
 
 
 

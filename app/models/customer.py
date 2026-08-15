@@ -1,6 +1,4 @@
-import uuid
 from sqlalchemy import Boolean, Enum, String
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.enums import LeadSource
 from app.models.base import BaseEntity
@@ -48,6 +46,11 @@ class Customer(BaseEntity):
         nullable=True,
     )
 
+    profile_pic: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
     source: Mapped[LeadSource] = mapped_column(
         Enum(LeadSource, name="lead_source"),
         nullable=False,
@@ -64,3 +67,4 @@ class Customer(BaseEntity):
     enquiries = relationship("Enquiry", back_populates="customer")
     leads = relationship("Lead", back_populates="customer")
     reviews = relationship("Review", back_populates="customer")
+    auth_sessions = relationship("AuthSession", back_populates="customer", cascade="all, delete-orphan")
