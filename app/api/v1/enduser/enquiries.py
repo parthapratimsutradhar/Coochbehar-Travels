@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import EnquiryType, LeadSource, LeadStatus
 from app.db.database import get_db
-from app.models.custom_tour_request import CustomTourRequest
 from app.models.enquiry import Enquiry
 from app.models.lead import Lead
 from app.schemas.custom_tour_request import (
