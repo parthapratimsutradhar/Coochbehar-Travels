@@ -469,6 +469,28 @@ def test_18_invalid_refresh_token(client: TestClient):
     assert res.status_code == 401
 
 
+def test_active_session_marks_current_without_refresh_cookie(client: TestClient, test_user: User):
+    """The access token identifies the current session when the cookie is unavailable."""
+    req_res = client.post(
+        "/api/v1/admin/auth/otp/request",
+        json={"identifier": test_user.email},
+    )
+    login_res = client.post(
+        "/api/v1/admin/auth/otp/verify",
+        json={"identifier": test_user.email, "otp": req_res.json()["dev_otp"]},
+    )
+
+    sessions_res = client.get(
+        "/api/v1/sessions/",
+        headers={"Authorization": f"Bearer {login_res.json()['access_token']}"},
+    )
+
+    assert sessions_res.status_code == 200
+    sessions = sessions_res.json()
+    assert len(sessions) == 1
+    assert sessions[0]["is_current"] is True
+
+
 def test_19_admin_google_login(client: TestClient, test_user: User):
     """19. Test Admin Continue with Google."""
     google_token = make_mock_google_id_token(

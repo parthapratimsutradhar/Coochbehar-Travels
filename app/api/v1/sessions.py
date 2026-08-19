@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import (
     clear_refresh_cookie,
     extract_refresh_token,
+    get_current_access_token_payload,
     get_current_actor,
     set_refresh_cookie,
 )
@@ -109,22 +110,32 @@ def logout_all(
 )
 def list_sessions(
     request: Request,
+    access_token_payload: dict = Depends(get_current_access_token_payload),
     actor_info: tuple[User | Customer, str] = Depends(get_current_actor),
     db: Session = Depends(get_db),
 ):
     actor, actor_type = actor_info
     current_refresh_token = extract_refresh_token(request)
+    current_session_id = None
+    session_id_claim = access_token_payload.get("session_id")
+    if session_id_claim:
+        try:
+            current_session_id = uuid.UUID(session_id_claim)
+        except (ValueError, AttributeError):
+            current_session_id = None
     auth_service = AuthService(db)
 
     if actor_type in ("ADMIN", "STAFF"):
         return auth_service.get_actor_sessions(
             user_id=actor.id,
             current_refresh_token=current_refresh_token,
+            current_session_id=current_session_id,
         )
     else:
         return auth_service.get_actor_sessions(
             customer_id=actor.id,
             current_refresh_token=current_refresh_token,
+            current_session_id=current_session_id,
         )
 
 

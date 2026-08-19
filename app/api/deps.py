@@ -181,6 +181,13 @@ def get_current_actor(
     raise HTTPException(status_code=401, detail="Invalid actor type in token.")
 
 
+def get_current_access_token_payload(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_bearer),
+) -> dict:
+    """Return the validated access-token claims for session-aware endpoints."""
+    return _get_token_payload(credentials)
+
+
 def extract_refresh_token(request: Request) -> str | None:
     """Extract refresh token from HttpOnly cookie with fallback support."""
     token = request.cookies.get(settings.REFRESH_COOKIE_NAME)

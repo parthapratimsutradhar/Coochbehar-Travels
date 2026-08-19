@@ -167,7 +167,7 @@ class AuthService:
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
 
-        self.session_repo.create_session(
+        session = self.session_repo.create_session(
             user_id=user.id,
             customer_id=None,
             actor_type="ADMIN",
@@ -185,6 +185,7 @@ class AuthService:
             actor_type="ADMIN",
             email=user.email,
             mobile=user.mobile,
+            extra_claims={"session_id": str(session.id)},
         )
 
         return access_token, raw_refresh_token, user
@@ -222,7 +223,7 @@ class AuthService:
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
 
-        self.session_repo.create_session(
+        session = self.session_repo.create_session(
             user_id=user.id,
             customer_id=None,
             actor_type=user.role.value,
@@ -240,6 +241,7 @@ class AuthService:
             actor_type=user.role.value,
             email=user.email,
             mobile=user.mobile,
+            extra_claims={"session_id": str(session.id)},
         )
 
         return access_token, raw_refresh_token, user
@@ -350,7 +352,7 @@ class AuthService:
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
 
-        self.session_repo.create_session(
+        session = self.session_repo.create_session(
             user_id=None,
             customer_id=customer.id,
             actor_type="CUSTOMER",
@@ -366,6 +368,7 @@ class AuthService:
             actor_type="CUSTOMER",
             email=customer.email,
             mobile=customer.mobile,
+            extra_claims={"session_id": str(session.id)},
         )
 
         return access_token, raw_refresh_token, customer
@@ -417,7 +420,7 @@ class AuthService:
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
 
-        self.session_repo.create_session(
+        session = self.session_repo.create_session(
             user_id=None,
             customer_id=customer.id,
             actor_type="CUSTOMER",
@@ -433,6 +436,7 @@ class AuthService:
             actor_type="CUSTOMER",
             email=customer.email,
             mobile=customer.mobile,
+            extra_claims={"session_id": str(session.id)},
         )
 
         return access_token, raw_refresh_token, customer
@@ -510,13 +514,11 @@ class AuthService:
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="User account is deactivated.",
                 )
-            access_token = create_access_token(
-                subject=user.id,
-                role=user.role.value if hasattr(user.role, "value") else str(user.role),
-                actor_type=session.actor_type,
-                email=user.email,
-                mobile=user.mobile,
-            )
+            access_token_subject = user.id
+            access_token_role = user.role.value if hasattr(user.role, "value") else str(user.role)
+            access_token_actor_type = session.actor_type
+            access_token_email = user.email
+            access_token_mobile = user.mobile
         else:
             customer = self.customer_repo.get_by_id(session.customer_id)
             if not customer:
@@ -525,22 +527,29 @@ class AuthService:
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Customer profile not found.",
                 )
-            access_token = create_access_token(
-                subject=customer.id,
-                role="CUSTOMER",
-                actor_type="CUSTOMER",
-                email=customer.email,
-                mobile=customer.mobile,
-            )
+            access_token_subject = customer.id
+            access_token_role = "CUSTOMER"
+            access_token_actor_type = "CUSTOMER"
+            access_token_email = customer.email
+            access_token_mobile = customer.mobile
 
         new_raw_refresh_token = generate_secure_token(64)
         new_token_hash = hash_token(new_raw_refresh_token)
 
-        self.session_repo.rotate_session(
+        new_session = self.session_repo.rotate_session(
             old_session=session,
             new_token_hash=new_token_hash,
             user_agent=user_agent,
             ip_address=ip_address,
+        )
+
+        access_token = create_access_token(
+            subject=access_token_subject,
+            role=access_token_role,
+            actor_type=access_token_actor_type,
+            email=access_token_email,
+            mobile=access_token_mobile,
+            extra_claims={"session_id": str(new_session.id)},
         )
 
         return access_token, new_raw_refresh_token
@@ -569,6 +578,7 @@ class AuthService:
         user_id: uuid.UUID | None = None,
         customer_id: uuid.UUID | None = None,
         current_refresh_token: str | None = None,
+        current_session_id: uuid.UUID | None = None,
     ) -> list[AuthSessionResponse]:
         """Fetch active sessions for actor, marking the current session."""
         sessions = self.session_repo.get_active_sessions_for_actor(
@@ -579,7 +589,10 @@ class AuthService:
 
         result = []
         for s in sessions:
-            is_current = (current_hash is not None and s.refresh_token_hash == current_hash)
+            is_current = (
+                (current_session_id is not None and s.id == current_session_id)
+                or (current_hash is not None and s.refresh_token_hash == current_hash)
+            )
             result.append(
                 AuthSessionResponse(
                     id=s.id,
