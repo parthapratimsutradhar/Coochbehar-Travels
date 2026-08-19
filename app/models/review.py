@@ -7,6 +7,7 @@ from sqlalchemy import (
     String,
     Text
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import BaseEntity
 
@@ -52,6 +53,11 @@ class Review(BaseEntity):
 
     review: Mapped[str] = mapped_column(
         Text,
+        nullable=False,
+    )
+
+    review_gallery: Mapped[dict] = mapped_column(
+        JSONB,
         nullable=False,
     )
 
