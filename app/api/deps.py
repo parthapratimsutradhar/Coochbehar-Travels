@@ -61,7 +61,7 @@ def get_current_user(
     payload = _get_token_payload(credentials)
     actor_type = payload.get("actor_type", "USER")
 
-    if actor_type != "USER":
+    if actor_type != "ADMIN" and actor_type != "STAFF":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin/Staff access required.",
