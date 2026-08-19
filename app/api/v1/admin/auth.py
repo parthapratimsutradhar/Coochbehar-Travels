@@ -90,7 +90,7 @@ def verify_admin_otp(
     summary="Admin Continue with Google",
     description="Authenticate an active Admin account via Google OAuth ID token.",
 )
-def google_login_admin(
+async def google_login_admin(
     payload: AdminGoogleAuthSchema,
     request: Request,
     response: Response,
@@ -100,7 +100,7 @@ def google_login_admin(
     ip_address = request.client.host if request.client else None
 
     auth_service = AuthService(db)
-    access_token, raw_refresh_token = auth_service.google_login_admin(
+    access_token, raw_refresh_token = await auth_service.google_login_admin(
         id_token=payload.id_token,
         user_agent=user_agent,
         ip_address=ip_address,

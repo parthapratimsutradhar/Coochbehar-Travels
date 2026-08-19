@@ -94,7 +94,7 @@ def verify_customer_otp(
     summary="Customer Continue with Google",
     description="Authenticate or auto-register a traveler via Google OAuth ID token and automatically link web visitor telemetry.",
 )
-def google_login_customer(
+async def google_login_customer(
     payload: CustomerGoogleAuthSchema,
     request: Request,
     response: Response,
@@ -104,7 +104,7 @@ def google_login_customer(
     ip_address = request.client.host if request.client else None
 
     auth_service = AuthService(db)
-    access_token, raw_refresh_token, customer = auth_service.google_login_customer(
+    access_token, raw_refresh_token, customer = await auth_service.google_login_customer(
         id_token=payload.id_token,
         visitor_id=payload.visitor_id,
         user_agent=user_agent,

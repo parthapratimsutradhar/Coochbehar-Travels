@@ -15,6 +15,7 @@ from app.repository.otp_repo import OtpRepository
 from app.repository.user_repo import UserRepository
 from app.schemas.auth import AuthSessionResponse
 from app.services.email_service import EmailService
+from app.services.cloudinary_service import upload_google_profile_picture
 from app.utils.security import (
     create_access_token,
     generate_otp,
@@ -233,7 +234,7 @@ class AuthService:
         return user
 
     # ── ADMIN GOOGLE OAUTH FLOW ────────────────────────────────────────
-    def google_login_admin(
+    async def google_login_admin(
         self,
         id_token: str,
         user_agent: str | None = None,
@@ -256,7 +257,7 @@ class AuthService:
             )
 
         if google_data.get("picture"):
-            user.profile_pic = google_data["picture"]
+            user.profile_pic = await upload_google_profile_picture(google_data["picture"])
             self.db.commit()
 
         raw_refresh_token = generate_secure_token(64)
@@ -416,7 +417,7 @@ class AuthService:
         return access_token, raw_refresh_token, customer
 
     # ── CUSTOMER GOOGLE OAUTH FLOW ────────────────────────────────────
-    def google_login_customer(
+    async def google_login_customer(
         self,
         id_token: str,
         visitor_id: uuid.UUID | None = None,
@@ -444,10 +445,10 @@ class AuthService:
                 source=LeadSource.WEBSITE,
             )
             if picture:
-                customer.profile_pic = picture
+                customer.profile_pic = await upload_google_profile_picture(picture)
                 self.db.commit()
         elif picture:
-            customer.profile_pic = picture
+            customer.profile_pic = await upload_google_profile_picture(picture)
             self.db.commit()
 
         if visitor_id:

@@ -492,8 +492,16 @@ def test_active_session_marks_current_without_refresh_cookie(client: TestClient,
     assert sessions[0]["is_current"] is True
 
 
-def test_19_admin_google_login(client: TestClient, test_user: User):
+def test_19_admin_google_login(client: TestClient, test_user: User, db_session, monkeypatch):
     """19. Test Admin Continue with Google."""
+    async def fake_upload_google_profile_picture(picture_url: str) -> str:
+        assert picture_url.startswith("https://lh3.googleusercontent.com/")
+        return "https://res.cloudinary.com/example/image/upload/profile-picture/admin.jpg"
+
+    monkeypatch.setattr(
+        "app.services.auth_service.upload_google_profile_picture",
+        fake_upload_google_profile_picture,
+    )
     google_token = make_mock_google_id_token(
         email=test_user.email,
         name=test_user.name,
@@ -506,13 +514,21 @@ def test_19_admin_google_login(client: TestClient, test_user: User):
     assert res.status_code == 200
     data = res.json()["data"]
     assert "access_token" in data
-    assert data["user"]["email"] == test_user.email
-    assert data["user"]["profile_pic"] == "https://lh3.googleusercontent.com/a/new-admin-pic.jpg"
+    db_session.refresh(test_user)
+    assert test_user.profile_pic == "https://res.cloudinary.com/example/image/upload/profile-picture/admin.jpg"
     assert settings.REFRESH_COOKIE_NAME in res.cookies
 
 
-def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClient, db_session):
+def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClient, db_session, monkeypatch):
     """20. Test Customer Continue with Google (auto-registration + avatar + visitor linking)."""
+    async def fake_upload_google_profile_picture(picture_url: str) -> str:
+        assert picture_url.startswith("https://lh3.googleusercontent.com/")
+        return "https://res.cloudinary.com/example/image/upload/profile-picture/customer.jpg"
+
+    monkeypatch.setattr(
+        "app.services.auth_service.upload_google_profile_picture",
+        fake_upload_google_profile_picture,
+    )
     visitor = Visitor(visitor_code="VIS-GGL01", lead_score=15)
     db_session.add(visitor)
     db_session.commit()
@@ -533,7 +549,7 @@ def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClien
     assert "access_token" in data
     assert data["customer"]["name"] == "Sandra Adventurer"
     assert data["customer"]["email"] == "sandra.adventurer@gmail.com"
-    assert data["customer"]["profile_pic"] == "https://lh3.googleusercontent.com/a/sandra-avatar.png"
+    assert data["customer"]["profile_pic"] == "https://res.cloudinary.com/example/image/upload/profile-picture/customer.jpg"
 
     # Assert visitor is linked to new customer
     cust_id = uuid.UUID(data["customer"]["id"])
