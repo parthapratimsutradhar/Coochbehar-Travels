@@ -73,6 +73,9 @@ class Settings:
     GOOGLE_REDIRECT_URI_WEB: str | None = _env("GOOGLE_REDIRECT_URI_WEB")
     GOOGLE_REDIRECT_URI_ANDROID: str | None = _env("GOOGLE_REDIRECT_URI_ANDROID")
     GOOGLE_REDIRECT_URI_IOS: str | None = _env("GOOGLE_REDIRECT_URI_IOS")
+    GMAIL_CREDENTIALS_FILE: str = _env("GMAIL_CREDENTIALS_FILE") or "credentials.json"
+    GMAIL_TOKEN_FILE: str = _env("GMAIL_TOKEN_FILE") or "token.json"
+    GMAIL_TOKEN_JSON: str | None = _env("GMAIL_TOKEN_JSON")
 
     # ── SMS ──────────────────────────────────────────────────────────
     SMS_PROVIDER: str | None = _env("SMS_PROVIDER")  # fast2sms, etc.
@@ -80,8 +83,6 @@ class Settings:
 
 
     # ── EMAIL ──────────────────────────────────────────────────────────
-    RESEND_API_KEY: str | None = _env("RESEND_API_KEY")
-    RESEND_FROM_EMAIL: str | None = _env("RESEND_FROM_EMAIL")
     EMAIL_HOST: str | None = _env("EMAIL_HOST")
     EMAIL_PORT: int | None = int(os.getenv("EMAIL_PORT", "587"))
     EMAIL_USERNAME: str | None = _env("EMAIL_USERNAME")
