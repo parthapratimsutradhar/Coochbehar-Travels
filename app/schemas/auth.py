@@ -1,21 +1,52 @@
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.enums import LeadSource, UserRole
+from app.core.enums import UserRole
 from app.schemas.customer import CustomerResponse
 
 
-class OtpRequestSchema(BaseModel):
+# ── Admin Schemas ──────────────────────────────────────────────────────
+
+class AdminOtpRequestSchema(BaseModel):
+    """Admin OTP request — no visitor_id or identifier_type needed."""
+
     identifier: str = Field(
         ...,
         description="Mobile number (e.g. '+919876543210') or Email address",
         min_length=3,
         max_length=255,
     )
-    identifier_type: str | None = Field(
-        default=None,
-        description="MOBILE or EMAIL (auto-detected if omitted)",
+    purpose: str = Field(
+        default="LOGIN",
+        description="LOGIN, VERIFY_MOBILE, or VERIFY_EMAIL",
+    )
+
+
+class AdminOtpVerifySchema(BaseModel):
+    """Admin OTP verification — login only, no registration or visitor linking."""
+
+    identifier: str = Field(..., description="Mobile number or Email address")
+    otp: str = Field(..., min_length=4, max_length=10, description="The 6-digit OTP code")
+    purpose: str = Field(default="LOGIN")
+
+
+class AdminGoogleAuthSchema(BaseModel):
+    """Admin Google OAuth — no visitor tracking."""
+
+    id_token: str = Field(..., description="Google ID Token issued by Google Identity Services")
+
+
+# ── Customer / Enduser Schemas ─────────────────────────────────────────
+
+class CustomerOtpRequestSchema(BaseModel):
+    """Customer OTP request — includes visitor_id for telemetry linking."""
+
+    identifier: str = Field(
+        ...,
+        description="Mobile number (e.g. '+919876543210') or Email address",
+        min_length=3,
+        max_length=255,
     )
     purpose: str = Field(
         default="LOGIN",
@@ -27,18 +58,9 @@ class OtpRequestSchema(BaseModel):
     )
 
 
-class OtpRequestResponse(BaseModel):
-    message: str
-    identifier: str
-    identifier_type: str
-    expires_in: int = Field(default=300, description="OTP validity in seconds")
-    dev_otp: str | None = Field(
-        default=None,
-        description="OTP value returned only in development/test environment for convenience",
-    )
+class CustomerOtpVerifySchema(BaseModel):
+    """Customer OTP verification — supports auto-registration and visitor linking."""
 
-
-class OtpVerifySchema(BaseModel):
     identifier: str = Field(..., description="Mobile number or Email address")
     otp: str = Field(..., min_length=4, max_length=10, description="The 6-digit OTP code")
     name: str | None = Field(
@@ -50,6 +72,26 @@ class OtpVerifySchema(BaseModel):
     visitor_id: UUID | None = Field(
         default=None,
         description="Optional anonymous visitor ID to automatically link telemetry",
+    )
+
+
+class CustomerGoogleAuthSchema(BaseModel):
+    """Customer Google OAuth — includes visitor_id for telemetry linking."""
+
+    id_token: str = Field(..., description="Google ID Token issued by Google Identity Services")
+    visitor_id: UUID | None = Field(default=None, description="Optional visitor UUID to link telemetry")
+
+
+# ── Shared Response Schemas ────────────────────────────────────────────
+
+class OtpRequestResponse(BaseModel):
+    message: str
+    identifier: str
+    identifier_type: str
+    expires_in_sec: int = Field(default=300, description="OTP validity in seconds")
+    dev_otp: str | None = Field(
+        default=None,
+        description="OTP value returned only in development/test environment for convenience",
     )
 
 
@@ -68,16 +110,10 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
-class GoogleAuthSchema(BaseModel):
-    id_token: str = Field(..., description="Google ID Token issued by Google Identity Services")
-    visitor_id: UUID | None = Field(default=None, description="Optional visitor UUID to link telemetry")
-
-
 class AdminTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    expires_in: int = Field(default=900, description="Access token expiration in seconds (15 minutes)")
-    user: UserResponse
+    expires_in_sec: int = Field(default=900, description="Access token expiration in seconds (15 minutes)")
 
 
 class CustomerTokenResponse(BaseModel):

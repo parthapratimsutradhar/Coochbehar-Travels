@@ -5,7 +5,7 @@ from app.services.cloudinary_service import upload_file_to_cloudinary
 
 
 router = APIRouter(
-    prefix="/files",
+    prefix="/public/files",
     tags=["Files"],
 )
 

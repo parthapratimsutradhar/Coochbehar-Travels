@@ -1,16 +1,16 @@
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_customer
+from app.api.deps import get_current_customer, set_refresh_cookie
 from app.core.config import settings
 from app.db.database import get_db
 from app.models.customer import Customer
 from app.schemas.auth import (
+    CustomerGoogleAuthSchema,
+    CustomerOtpRequestSchema,
+    CustomerOtpVerifySchema,
     CustomerTokenResponse,
-    GoogleAuthSchema,
     OtpRequestResponse,
-    OtpRequestSchema,
-    OtpVerifySchema,
 )
 from app.schemas.customer import CustomerResponse, CustomerUpdate
 from app.services.auth_service import AuthService
@@ -21,20 +21,6 @@ router = APIRouter(
 )
 
 
-def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
-    max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600
-    response.set_cookie(
-        key=settings.REFRESH_COOKIE_NAME,
-        value=refresh_token,
-        max_age=max_age,
-        expires=max_age,
-        path=settings.REFRESH_COOKIE_PATH,
-        httponly=True,
-        secure=settings.REFRESH_COOKIE_SECURE,
-        samesite=settings.REFRESH_COOKIE_SAMESITE,
-    )
-
-
 @router.post(
     "/otp/request",
     response_model=OtpRequestResponse,
@@ -42,13 +28,12 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
     description="Dispatch a passwordless 6-digit OTP to a traveler's mobile number or email.",
 )
 def request_customer_otp(
-    payload: OtpRequestSchema,
+    payload: CustomerOtpRequestSchema,
     db: Session = Depends(get_db),
 ):
     auth_service = AuthService(db)
     message, identifier, id_type, expires_in, raw_otp = auth_service.request_customer_otp(
         identifier=payload.identifier,
-        identifier_type=payload.identifier_type,
         purpose=payload.purpose,
         visitor_id=payload.visitor_id,
     )
@@ -68,7 +53,7 @@ def request_customer_otp(
     description="Verifies the OTP, auto-creates a customer profile if first-time traveler, links web visitor telemetry, creates a 30-day session, and returns a 15-minute access JWT.",
 )
 def verify_customer_otp(
-    payload: OtpVerifySchema,
+    payload: CustomerOtpVerifySchema,
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
@@ -87,7 +72,7 @@ def verify_customer_otp(
         ip_address=ip_address,
     )
 
-    _set_refresh_cookie(response, raw_refresh_token)
+    set_refresh_cookie(response, raw_refresh_token)
 
     return CustomerTokenResponse(
         access_token=access_token,
@@ -104,7 +89,7 @@ def verify_customer_otp(
     description="Authenticate or auto-register a traveler via Google OAuth ID token and automatically link web visitor telemetry.",
 )
 def google_login_customer(
-    payload: GoogleAuthSchema,
+    payload: CustomerGoogleAuthSchema,
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
@@ -120,7 +105,7 @@ def google_login_customer(
         ip_address=ip_address,
     )
 
-    _set_refresh_cookie(response, raw_refresh_token)
+    set_refresh_cookie(response, raw_refresh_token)
 
     return CustomerTokenResponse(
         access_token=access_token,

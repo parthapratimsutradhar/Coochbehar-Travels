@@ -149,7 +149,7 @@ Execute database migrations using `uv` to ensure your database schema is up to d
    uv run python -m alembic upgrade head
    ```
 
-#### Additional Migration Helper Commands:
+#### Additional Helper Commands:
 * **Check Migration Status**:
   ```bash
   uv run python -m alembic current
@@ -162,7 +162,10 @@ Execute database migrations using `uv` to ensure your database schema is up to d
   ```bash
   uv run python -m alembic downgrade -1
   ```
-
+* **Admin Seed Script**
+  ```bash
+  uv run python scripts/seed_admin.py
+  ```
 ---
 
 ### 4. Running the Development Server

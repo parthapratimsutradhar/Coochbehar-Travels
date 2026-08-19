@@ -20,6 +20,9 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 
 class Settings:
+
+    IS_DEVELOPMENT: bool = _env_bool("IS_DEVELOPMENT", False)
+
     DATABASE_URL = _env("DATABASE_URL")
 
     # ── JWT & Authentication ─────────────────────────────────────────
@@ -48,7 +51,6 @@ class Settings:
     # ── OTP ──────────────────────────────────────────────────────────
     OTP_EXPIRY_SECONDS: int = int(os.getenv("OTP_EXPIRY_SECONDS", "300"))
     OTP_MAX_ATTEMPTS: int = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
-    OTP_RETURN_DEV_OTP: bool = _env_bool("OTP_RETURN_DEV_OTP", False)
 
     # ── Google OAuth ─────────────────────────────────────────────────
     GOOGLE_CLIENT_ID_WEB: str | None = _env("GOOGLE_CLIENT_ID_WEB")

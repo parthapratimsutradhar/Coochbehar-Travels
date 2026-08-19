@@ -1,12 +1,15 @@
 from app.schemas.auth import (
+    AdminGoogleAuthSchema,
+    AdminOtpRequestSchema,
+    AdminOtpVerifySchema,
     AdminTokenResponse,
     AuthSessionResponse,
+    CustomerGoogleAuthSchema,
+    CustomerOtpRequestSchema,
+    CustomerOtpVerifySchema,
     CustomerTokenResponse,
-    GoogleAuthSchema,
     MessageResponse,
     OtpRequestResponse,
-    OtpRequestSchema,
-    OtpVerifySchema,
     RefreshResponse,
     UserResponse,
 )

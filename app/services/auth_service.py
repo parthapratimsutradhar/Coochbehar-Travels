@@ -63,9 +63,9 @@ class AuthService:
                 otp=raw_otp,
                 expires_in_seconds=settings.OTP_EXPIRY_SECONDS,
             )
-            return raw_otp if settings.OTP_RETURN_DEV_OTP else None
+            return raw_otp if settings.IS_DEVELOPMENT else None
 
-        if settings.OTP_RETURN_DEV_OTP:
+        if settings.IS_DEVELOPMENT:
             return raw_otp
 
         raise HTTPException(
@@ -170,7 +170,7 @@ class AuthService:
         self.session_repo.create_session(
             user_id=user.id,
             customer_id=None,
-            actor_type="USER",
+            actor_type="ADMIN",
             refresh_token_hash=refresh_token_hash,
             expires_at=expires_at,
             user_agent=user_agent,
@@ -182,7 +182,7 @@ class AuthService:
         access_token = create_access_token(
             subject=user.id,
             role=user.role.value if hasattr(user.role, "value") else str(user.role),
-            actor_type="USER",
+            actor_type="ADMIN",
             email=user.email,
             mobile=user.mobile,
         )
@@ -248,12 +248,11 @@ class AuthService:
     def request_customer_otp(
         self,
         identifier: str,
-        identifier_type: str | None = None,
         purpose: str = "LOGIN",
         visitor_id: uuid.UUID | None = None,
     ) -> tuple[str, str, str, int, str | None]:
         """Generate and dispatch OTP for Customer / Traveler login or registration."""
-        cleaned, id_type = self.normalize_identifier(identifier, identifier_type)
+        cleaned, id_type = self.normalize_identifier(identifier)
 
         raw_otp = generate_otp(6)
         hashed = hash_otp(raw_otp)

@@ -1,5 +1,5 @@
 import uuid
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -160,3 +160,31 @@ def extract_refresh_token(request: Request) -> str | None:
         request.cookies.get("refresh_token")
         or request.cookies.get("__Host-refresh_token")
     )
+
+
+def set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    """Set the HttpOnly refresh-token cookie with consistent settings."""
+    max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600
+    response.set_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        max_age=max_age,
+        expires=max_age,
+        path=settings.REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.REFRESH_COOKIE_SECURE,
+        samesite=settings.REFRESH_COOKIE_SAMESITE,
+    )
+
+
+def clear_refresh_cookie(response: Response) -> None:
+    """Delete all possible refresh-token cookies."""
+    response.delete_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        path=settings.REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.REFRESH_COOKIE_SECURE,
+        samesite=settings.REFRESH_COOKIE_SAMESITE,
+    )
+    response.delete_cookie(key="refresh_token", path="/")
+    response.delete_cookie(key="__Host-refresh_token", path="/")
