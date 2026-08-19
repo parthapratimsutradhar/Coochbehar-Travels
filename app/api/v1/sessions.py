@@ -92,7 +92,7 @@ def logout_all(
 ):
     actor, actor_type = actor_info
     auth_service = AuthService(db)
-    if actor_type == "USER":
+    if actor_type in ("ADMIN", "STAFF"):
         auth_service.logout_all_for_actor(user_id=actor.id)
     else:
         auth_service.logout_all_for_actor(customer_id=actor.id)
@@ -116,7 +116,7 @@ def list_sessions(
     current_refresh_token = extract_refresh_token(request)
     auth_service = AuthService(db)
 
-    if actor_type == "USER":
+    if actor_type in ("ADMIN", "STAFF"):
         return auth_service.get_actor_sessions(
             user_id=actor.id,
             current_refresh_token=current_refresh_token,
@@ -144,7 +144,7 @@ def revoke_session(
     actor, actor_type = actor_info
     auth_service = AuthService(db)
 
-    if actor_type == "USER":
+    if actor_type in ("ADMIN", "STAFF"):
         auth_service.revoke_session_by_id(session_id=session_id, user_id=actor.id)
     else:
         auth_service.revoke_session_by_id(session_id=session_id, customer_id=actor.id)

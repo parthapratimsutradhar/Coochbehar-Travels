@@ -153,7 +153,7 @@ class AuthService:
         if challenge.identifier_type == "EMAIL":
             user = self.user_repo.get_by_email(cleaned)
         else:
-            user = self.user_repo.get_by_email(cleaned) or self.user_repo.get_by_id(challenge.customer_id)
+            user = self.user_repo.get_by_mobile(cleaned)
 
         if not user or not user.is_active:
             raise HTTPException(
@@ -225,7 +225,7 @@ class AuthService:
         self.session_repo.create_session(
             user_id=user.id,
             customer_id=None,
-            actor_type="USER",
+            actor_type=user.role.value,
             refresh_token_hash=refresh_token_hash,
             expires_at=expires_at,
             user_agent=user_agent,
@@ -237,7 +237,7 @@ class AuthService:
         access_token = create_access_token(
             subject=user.id,
             role=user.role.value if hasattr(user.role, "value") else str(user.role),
-            actor_type="USER",
+            actor_type=user.role.value,
             email=user.email,
             mobile=user.mobile,
         )
@@ -502,7 +502,7 @@ class AuthService:
                 detail="Refresh session expired due to 24 hours of inactivity.",
             )
 
-        if session.actor_type == "USER" or session.user_id is not None:
+        if session.actor_type in ("ADMIN", "STAFF") and session.user_id is not None:
             user = self.user_repo.get_by_id(session.user_id)
             if not user or not user.is_active:
                 self.session_repo.revoke_session(session)
@@ -513,7 +513,7 @@ class AuthService:
             access_token = create_access_token(
                 subject=user.id,
                 role=user.role.value if hasattr(user.role, "value") else str(user.role),
-                actor_type="USER",
+                actor_type=session.actor_type,
                 email=user.email,
                 mobile=user.mobile,
             )

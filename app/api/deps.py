@@ -53,15 +53,15 @@ def _get_token_payload(credentials: HTTPAuthorizationCredentials | None) -> dict
     return payload
 
 
-def get_current_user(
+def get_current_admin_or_staff(
     credentials: HTTPAuthorizationCredentials | None = Depends(security_bearer),
     db: Session = Depends(get_db),
 ) -> User:
     """Extract and validate JWT access token for an Admin / Staff user."""
     payload = _get_token_payload(credentials)
-    actor_type = payload.get("actor_type", "USER")
+    actor_type = payload.get("actor_type")
 
-    if actor_type != "ADMIN" and actor_type != "STAFF":
+    if actor_type not in ["ADMIN", "STAFF"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin/Staff access required.",
@@ -91,6 +91,9 @@ def get_current_user(
         )
 
     return user
+
+
+get_current_user = get_current_admin_or_staff
 
 
 def get_current_admin(
@@ -151,21 +154,31 @@ def get_current_actor(
 ) -> tuple[User | Customer, str]:
     """Universal actor resolver: returns (User or Customer, actor_type)."""
     payload = _get_token_payload(credentials)
-    actor_type = payload.get("actor_type", "USER")
-    sub_id = uuid.UUID(payload.get("sub"))
+    actor_type = payload.get("actor_type")
+    sub = payload.get("sub")
+    if not actor_type or not sub:
+        raise HTTPException(status_code=401, detail="Invalid token claims.")
 
-    if actor_type == "USER":
+    try:
+        sub_id = uuid.UUID(sub)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=401, detail="Invalid actor ID in token.")
+
+    if actor_type in ("ADMIN", "STAFF"):
         user_repo = UserRepository(db)
         user = user_repo.get_by_id(sub_id)
         if not user or not user.is_active:
             raise HTTPException(status_code=401, detail="User inactive or not found.")
-        return user, "USER"
-    else:
+        return user, actor_type
+
+    if actor_type == "CUSTOMER":
         customer_repo = CustomerRepository(db)
         customer = customer_repo.get_by_id(sub_id)
         if not customer:
             raise HTTPException(status_code=401, detail="Customer not found.")
         return customer, "CUSTOMER"
+
+    raise HTTPException(status_code=401, detail="Invalid actor type in token.")
 
 
 def extract_refresh_token(request: Request) -> str | None:
