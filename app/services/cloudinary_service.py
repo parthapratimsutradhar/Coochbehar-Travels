@@ -16,6 +16,7 @@ ALLOWED_CONTENT_TYPES = {
     "image/webp",
     "image/gif",
     "video/mp4",
+    "video/mov",
     "video/webm",
     "application/pdf",
 }
@@ -23,10 +24,14 @@ ALLOWED_CONTENT_TYPES = {
 UPLOAD_ALLOWED_FOLDERS = {
     "profile-picture",
     "tour-packages",
-    "temporary-uploads"
+    "temporary-uploads",
+    "review-gallery"
 }
 
-UPLOAD_MAX_SIZE_BYTES="10"
+
+REVIEW_IMAGE_MAX_SIZE = 10 * 1024 * 1024  # 10 MB
+REVIEW_VIDEO_MAX_SIZE = 50 * 1024 * 1024  # 50 MB
+REVIEW_VIDEO_MAX_DURATION = 60            # seconds
 
 
 def _clean_folder_segment(value: str) -> str:

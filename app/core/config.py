@@ -80,6 +80,8 @@ class Settings:
 
 
     # ── EMAIL ──────────────────────────────────────────────────────────
+    RESEND_API_KEY: str | None = _env("RESEND_API_KEY")
+    RESEND_FROM_EMAIL: str | None = _env("RESEND_FROM_EMAIL")
     EMAIL_HOST: str | None = _env("EMAIL_HOST")
     EMAIL_PORT: int | None = int(os.getenv("EMAIL_PORT", "587"))
     EMAIL_USERNAME: str | None = _env("EMAIL_USERNAME")
@@ -99,3 +101,6 @@ class Settings:
 
 
 settings = Settings()
+
+
+
