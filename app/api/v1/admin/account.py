@@ -12,7 +12,7 @@ from app.models.user import User
 from app.schemas.account import AdminDeleteProfileRequest, AdminProfileUpdate
 from app.schemas.auth import UserResponse
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
-from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
+from app.schemas.response import ActionResponse, ErrorResponse
 from app.services.auth_service import AuthService
 
 
@@ -32,7 +32,7 @@ def list_accounts(
 	page: int = Query(1, ge=1),
 	page_size: int = Query(20, ge=1, le=100),
 	email: str | None = Query(None),
-	ph: str | None = Query(None, description="Filter by phone/mobile"),
+	phone: str | None = Query(None, description="Filter by phone"),
 	name: str | None = Query(None),
 	role: UserRole | None = Query(None),
 	current_admin: User = Depends(get_current_admin_only),
@@ -41,8 +41,8 @@ def list_accounts(
 	stmt = select(User).where(User.role.in_((UserRole.ADMIN, UserRole.STAFF)))
 	if email:
 		stmt = stmt.where(User.email.ilike(f"%{email.strip()}%"))
-	if ph:
-		stmt = stmt.where(User.mobile.ilike(f"%{ph.strip()}%"))
+	if phone:
+		stmt = stmt.where(User.mobile.ilike(f"%{phone.strip()}%"))
 	if name:
 		stmt = stmt.where(User.name.ilike(f"%{name.strip()}%"))
 	if role:
@@ -69,8 +69,8 @@ def list_accounts(
 
 @router.patch(
 	"/{user_id}",
-	response_model=SuccessResponse[UserResponse],
-	responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+	response_model=ActionResponse,
+	responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
 	summary="Update an admin or staff profile",
 )
 def update_account(
@@ -101,13 +101,13 @@ def update_account(
 		db.rollback()
 		raise HTTPException(status_code=status.HTTP_409_CONFLICT, message="Account contact messages are already in use.")
 	db.refresh(account)
-	return SuccessResponse(message="Account updated successfully.", data=UserResponse.model_validate(account))
+	return ActionResponse(message="Account updated successfully.")
 
 
 @router.delete(
 	"/{user_id}",
 	response_model=ActionResponse,
-	responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+	responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
 	summary="Delete an admin or staff profile",
 )
 def delete_account(
