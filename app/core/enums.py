@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, IntEnum
 
 
 class UserRole(str, Enum):
@@ -83,3 +83,35 @@ class OauthPurpose(str, Enum):
     ADMIN_LOGIN = "ADMIN_LOGIN"
     CUSTOMER_LOGIN = "CUSTOMER_LOGIN"
     CUSTOMER_LINK = "CUSTOMER_LINK"
+
+
+class StatusCode(IntEnum):
+    BAD_REQUEST = 400
+    UNAUTHORIZED = 401
+    FORBIDDEN = 403
+    NOT_FOUND = 404
+    CONFLICT = 409
+    UNPROCESSABLE_ENTITY = 422
+    INTERNAL_SERVER_ERROR = 500
+
+
+class ErrorCode(str, Enum):
+    BAD_REQUEST = "BAD_REQUEST"
+    UNAUTHORIZED = "UNAUTHORIZED"
+    FORBIDDEN = "FORBIDDEN"
+    NOT_FOUND = "NOT_FOUND"
+    CONFLICT = "CONFLICT"
+    VALIDATION_ERROR = "VALIDATION_ERROR"
+    INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
+
+    @classmethod
+    def from_status_code(cls, status_code: int) -> "ErrorCode | str":
+        return {
+            StatusCode.BAD_REQUEST: cls.BAD_REQUEST,
+            StatusCode.UNAUTHORIZED: cls.UNAUTHORIZED,
+            StatusCode.FORBIDDEN: cls.FORBIDDEN,
+            StatusCode.NOT_FOUND: cls.NOT_FOUND,
+            StatusCode.CONFLICT: cls.CONFLICT,
+            StatusCode.UNPROCESSABLE_ENTITY: cls.VALIDATION_ERROR,
+            StatusCode.INTERNAL_SERVER_ERROR: cls.INTERNAL_SERVER_ERROR,
+        }.get(status_code, "ERROR")

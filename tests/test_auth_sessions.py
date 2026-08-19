@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 import pytest
 import jwt
 from fastapi.testclient import TestClient
@@ -22,8 +23,6 @@ from app.models.vehicle import Vehicle
 from app.models.visitor import Visitor
 from app.utils.security import (
     create_access_token,
-    decode_access_token,
-    hash_token,
 )
 
 # Enable JSONB support in SQLite in-memory test database
@@ -78,7 +77,7 @@ def test_user(db_session) -> User:
     user = User(
         user_code="USR-TEST01",
         name="Admin Tester",
-        email="admin@coochbehartravels.com",
+        email="ppsdev6@gmail.com",
         mobile="+919876543210",
         profile_pic="https://images.unsplash.com/photo-admin.jpg",
         role=UserRole.ADMIN,
@@ -96,7 +95,7 @@ def second_user(db_session) -> User:
     user = User(
         user_code="USR-TEST02",
         name="Staff Tester",
-        email="staff@coochbehartravels.com",
+        email="progtesting01@gmail.com",
         mobile="+919876543211",
         role=UserRole.STAFF,
         is_active=True,
@@ -113,7 +112,7 @@ def test_customer(db_session) -> Customer:
     customer = Customer(
         customer_code="CUS-TEST01",
         name="John Traveler",
-        email="john.traveler@example.com",
+        email="ppsdev6@gmail.com",
         mobile="+919811122233",
         profile_pic="https://images.unsplash.com/photo-john.jpg",
     )
@@ -146,7 +145,7 @@ def test_1_admin_pure_otp_login(client: TestClient, test_user: User):
         json={"identifier": test_user.email},
     )
     assert req_res.status_code == 200
-    otp = req_res.json()["dev_otp"]
+    otp = req_res.json()["data"]["dev_otp"]
     assert otp is not None
     assert len(otp) == 6
 
@@ -155,7 +154,9 @@ def test_1_admin_pure_otp_login(client: TestClient, test_user: User):
         json={"identifier": test_user.email, "otp": otp},
     )
     assert verify_res.status_code == 200
-    data = verify_res.json()
+    res_json = verify_res.json()
+    assert res_json["success"] is True
+    data = res_json["data"]
     assert "access_token" in data
     assert data["token_type"] == "bearer"
     assert data["expires_in"] == 15 * 60
@@ -174,14 +175,14 @@ def test_2_customer_pure_otp_login_and_autoregistration(client: TestClient, db_s
         json={"identifier": new_mobile},
     )
     assert req_res.status_code == 200
-    otp = req_res.json()["dev_otp"]
+    otp = req_res.json()["data"]["dev_otp"]
 
     verify_res = client.post(
         "/api/v1/enduser/auth/otp/verify",
         json={"identifier": new_mobile, "otp": otp, "name": "Alice Explorer"},
     )
     assert verify_res.status_code == 200
-    data = verify_res.json()
+    data = verify_res.json()["data"]
     assert "access_token" in data
     assert data["customer"]["name"] == "Alice Explorer"
     assert data["customer"]["mobile"] == new_mobile
@@ -204,7 +205,7 @@ def test_3_customer_visitor_telemetry_linking(client: TestClient, db_session):
         "/api/v1/enduser/auth/otp/request",
         json={"identifier": customer_email, "visitor_id": str(visitor.id)},
     )
-    otp = req_res.json()["dev_otp"]
+    otp = req_res.json()["data"]["dev_otp"]
 
     verify_res = client.post(
         "/api/v1/enduser/auth/otp/verify",
@@ -216,7 +217,7 @@ def test_3_customer_visitor_telemetry_linking(client: TestClient, db_session):
         },
     )
     assert verify_res.status_code == 200
-    cust_id = uuid.UUID(verify_res.json()["customer"]["id"])
+    cust_id = uuid.UUID(verify_res.json()["data"]["customer"]["id"])
 
     db_session.refresh(visitor)
     assert visitor.customer_id == cust_id
@@ -237,7 +238,7 @@ def test_4_access_token_expiration(client: TestClient, test_user: User):
         headers={"Authorization": f"Bearer {expired_token}"},
     )
     assert response.status_code == 401
-    assert "Invalid or expired access token" in response.json()["detail"]
+    assert "Invalid or expired access token" in response.json()["message"]
 
 
 def test_5_successful_refresh(client: TestClient, test_user: User):
@@ -245,13 +246,13 @@ def test_5_successful_refresh(client: TestClient, test_user: User):
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
         "/api/v1/admin/auth/otp/verify",
-        json={"identifier": test_user.email, "otp": req_res.json()["dev_otp"]},
+        json={"identifier": test_user.email, "otp": req_res.json()["data"]["dev_otp"]},
     )
     assert login_res.status_code == 200
 
-    refresh_res = client.post("/auth/refresh", cookies=login_res.cookies)
+    refresh_res = client.post("/api/v1/sessions/refresh", cookies=login_res.cookies)
     assert refresh_res.status_code == 200
-    data = refresh_res.json()
+    data = refresh_res.json()["data"]
     assert "access_token" in data
     assert data["token_type"] == "bearer"
     assert data["expires_in"] == 15 * 60
@@ -262,11 +263,11 @@ def test_6_refresh_token_rotation(client: TestClient, test_user: User):
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
         "/api/v1/admin/auth/otp/verify",
-        json={"identifier": test_user.email, "otp": req_res.json()["dev_otp"]},
+        json={"identifier": test_user.email, "otp": req_res.json()["data"]["dev_otp"]},
     )
     old_cookie_val = login_res.cookies.get(settings.REFRESH_COOKIE_NAME)
 
-    refresh_res = client.post("/auth/refresh", cookies=login_res.cookies)
+    refresh_res = client.post("/api/v1/sessions/refresh", cookies=login_res.cookies)
     assert refresh_res.status_code == 200
     new_cookie_val = refresh_res.cookies.get(settings.REFRESH_COOKIE_NAME)
 
@@ -279,12 +280,12 @@ def test_7_old_refresh_token_rejected_after_rotation(client: TestClient, test_us
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
         "/api/v1/admin/auth/otp/verify",
-        json={"identifier": test_user.email, "otp": req_res.json()["dev_otp"]},
+        json={"identifier": test_user.email, "otp": req_res.json()["data"]["dev_otp"]},
     )
     old_cookies = dict(login_res.cookies)
 
-    assert client.post("/auth/refresh", cookies=old_cookies).status_code == 200
-    assert client.post("/auth/refresh", cookies=old_cookies).status_code == 401
+    assert client.post("/api/v1/sessions/refresh", cookies=old_cookies).status_code == 200
+    assert client.post("/api/v1/sessions/refresh", cookies=old_cookies).status_code == 401
 
 
 def test_8_refresh_session_revoked(client: TestClient, test_user: User, db_session):
@@ -292,7 +293,7 @@ def test_8_refresh_session_revoked(client: TestClient, test_user: User, db_sessi
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
         "/api/v1/admin/auth/otp/verify",
-        json={"identifier": test_user.email, "otp": req_res.json()["dev_otp"]},
+        json={"identifier": test_user.email, "otp": req_res.json()["data"]["dev_otp"]},
     )
     cookies = dict(login_res.cookies)
 
@@ -300,7 +301,7 @@ def test_8_refresh_session_revoked(client: TestClient, test_user: User, db_sessi
     session.revoked_at = datetime.now(timezone.utc)
     db_session.commit()
 
-    assert client.post("/auth/refresh", cookies=cookies).status_code == 401
+    assert client.post("/api/v1/sessions/refresh", cookies=cookies).status_code == 401
 
 
 def test_9_refresh_session_expired_after_30_days(client: TestClient, test_user: User, db_session):
@@ -308,7 +309,7 @@ def test_9_refresh_session_expired_after_30_days(client: TestClient, test_user: 
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
         "/api/v1/admin/auth/otp/verify",
-        json={"identifier": test_user.email, "otp": req_res.json()["dev_otp"]},
+        json={"identifier": test_user.email, "otp": req_res.json()["data"]["dev_otp"]},
     )
     cookies = dict(login_res.cookies)
 
@@ -316,9 +317,9 @@ def test_9_refresh_session_expired_after_30_days(client: TestClient, test_user: 
     session.expires_at = datetime.now(timezone.utc) - timedelta(seconds=10)
     db_session.commit()
 
-    res = client.post("/auth/refresh", cookies=cookies)
+    res = client.post("/api/v1/sessions/refresh", cookies=cookies)
     assert res.status_code == 401
-    assert "maximum 30-day limit reached" in res.json()["detail"]
+    assert "maximum 30-day limit reached" in res.json()["message"]
 
 
 def test_10_refresh_session_rejected_after_24_hours_inactivity(
@@ -328,7 +329,7 @@ def test_10_refresh_session_rejected_after_24_hours_inactivity(
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
         "/api/v1/admin/auth/otp/verify",
-        json={"identifier": test_user.email, "otp": req_res.json()["dev_otp"]},
+        json={"identifier": test_user.email, "otp": req_res.json()["data"]["dev_otp"]},
     )
     cookies = dict(login_res.cookies)
 
@@ -336,9 +337,9 @@ def test_10_refresh_session_rejected_after_24_hours_inactivity(
     session.last_used_at = datetime.now(timezone.utc) - timedelta(hours=25)
     db_session.commit()
 
-    res = client.post("/auth/refresh", cookies=cookies)
+    res = client.post("/api/v1/sessions/refresh", cookies=cookies)
     assert res.status_code == 401
-    assert "24 hours of inactivity" in res.json()["detail"]
+    assert "24 hours of inactivity" in res.json()["message"]
 
 
 def test_11_active_user_can_continue_refreshing(client: TestClient, test_user: User):
@@ -346,12 +347,12 @@ def test_11_active_user_can_continue_refreshing(client: TestClient, test_user: U
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
         "/api/v1/admin/auth/otp/verify",
-        json={"identifier": test_user.email, "otp": req_res.json()["dev_otp"]},
+        json={"identifier": test_user.email, "otp": req_res.json()["data"]["dev_otp"]},
     )
     current_cookies = login_res.cookies
 
     for _ in range(5):
-        res = client.post("/auth/refresh", cookies=current_cookies)
+        res = client.post("/api/v1/sessions/refresh", cookies=current_cookies)
         assert res.status_code == 200
         current_cookies = res.cookies
 
@@ -363,7 +364,7 @@ def test_12_absolute_expiration_does_not_extend_after_refresh(
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
         "/api/v1/admin/auth/otp/verify",
-        json={"identifier": test_user.email, "otp": req_res.json()["dev_otp"]},
+        json={"identifier": test_user.email, "otp": req_res.json()["data"]["dev_otp"]},
     )
     initial_session = (
         db_session.query(AuthSession)
@@ -373,7 +374,7 @@ def test_12_absolute_expiration_does_not_extend_after_refresh(
     )
     original_expires_at = initial_session.expires_at
 
-    refresh_res = client.post("/auth/refresh", cookies=login_res.cookies)
+    refresh_res = client.post("/api/v1/sessions/refresh", cookies=login_res.cookies)
     assert refresh_res.status_code == 200
 
     new_session = (
@@ -389,34 +390,34 @@ def test_13_logout(client: TestClient, test_user: User, db_session):
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
         "/api/v1/admin/auth/otp/verify",
-        json={"identifier": test_user.email, "otp": req_res.json()["dev_otp"]},
+        json={"identifier": test_user.email, "otp": req_res.json()["data"]["dev_otp"]},
     )
     cookies = login_res.cookies
 
-    logout_res = client.post("/auth/logout", cookies=cookies)
+    logout_res = client.post("/api/v1/sessions/logout", cookies=cookies)
     assert logout_res.status_code == 200
 
     session = db_session.query(AuthSession).filter_by(user_id=test_user.id).first()
     assert session.revoked_at is not None
-    assert client.post("/auth/refresh", cookies=cookies).status_code == 401
+    assert client.post("/api/v1/sessions/refresh", cookies=cookies).status_code == 401
 
 
 def test_14_logout_all(client: TestClient, test_user: User, db_session):
     """14. Test that logout-all revokes all active sessions for the user."""
     req1 = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
-    log1 = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req1.json()["dev_otp"]})
-    token1 = log1.json()["access_token"]
+    log1 = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req1.json()["data"]["dev_otp"]})
+    token1 = log1.json()["data"]["access_token"]
     cookies1 = log1.cookies
 
     req2 = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
-    log2 = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req2.json()["dev_otp"]})
+    log2 = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req2.json()["data"]["dev_otp"]})
     cookies2 = log2.cookies
 
-    logout_all_res = client.post("/auth/logout-all", headers={"Authorization": f"Bearer {token1}"})
+    logout_all_res = client.post("/api/v1/sessions/logout-all", headers={"Authorization": f"Bearer {token1}"})
     assert logout_all_res.status_code == 200
 
-    assert client.post("/auth/refresh", cookies=cookies1).status_code == 401
-    assert client.post("/auth/refresh", cookies=cookies2).status_code == 401
+    assert client.post("/api/v1/sessions/refresh", cookies=cookies1).status_code == 401
+    assert client.post("/api/v1/sessions/refresh", cookies=cookies2).status_code == 401
 
 
 def test_15_user_cannot_revoke_another_users_session(
@@ -424,15 +425,15 @@ def test_15_user_cannot_revoke_another_users_session(
 ):
     """15. Test that a user cannot revoke another user's session (returns 404)."""
     req_sec = client.post("/api/v1/admin/auth/otp/request", json={"identifier": second_user.email})
-    client.post("/api/v1/admin/auth/otp/verify", json={"identifier": second_user.email, "otp": req_sec.json()["dev_otp"]})
+    client.post("/api/v1/admin/auth/otp/verify", json={"identifier": second_user.email, "otp": req_sec.json()["data"]["dev_otp"]})
     second_session = db_session.query(AuthSession).filter_by(user_id=second_user.id).first()
 
     req_first = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
-    log_first = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req_first.json()["dev_otp"]})
-    first_token = log_first.json()["access_token"]
+    log_first = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req_first.json()["data"]["dev_otp"]})
+    first_token = log_first.json()["data"]["access_token"]
 
     del_res = client.delete(
-        f"/auth/sessions/{second_session.id}",
+        f"/api/v1/sessions/{second_session.id}",
         headers={"Authorization": f"Bearer {first_token}"},
     )
     assert del_res.status_code == 404
@@ -444,28 +445,28 @@ def test_15_user_cannot_revoke_another_users_session(
 def test_16_refresh_token_reuse_replay_handling(client: TestClient, test_user: User):
     """16. Test that replaying an already-rotated refresh token revokes all user sessions (theft defense)."""
     req = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
-    log = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req.json()["dev_otp"]})
+    log = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req.json()["data"]["dev_otp"]})
     old_cookies = dict(log.cookies)
 
-    ref1 = client.post("/auth/refresh", cookies=old_cookies)
+    ref1 = client.post("/api/v1/sessions/refresh", cookies=old_cookies)
     assert ref1.status_code == 200
     valid_cookies = ref1.cookies
 
-    replay_res = client.post("/auth/refresh", cookies=old_cookies)
+    replay_res = client.post("/api/v1/sessions/refresh", cookies=old_cookies)
     assert replay_res.status_code == 401
-    assert "reuse detected" in replay_res.json()["detail"]
+    assert "reuse detected" in replay_res.json()["message"]
 
-    assert client.post("/auth/refresh", cookies=valid_cookies).status_code == 401
+    assert client.post("/api/v1/sessions/refresh", cookies=valid_cookies).status_code == 401
 
 
 def test_17_missing_refresh_cookie(client: TestClient):
     """17. Test that refresh endpoint returns 401 if no refresh cookie is sent."""
-    assert client.post("/auth/refresh").status_code == 401
+    assert client.post("/api/v1/sessions/refresh").status_code == 401
 
 
 def test_18_invalid_refresh_token(client: TestClient):
     """18. Test that an invalid/non-existent refresh token returns 401."""
-    res = client.post("/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: "invalid-token"})
+    res = client.post("/api/v1/sessions/refresh", cookies={settings.REFRESH_COOKIE_NAME: "invalid-token"})
     assert res.status_code == 401
 
 
@@ -477,16 +478,16 @@ def test_active_session_marks_current_without_refresh_cookie(client: TestClient,
     )
     login_res = client.post(
         "/api/v1/admin/auth/otp/verify",
-        json={"identifier": test_user.email, "otp": req_res.json()["dev_otp"]},
+        json={"identifier": test_user.email, "otp": req_res.json()["data"]["dev_otp"]},
     )
 
     sessions_res = client.get(
         "/api/v1/sessions/",
-        headers={"Authorization": f"Bearer {login_res.json()['access_token']}"},
+        headers={"Authorization": f"Bearer {login_res.json()['data']['access_token']}"},
     )
 
     assert sessions_res.status_code == 200
-    sessions = sessions_res.json()
+    sessions = sessions_res.json()["data"]
     assert len(sessions) == 1
     assert sessions[0]["is_current"] is True
 
@@ -503,7 +504,7 @@ def test_19_admin_google_login(client: TestClient, test_user: User):
         json={"id_token": google_token},
     )
     assert res.status_code == 200
-    data = res.json()
+    data = res.json()["data"]
     assert "access_token" in data
     assert data["user"]["email"] == test_user.email
     assert data["user"]["profile_pic"] == "https://lh3.googleusercontent.com/a/new-admin-pic.jpg"
@@ -528,7 +529,7 @@ def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClien
         json={"id_token": google_token, "visitor_id": str(visitor.id)},
     )
     assert res.status_code == 200
-    data = res.json()
+    data = res.json()["data"]
     assert "access_token" in data
     assert data["customer"]["name"] == "Sandra Adventurer"
     assert data["customer"]["email"] == "sandra.adventurer@gmail.com"
@@ -541,16 +542,14 @@ def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClien
 
 
 def test_21_room_and_vehicle_float_types(db_session):
-    """21. Test that Room and Vehicle models use float for prices."""
-    room = Room(room_code="RM-101", room_number="101", price_per_night=2500.50, is_active=True)
-    vehicle = Vehicle(vehicle_code="VH-01", name="Innova Crysta", registration_number="WB-64-1234", capacity=7, price_per_day=3200.75, is_active=True)
+    """21. Test that Room and Vehicle models use float/Decimal for prices."""
+    room = Room(room_code="RM-101", room_number="101", price_per_night=Decimal("2500.50"), is_active=True)
+    vehicle = Vehicle(vehicle_code="VH-01", name="Innova Crysta", registration_number="WB-64-1234", capacity=7, price_per_day=Decimal("3200.75"), is_active=True)
     db_session.add(room)
     db_session.add(vehicle)
     db_session.commit()
     db_session.refresh(room)
     db_session.refresh(vehicle)
 
-    assert isinstance(room.price_per_night, float)
-    assert room.price_per_night == 2500.50
-    assert isinstance(vehicle.price_per_day, float)
-    assert vehicle.price_per_day == 3200.75
+    assert float(room.price_per_night) == 2500.50
+    assert float(vehicle.price_per_day) == 3200.75

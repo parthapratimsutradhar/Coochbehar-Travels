@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.config import settings
+from app.api.deps import get_current_actor
 from app.main import app
 
 
@@ -11,22 +11,22 @@ def client():
         yield test_client
 
 
-def test_upload_requires_upload_key(client: TestClient, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(settings, "UPLOAD_KEY", "test-upload-key")
-
+def test_upload_requires_jwt(client: TestClient):
     response = client.post(
-        "/api/v1/public/files/upload?sub_folder=tour-packages",
+        "/api/v1/public/files/upload",
         files={"file": ("photo.jpg", b"content", "image/jpeg")},
     )
 
     assert response.status_code == 401
 
 
-def test_upload_accepts_configured_upload_key(
+@pytest.mark.parametrize("actor_type", ["ADMIN", "STAFF", "CUSTOMER"])
+def test_upload_accepts_authenticated_actor(
     client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch,
+    actor_type: str,
 ):
-    monkeypatch.setattr(settings, "UPLOAD_KEY", "test-upload-key")
+    app.dependency_overrides[get_current_actor] = lambda: (object(), actor_type)
 
     async def fake_upload_file_to_cloudinary(file, sub_folder):
         return {
@@ -42,12 +42,13 @@ def test_upload_accepts_configured_upload_key(
         "app.api.v1.public.uploads.upload_file_to_cloudinary",
         fake_upload_file_to_cloudinary,
     )
-
-    response = client.post(
-        "/api/v1/public/files/upload?sub_folder=tour-packages",
-        headers={"X-Upload-Key": "test-upload-key"},
-        files={"file": ("photo.jpg", b"content", "image/jpeg")},
-    )
+    try:
+        response = client.post(
+            "/api/v1/public/files/upload",
+            files={"file": ("photo.jpg", b"content", "image/jpeg")},
+        )
+    finally:
+        app.dependency_overrides.pop(get_current_actor, None)
 
     assert response.status_code == 201
-    assert response.json()["public_id"] == "tour-packages/photo"
+    assert response.json()["data"]["public_id"] == "tour-packages/photo"

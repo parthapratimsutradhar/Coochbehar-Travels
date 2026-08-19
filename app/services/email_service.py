@@ -22,7 +22,7 @@ class EmailService:
     if not token_file.is_file():
       raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=f"Gmail OAuth token file was not found: {token_file}. Run scripts/generate_token.py first.",
+        message=f"Gmail OAuth token file was not found: {token_file}. Run scripts/generate_token.py first.",
       )
 
   def _get_gmail_service(self):
@@ -36,7 +36,7 @@ class EmailService:
       except (TypeError, ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(
           status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-          detail="GMAIL_TOKEN_JSON is not valid Google OAuth token JSON.",
+          message="GMAIL_TOKEN_JSON is not valid Google OAuth token JSON.",
         ) from exc
     else:
       try:
@@ -44,12 +44,12 @@ class EmailService:
       except (TypeError, ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(
           status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-          detail="Gmail token.json is invalid or missing refresh_token. Run scripts/generate_token.py again.",
+          message="Gmail token.json is invalid or missing refresh_token. Run scripts/generate_token.py again.",
         ) from exc
     if not credentials.refresh_token:
       raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Gmail OAuth token is missing refresh_token. Run scripts/generate_token.py again.",
+        message="Gmail OAuth token is missing refresh_token. Run scripts/generate_token.py again.",
       )
     if credentials.expired and credentials.refresh_token:
       credentials.refresh(Request())
@@ -58,7 +58,7 @@ class EmailService:
     if not credentials.valid:
       raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Gmail OAuth token is invalid. Run scripts/generate_token.py again.",
+        message="Gmail OAuth token is invalid. Run scripts/generate_token.py again.",
       )
     return build("gmail", "v1", credentials=credentials, cache_discovery=False)
 
@@ -81,7 +81,7 @@ class EmailService:
         detail = f"{detail} Provider error: {exc}"
       raise HTTPException(
         status_code=status.HTTP_502_BAD_GATEWAY,
-        detail=detail,
+        message=detail,
       ) from exc
 
   def send_email(self, to_email: str, subject: str, body: str) -> dict:

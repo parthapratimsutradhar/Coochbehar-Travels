@@ -127,7 +127,6 @@ Create a `.env` file in the root directory (or update existing `.env`):
 ```env
 DATABASE_URL=postgresql+psycopg://USERNAME:PASSWORD@HOST:PORT/DATABASE
 CORS_ORIGINS=https://your-frontend.onrender.com
-UPLOAD_KEY=replace-with-one-long-random-token
 UPLOAD_MAX_SIZE_BYTES=10485760
 UPLOAD_ALLOWED_FOLDERS=tour-packages,customers,users,vehicles,rooms,reviews
 ```
@@ -140,14 +139,10 @@ trailing slash. For example:
 CORS_ORIGINS=https://coochbehartravels.com,https://admin.coochbehartravels.com
 ```
 
-The public file endpoint is `POST /api/v1/public/files/upload`. The frontend must
-send the same long-lived token in the `X-Upload-Key` header and use HTTPS:
+The file endpoint is `POST /api/v1/public/files/upload`. It requires the standard
+Bearer JWT and is available to authenticated admin, staff, and customer actors.
 
-```text
-X-Upload-Key: <UPLOAD_KEY>
-```
-
-The endpoint validates the key, file size, media type, and allowed folder before
+The endpoint validates the JWT, file size, media type, and allowed folder before
 uploading to Cloudinary. Save the returned `public_id` in the relevant business
 record when associating the uploaded file.
 

@@ -16,6 +16,7 @@ from app.schemas.lead import (
     LeadResponse,
     LeadUpdate,
 )
+from app.schemas.response import SuccessResponse
 
 router = APIRouter(
     prefix="/admin/leads",
@@ -25,7 +26,7 @@ router = APIRouter(
 
 @router.get(
     "",
-    response_model=list[LeadResponse],
+    response_model=SuccessResponse[list[LeadResponse]],
     summary="List sales leads",
     description="Retrieve sales leads with status, source, and search filters.",
 )
@@ -53,12 +54,15 @@ def list_leads(
 
     stmt = stmt.offset(skip).limit(limit)
     leads = db.execute(stmt).scalars().all()
-    return leads
+    return SuccessResponse(
+        message="Leads fetched successfully",
+        data=[LeadResponse.model_validate(l) for l in leads],
+    )
 
 
 @router.get(
     "/{lead_id}",
-    response_model=LeadResponse,
+    response_model=SuccessResponse[LeadResponse],
     summary="Get single sales lead detail",
 )
 def get_lead(
@@ -70,14 +74,17 @@ def get_lead(
     if not lead:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lead with ID {lead_id} not found",
+            message=f"Lead with ID {lead_id} not found",
         )
-    return lead
+    return SuccessResponse(
+        message="Lead fetched successfully",
+        data=LeadResponse.model_validate(lead),
+    )
 
 
 @router.post(
     "",
-    response_model=LeadResponse,
+    response_model=SuccessResponse[LeadResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Manually create a new lead",
 )
@@ -104,12 +111,16 @@ def create_lead(
     db.commit()
 
     stmt = select(Lead).options(selectinload(Lead.activities)).where(Lead.id == lead.id)
-    return db.execute(stmt).scalar_one()
+    created = db.execute(stmt).scalar_one()
+    return SuccessResponse(
+        message="Lead created successfully",
+        data=LeadResponse.model_validate(created),
+    )
 
 
 @router.patch(
     "/{lead_id}",
-    response_model=LeadResponse,
+    response_model=SuccessResponse[LeadResponse],
     summary="Update sales lead status / notes",
 )
 def update_lead(
@@ -122,7 +133,7 @@ def update_lead(
     if not lead:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lead with ID {lead_id} not found",
+            message=f"Lead with ID {lead_id} not found",
         )
 
     update_data = payload.model_dump(exclude_unset=True)
@@ -131,12 +142,15 @@ def update_lead(
 
     db.commit()
     db.refresh(lead)
-    return lead
+    return SuccessResponse(
+        message="Lead updated successfully",
+        data=LeadResponse.model_validate(lead),
+    )
 
 
 @router.post(
     "/{lead_id}/activities",
-    response_model=LeadActivityResponse,
+    response_model=SuccessResponse[LeadActivityResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Log sales activity / follow-up for a lead",
     description="Record WhatsApp messages, phone calls, emails, and schedule next follow-up dates.",
@@ -151,7 +165,7 @@ def log_lead_activity(
     if not lead:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lead with ID {lead_id} not found",
+            message=f"Lead with ID {lead_id} not found",
         )
 
     activity = LeadActivity(
@@ -169,4 +183,8 @@ def log_lead_activity(
 
     db.commit()
     db.refresh(activity)
-    return activity
+    return SuccessResponse(
+        message="Lead activity logged successfully",
+        data=LeadActivityResponse.model_validate(activity),
+    )
+

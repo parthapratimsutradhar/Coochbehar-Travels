@@ -64,9 +64,11 @@ class TourPackageService:
         )
 
         return PaginatedResponse[TourPackageListItem](
+            message="Tour packages fetched successfully",
             data=items,
             pagination=pagination,
         )
+
 
     def get_package_by_slug(self, slug: str) -> TourPackageDetailResponse:
         """Fetch full tour package details formatted for consumer frontend."""
@@ -75,7 +77,7 @@ class TourPackageService:
         if package is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tour package with slug '{slug}' not found",
+                message=f"Tour package with slug '{slug}' not found",
             )
         return self._format_package_detail(package)
 
@@ -86,7 +88,7 @@ class TourPackageService:
         if package is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tour package with id '{package_id}' not found",
+                message=f"Tour package with id '{package_id}' not found",
             )
         return self._format_package_detail(package)
 

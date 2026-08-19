@@ -6,7 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from scalar_fastapi import get_scalar_api_reference
 
 from app.core.config import settings
+from app.core.exception_handlers import register_exception_handlers
 from app.api.v1.admin.auth import router as admin_auth_router
+from app.api.v1.admin.account import router as admin_account_router
 from app.api.v1.admin.enquiries import router as admin_enquiries_router
 from app.api.v1.admin.leads import router as admin_leads_router
 from app.api.v1.sessions import router as sessions_router
@@ -32,9 +34,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+register_exception_handlers(app)
+
+
 # ── API routers ───────────────────────────────────────────────────────
 app.include_router(sessions_router, prefix="/api/v1")  # /api/v1/sessions/*
 app.include_router(admin_auth_router, prefix="/api/v1")  # /api/v1/admin/auth/otp/*
+app.include_router(admin_account_router, prefix="/api/v1")  # /api/v1/admin/account/*
 app.include_router(enduser_auth_router, prefix="/api/v1")  # /api/v1/enduser/auth/otp/*
 app.include_router(tour_packages_router, prefix="/api/v1")
 app.include_router(enquiries_router, prefix="/api/v1")

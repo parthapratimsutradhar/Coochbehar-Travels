@@ -97,10 +97,6 @@ class Settings:
     CLOUDINARY_API_KEY: str | None = _env("CLOUDINARY_API_KEY")
     CLOUDINARY_API_SECRET: str | None = _env("CLOUDINARY_API_SECRET")
 
-    # ── Public file uploads ──────────────────────────────────────────
-    UPLOAD_KEY: str | None = _env("UPLOAD_KEY")
-
-
 settings = Settings()
 
 

@@ -15,9 +15,9 @@ from app.models.customer import Customer
 from app.models.user import User
 from app.schemas.auth import (
     AuthSessionResponse,
-    MessageResponse,
     RefreshResponse,
 )
+from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.auth_service import AuthService
 
 router = APIRouter(
@@ -26,10 +26,9 @@ router = APIRouter(
 )
 
 
-
 @router.post(
     "/refresh",
-    response_model=RefreshResponse,
+    response_model=SuccessResponse[RefreshResponse],
     summary="Renew Access Token",
     description="Rotates the refresh token from the HttpOnly cookie, preserves original 30-day max expiration, and returns a new 15-minute access JWT.",
 )
@@ -55,16 +54,19 @@ def refresh(
 
     set_refresh_cookie(response, new_raw_refresh_token)
 
-    return RefreshResponse(
-        access_token=new_access_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    return SuccessResponse(
+        message="Token refreshed successfully.",
+        data=RefreshResponse(
+            access_token=new_access_token,
+            token_type="bearer",
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        ),
     )
 
 
 @router.post(
     "/logout",
-    response_model=MessageResponse,
+    response_model=ActionResponse,
     summary="Logout current session",
     description="Revokes the current refresh session and clears the HttpOnly refresh token cookie.",
 )
@@ -77,12 +79,12 @@ def logout(
     auth_service = AuthService(db)
     auth_service.logout(raw_refresh_token)
     clear_refresh_cookie(response)
-    return MessageResponse(message="Successfully logged out.")
+    return ActionResponse(message="Successfully logged out.")
 
 
 @router.post(
     "/logout-all",
-    response_model=MessageResponse,
+    response_model=ActionResponse,
     summary="Logout all active sessions",
     description="Revokes all active sessions for the authenticated actor (User or Customer) and clears the refresh cookie.",
 )
@@ -99,12 +101,12 @@ def logout_all(
         auth_service.logout_all_for_actor(customer_id=actor.id)
 
     clear_refresh_cookie(response)
-    return MessageResponse(message="Successfully logged out of all active sessions.")
+    return ActionResponse(message="Successfully logged out of all active sessions.")
 
 
 @router.get(
     "/",
-    response_model=list[AuthSessionResponse],
+    response_model=SuccessResponse[list[AuthSessionResponse]],
     summary="List active sessions",
     description="Retrieve all non-revoked sessions for the authenticated actor (User or Customer).",
 )
@@ -126,22 +128,27 @@ def list_sessions(
     auth_service = AuthService(db)
 
     if actor_type in ("ADMIN", "STAFF"):
-        return auth_service.get_actor_sessions(
+        sessions = auth_service.get_actor_sessions(
             user_id=actor.id,
             current_refresh_token=current_refresh_token,
             current_session_id=current_session_id,
         )
     else:
-        return auth_service.get_actor_sessions(
+        sessions = auth_service.get_actor_sessions(
             customer_id=actor.id,
             current_refresh_token=current_refresh_token,
             current_session_id=current_session_id,
         )
+    return SuccessResponse(
+        message="Active sessions retrieved successfully.",
+        data=sessions,
+    )
 
 
 @router.delete(
     "/{session_id}",
-    response_model=MessageResponse,
+    response_model=ActionResponse,
+    responses={422: {"model": ErrorResponse}},
     summary="Revoke a specific session",
     description="Revoke an individual session belonging to the authenticated actor.",
 )
@@ -166,4 +173,5 @@ def revoke_session(
         if session and session.revoked_at is not None:
             clear_refresh_cookie(response)
 
-    return MessageResponse(message="Session revoked successfully.")
+    return ActionResponse(message="Session revoked successfully.")
+

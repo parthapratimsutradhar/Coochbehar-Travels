@@ -8,6 +8,7 @@ from app.core.enums import EnquiryStatus, EnquiryType
 from app.db.database import get_db
 from app.models.enquiry import Enquiry
 from app.schemas.enquiry import EnquiryResponse, EnquiryUpdate
+from app.schemas.response import SuccessResponse
 
 router = APIRouter(
     prefix="/admin/enquiries",
@@ -17,7 +18,7 @@ router = APIRouter(
 
 @router.get(
     "",
-    response_model=list[EnquiryResponse],
+    response_model=SuccessResponse[list[EnquiryResponse]],
     summary="List enquiries (Admin)",
     description="Retrieve all incoming enquiries with optional filtering by status and type.",
 )
@@ -37,12 +38,15 @@ def list_enquiries(
 
     stmt = stmt.offset(skip).limit(limit)
     enquiries = db.execute(stmt).scalars().all()
-    return enquiries
+    return SuccessResponse(
+        message="Enquiries fetched successfully",
+        data=[EnquiryResponse.model_validate(e) for e in enquiries],
+    )
 
 
 @router.get(
     "/{enquiry_id}",
-    response_model=EnquiryResponse,
+    response_model=SuccessResponse[EnquiryResponse],
     summary="Get single enquiry detail",
 )
 def get_enquiry(
@@ -54,14 +58,17 @@ def get_enquiry(
     if not enquiry:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Enquiry with ID {enquiry_id} not found",
+            message=f"Enquiry with ID {enquiry_id} not found",
         )
-    return enquiry
+    return SuccessResponse(
+        message="Enquiry fetched successfully",
+        data=EnquiryResponse.model_validate(enquiry),
+    )
 
 
 @router.patch(
     "/{enquiry_id}",
-    response_model=EnquiryResponse,
+    response_model=SuccessResponse[EnquiryResponse],
     summary="Update enquiry status (Admin)",
 )
 def update_enquiry(
@@ -74,7 +81,7 @@ def update_enquiry(
     if not enquiry:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Enquiry with ID {enquiry_id} not found",
+            message=f"Enquiry with ID {enquiry_id} not found",
         )
 
     update_data = payload.model_dump(exclude_unset=True)
@@ -83,4 +90,8 @@ def update_enquiry(
 
     db.commit()
     db.refresh(enquiry)
-    return enquiry
+    return SuccessResponse(
+        message="Enquiry updated successfully",
+        data=EnquiryResponse.model_validate(enquiry),
+    )
+

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 3s95xstUtRhZKYysnu2keeKBQr2oADgH9WyQBrIq1lxeIcHL3jDi5Szti5QZoah
+\restrict Bnj20k4VhCw5eGYY3sDbFcIM5pgRDrGAHHWtbKBaYf6DSF1whk6b5hveO76oaYi
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -126,6 +126,19 @@ CREATE TYPE public.lead_status AS ENUM (
 ALTER TYPE public.lead_status OWNER TO postgres;
 
 --
+-- Name: oauth_purpose; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.oauth_purpose AS ENUM (
+    'ADMIN_LOGIN',
+    'CUSTOMER_LOGIN',
+    'CUSTOMER_LINK'
+);
+
+
+ALTER TYPE public.oauth_purpose OWNER TO postgres;
+
+--
 -- Name: user_role; Type: TYPE; Schema: public; Owner: postgres
 --
 
@@ -153,6 +166,27 @@ CREATE TABLE public.alembic_version (
 ALTER TABLE public.alembic_version OWNER TO postgres;
 
 --
+-- Name: auth_sessions; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.auth_sessions (
+    id uuid NOT NULL,
+    user_id uuid,
+    customer_id uuid,
+    actor_type character varying(20) DEFAULT 'USER'::character varying NOT NULL,
+    refresh_token_hash character varying(255) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_used_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    revoked_at timestamp with time zone,
+    user_agent character varying(500),
+    ip_address character varying(45)
+);
+
+
+ALTER TABLE public.auth_sessions OWNER TO postgres;
+
+--
 -- Name: customers; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -165,11 +199,11 @@ CREATE TABLE public.customers (
     address character varying(255),
     emergency_contact_name character varying(100),
     emergency_contact_mobile character varying(20),
-    profile_pic character varying(500),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     source public.lead_source NOT NULL,
-    is_imported boolean NOT NULL
+    is_imported boolean NOT NULL,
+    profile_pic character varying(500)
 );
 
 
@@ -215,7 +249,7 @@ ALTER TABLE public.enquiries OWNER TO postgres;
 CREATE TABLE public.google_oauth_states (
     id uuid NOT NULL,
     state_token character varying(255) NOT NULL,
-    purpose character varying(30) NOT NULL,
+    purpose public.oauth_purpose NOT NULL,
     redirect_uri text,
     visitor_id uuid,
     expires_at timestamp with time zone NOT NULL,
@@ -225,27 +259,6 @@ CREATE TABLE public.google_oauth_states (
 
 
 ALTER TABLE public.google_oauth_states OWNER TO postgres;
-
---
--- Name: COLUMN google_oauth_states.state_token; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.google_oauth_states.state_token IS 'Random CSRF state token';
-
-
---
--- Name: COLUMN google_oauth_states.purpose; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.google_oauth_states.purpose IS 'ADMIN_LOGIN, CUSTOMER_LOGIN, CUSTOMER_LINK';
-
-
---
--- Name: COLUMN google_oauth_states.redirect_uri; Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON COLUMN public.google_oauth_states.redirect_uri IS 'Where to redirect after auth';
-
 
 --
 -- Name: lead_activities; Type: TABLE; Schema: public; Owner: postgres
@@ -359,6 +372,7 @@ CREATE TABLE public.reviews (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     customer_id uuid,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    review_gallery jsonb NOT NULL,
     CONSTRAINT ck_reviews_rating CHECK (((rating >= 1) AND (rating <= 5)))
 );
 
@@ -471,34 +485,13 @@ CREATE TABLE public.users (
     role public.user_role NOT NULL,
     is_active boolean NOT NULL,
     last_login timestamp with time zone,
-    profile_pic character varying(500),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    profile_pic character varying(500)
 );
 
 
 ALTER TABLE public.users OWNER TO postgres;
-
---
--- Name: auth_sessions; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.auth_sessions (
-    id uuid NOT NULL,
-    user_id uuid,
-    customer_id uuid,
-    actor_type character varying(20) DEFAULT 'USER'::character varying NOT NULL,
-    refresh_token_hash character varying(255) NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    last_used_at timestamp with time zone DEFAULT now() NOT NULL,
-    expires_at timestamp with time zone NOT NULL,
-    revoked_at timestamp with time zone,
-    user_agent character varying(500),
-    ip_address character varying(45)
-);
-
-
-ALTER TABLE public.auth_sessions OWNER TO postgres;
 
 --
 -- Name: vehicles; Type: TABLE; Schema: public; Owner: postgres
@@ -743,6 +736,27 @@ ALTER TABLE ONLY public.visitor_sessions
 
 ALTER TABLE ONLY public.visitors
     ADD CONSTRAINT visitors_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ix_auth_sessions_customer_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX ix_auth_sessions_customer_id ON public.auth_sessions USING btree (customer_id);
+
+
+--
+-- Name: ix_auth_sessions_refresh_token_hash; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX ix_auth_sessions_refresh_token_hash ON public.auth_sessions USING btree (refresh_token_hash);
+
+
+--
+-- Name: ix_auth_sessions_user_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX ix_auth_sessions_user_id ON public.auth_sessions USING btree (user_id);
 
 
 --
@@ -1075,6 +1089,22 @@ CREATE UNIQUE INDEX ix_visitors_visitor_code ON public.visitors USING btree (vis
 
 
 --
+-- Name: auth_sessions auth_sessions_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.auth_sessions
+    ADD CONSTRAINT auth_sessions_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id) ON DELETE CASCADE;
+
+
+--
+-- Name: auth_sessions auth_sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.auth_sessions
+    ADD CONSTRAINT auth_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
 -- Name: enquiries enquiries_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1254,5 +1284,5 @@ ALTER TABLE ONLY public.visitors
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 3s95xstUtRhZKYysnu2keeKBQr2oADgH9WyQBrIq1lxeIcHL3jDi5Szti5QZoah
+\unrestrict Bnj20k4VhCw5eGYY3sDbFcIM5pgRDrGAHHWtbKBaYf6DSF1whk6b5hveO76oaYi
 

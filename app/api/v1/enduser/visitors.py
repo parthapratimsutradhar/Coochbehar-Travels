@@ -9,6 +9,7 @@ from app.db.database import get_db
 from app.models.visitor import Visitor
 from app.models.visitor_event import VisitorEvent
 from app.models.visitor_session import VisitorSession
+from app.schemas.response import SuccessResponse
 from app.schemas.visitor import (
     VisitorCreate,
     VisitorEventCreate,
@@ -26,7 +27,7 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=VisitorResponse,
+    response_model=SuccessResponse[VisitorResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Track or identify a web visitor",
     description="Initialize a new visitor tracking ID or update last_seen for an existing visitor fingerprint.",
@@ -46,7 +47,10 @@ def track_visitor(
             visitor.customer_id = payload.customer_id
         db.commit()
         db.refresh(visitor)
-        return visitor
+        return SuccessResponse(
+            message="Visitor updated successfully",
+            data=VisitorResponse.model_validate(visitor),
+        )
 
     visitor_code = f"VIS-{uuid.uuid4().hex[:8].upper()}"
     visitor = Visitor(
@@ -65,12 +69,15 @@ def track_visitor(
     db.add(visitor)
     db.commit()
     db.refresh(visitor)
-    return visitor
+    return SuccessResponse(
+        message="Visitor tracked successfully",
+        data=VisitorResponse.model_validate(visitor),
+    )
 
 
 @router.post(
     "/sessions",
-    response_model=VisitorSessionResponse,
+    response_model=SuccessResponse[VisitorSessionResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Start a visitor session",
     description="Record a new web browsing session for a visitor.",
@@ -95,12 +102,15 @@ def create_session(
     db.add(session)
     db.commit()
     db.refresh(session)
-    return session
+    return SuccessResponse(
+        message="Visitor session created successfully",
+        data=VisitorSessionResponse.model_validate(session),
+    )
 
 
 @router.post(
     "/events",
-    response_model=VisitorEventResponse,
+    response_model=SuccessResponse[VisitorEventResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Log visitor interaction event",
     description="Record telemetry events (page clicks, tour package views, form submissions).",
@@ -137,4 +147,8 @@ def log_event(
 
     db.commit()
     db.refresh(event)
-    return event
+    return SuccessResponse(
+        message="Visitor event logged successfully",
+        data=VisitorEventResponse.model_validate(event),
+    )
+

@@ -21,5 +21,8 @@ class PaginationMeta(BaseModel):
 class PaginatedResponse(BaseModel, Generic[T]):
     """Generic paginated response wrapper."""
 
+    success: bool = Field(default=True)
+    message: str = Field(default="Items fetched successfully")
     data: list[T] = Field(..., description="List of items for the current page")
     pagination: PaginationMeta = Field(..., description="Pagination metadata")
+

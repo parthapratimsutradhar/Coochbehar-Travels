@@ -9,26 +9,34 @@ from app.schemas.customer import CustomerResponse
 # ── Admin Schemas ──────────────────────────────────────────────────────
 
 class AdminOtpRequestSchema(BaseModel):
-    """Admin OTP request — no visitor_id or identifier_type needed."""
+    """Admin OTP request — identifier and purpose are required."""  
 
     identifier: str = Field(
         ...,
-        description="Mobile number (e.g. '+919876543210') or Email address",
+        description="Mobile number (e.g. '919876543210') or Email address",
         min_length=3,
         max_length=255,
     )
     purpose: str = Field(
         default="LOGIN",
-        description="LOGIN, VERIFY_MOBILE, or VERIFY_EMAIL",
+        description="LOGIN, VERIFY_MOBILE, VERIFY_EMAIL, or DELETE_ACCOUNT",
     )
 
 
 class AdminOtpVerifySchema(BaseModel):
-    """Admin OTP verification — login only, no registration or visitor linking."""
+    """Admin OTP verification — for LOGIN, VERIFY_MOBILE, VERIFY_EMAIL, DELETE_ACCOUNT."""
 
-    identifier: str = Field(..., description="Mobile number or Email address")
+    identifier: str = Field(
+        ...,
+        description="Mobile number (e.g. '919876543210') or Email address",
+        min_length=3,
+        max_length=255,
+    )
     otp: str = Field(..., min_length=4, max_length=10, description="The 6-digit OTP code")
-    purpose: str = Field(default="LOGIN")
+    purpose: str = Field(
+        default="LOGIN",
+        description="LOGIN, VERIFY_MOBILE, VERIFY_EMAIL, or DELETE_ACCOUNT",
+    )
 
 
 class AdminGoogleAuthSchema(BaseModel):
@@ -44,13 +52,13 @@ class CustomerOtpRequestSchema(BaseModel):
 
     identifier: str = Field(
         ...,
-        description="Mobile number (e.g. '+919876543210') or Email address",
+        description="Mobile number (e.g. '919876543210') or Email address",
         min_length=3,
         max_length=255,
     )
     purpose: str = Field(
         default="LOGIN",
-        description="LOGIN, VERIFY_MOBILE, or VERIFY_EMAIL",
+        description="LOGIN, VERIFY_MOBILE, VERIFY_EMAIL, or DELETE_ACCOUNT",
     )
     visitor_id: UUID | None = Field(
         default=None,
@@ -85,7 +93,6 @@ class CustomerGoogleAuthSchema(BaseModel):
 # ── Shared Response Schemas ────────────────────────────────────────────
 
 class OtpRequestResponse(BaseModel):
-    message: str
     identifier: str
     identifier_type: str
     expires_in_sec: int = Field(default=300, description="OTP validity in seconds")
@@ -113,7 +120,8 @@ class UserResponse(BaseModel):
 class AdminTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    expires_in_sec: int = Field(default=900, description="Access token expiration in seconds (15 minutes)")
+    expires_in: int = Field(default=900, description="Access token expiration in seconds (15 minutes)")
+
 
 
 class CustomerTokenResponse(BaseModel):
@@ -133,7 +141,7 @@ class AuthSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    actor_type: str = "USER"
+    actor_type: str = "ADMIN"
     user_agent: str | None = None
     ip_address: str | None = None
     created_at: datetime

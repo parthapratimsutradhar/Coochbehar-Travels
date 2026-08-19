@@ -23,6 +23,11 @@ class UserRepository:
         stmt = select(User).where(User.email.ilike(email.strip()))
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def get_by_mobile(self, mobile: str) -> User | None:
+        """Fetch user by mobile number."""
+        stmt = select(User).where(User.mobile == mobile.strip())
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def update_last_login(self, user: User) -> None:
         """Update last_login timestamp."""
         user.last_login = datetime.now(timezone.utc)

@@ -13,6 +13,7 @@ from app.schemas.auth import (
     OtpRequestResponse,
 )
 from app.schemas.customer import CustomerResponse, CustomerUpdate
+from app.schemas.response import SuccessResponse
 from app.services.auth_service import AuthService
 
 router = APIRouter(
@@ -23,7 +24,7 @@ router = APIRouter(
 
 @router.post(
     "/otp/request",
-    response_model=OtpRequestResponse,
+    response_model=SuccessResponse[OtpRequestResponse],
     summary="Request Customer Login / Register OTP",
     description="Dispatch a passwordless 6-digit OTP to a traveler's mobile number or email.",
 )
@@ -37,18 +38,20 @@ def request_customer_otp(
         purpose=payload.purpose,
         visitor_id=payload.visitor_id,
     )
-    return OtpRequestResponse(
+    return SuccessResponse(
         message=message,
-        identifier=identifier,
-        identifier_type=id_type,
-        expires_in=expires_in,
-        dev_otp=raw_otp,
+        data=OtpRequestResponse(
+            identifier=identifier,
+            identifier_type=id_type,
+            expires_in_sec=expires_in,
+            dev_otp=raw_otp,
+        ),
     )
 
 
 @router.post(
     "/otp/verify",
-    response_model=CustomerTokenResponse,
+    response_model=SuccessResponse[CustomerTokenResponse],
     summary="Verify Customer OTP, Auto-Register & Link Visitor",
     description="Verifies the OTP, auto-creates a customer profile if first-time traveler, links web visitor telemetry, creates a 30-day session, and returns a 15-minute access JWT.",
 )
@@ -74,17 +77,20 @@ def verify_customer_otp(
 
     set_refresh_cookie(response, raw_refresh_token)
 
-    return CustomerTokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        customer=CustomerResponse.model_validate(customer),
+    return SuccessResponse(
+        message="Customer authenticated successfully.",
+        data=CustomerTokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            customer=CustomerResponse.model_validate(customer),
+        ),
     )
 
 
 @router.post(
     "/google",
-    response_model=CustomerTokenResponse,
+    response_model=SuccessResponse[CustomerTokenResponse],
     summary="Customer Continue with Google",
     description="Authenticate or auto-register a traveler via Google OAuth ID token and automatically link web visitor telemetry.",
 )
@@ -107,28 +113,34 @@ def google_login_customer(
 
     set_refresh_cookie(response, raw_refresh_token)
 
-    return CustomerTokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        customer=CustomerResponse.model_validate(customer),
+    return SuccessResponse(
+        message="Customer authenticated successfully with Google.",
+        data=CustomerTokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            customer=CustomerResponse.model_validate(customer),
+        ),
     )
 
 
 @router.get(
     "/me",
-    response_model=CustomerResponse,
+    response_model=SuccessResponse[CustomerResponse],
     summary="Get Authenticated Customer Profile",
 )
 def get_current_customer_profile(
     current_customer: Customer = Depends(get_current_customer),
 ):
-    return CustomerResponse.model_validate(current_customer)
+    return SuccessResponse(
+        message="Customer profile fetched successfully.",
+        data=CustomerResponse.model_validate(current_customer),
+    )
 
 
 @router.put(
     "/me",
-    response_model=CustomerResponse,
+    response_model=SuccessResponse[CustomerResponse],
     summary="Update Customer Profile",
 )
 def update_customer_profile(
@@ -141,4 +153,8 @@ def update_customer_profile(
         customer=current_customer,
         update_data=payload.model_dump(exclude_unset=True),
     )
-    return CustomerResponse.model_validate(updated)
+    return SuccessResponse(
+        message="Customer profile updated successfully.",
+        data=CustomerResponse.model_validate(updated),
+    )
+

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.enums import TourType
 from app.db.database import get_db
 from app.schemas.pagination import PaginatedResponse
+from app.schemas.response import SuccessResponse
 from app.schemas.tour_package import (
     TourPackageDetailResponse,
     TourPackageFilterParams,
@@ -115,7 +116,7 @@ def list_tour_packages(
 
 @router.get(
     "/{slug}",
-    response_model=TourPackageDetailResponse,
+    response_model=SuccessResponse[TourPackageDetailResponse],
     summary="Get tour package details by slug",
     description=(
         "Retrieve the full details of a tour package including all its "
@@ -135,4 +136,9 @@ def get_tour_package(
     """Fetch a single tour package by its URL slug."""
 
     service = TourPackageService(db)
-    return service.get_package_by_slug(slug)
+    detail = service.get_package_by_slug(slug)
+    return SuccessResponse(
+        message="Tour package fetched successfully",
+        data=detail,
+    )
+
