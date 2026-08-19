@@ -25,6 +25,17 @@ class Settings:
 
     DATABASE_URL = _env("DATABASE_URL")
 
+    # Comma-separated frontend origins, for example:
+    # https://coochbehartravels.com,https://admin.coochbehartravels.com
+    CORS_ORIGINS: tuple[str, ...] = tuple(
+        origin.strip().rstrip("/")
+        for origin in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:3000,http://localhost:5173",
+        ).split(",")
+        if origin.strip()
+    )
+
     # ── JWT & Authentication ─────────────────────────────────────────
     JWT_SECRET_KEY: str = _env("JWT_SECRET_KEY") or "CHANGE-ME-IN-PRODUCTION"
     JWT_ALGORITHM: str = _env("JWT_ALGORITHM") or "HS256"
@@ -83,6 +94,8 @@ class Settings:
     CLOUDINARY_API_KEY: str | None = _env("CLOUDINARY_API_KEY")
     CLOUDINARY_API_SECRET: str | None = _env("CLOUDINARY_API_SECRET")
 
+    # ── Public file uploads ──────────────────────────────────────────
+    UPLOAD_KEY: str | None = _env("UPLOAD_KEY")
 
 
 settings = Settings()

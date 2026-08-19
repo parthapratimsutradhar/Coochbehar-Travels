@@ -2,8 +2,10 @@ import copy
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from scalar_fastapi import get_scalar_api_reference
 
+from app.core.config import settings
 from app.api.v1.admin.auth import router as admin_auth_router
 from app.api.v1.admin.enquiries import router as admin_enquiries_router
 from app.api.v1.admin.leads import router as admin_leads_router
@@ -20,6 +22,14 @@ app = FastAPI(
     version="1.0.0",
     docs_url=None,
     redoc_url=None,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(settings.CORS_ORIGINS),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # ── API routers ───────────────────────────────────────────────────────

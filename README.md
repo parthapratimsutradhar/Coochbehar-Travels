@@ -126,7 +126,30 @@ Create a `.env` file in the root directory (or update existing `.env`):
 
 ```env
 DATABASE_URL=postgresql+psycopg://USERNAME:PASSWORD@HOST:PORT/DATABASE
+CORS_ORIGINS=https://your-frontend.onrender.com
+UPLOAD_KEY=replace-with-one-long-random-token
+UPLOAD_MAX_SIZE_BYTES=10485760
+UPLOAD_ALLOWED_FOLDERS=tour-packages,customers,users,vehicles,rooms,reviews
 ```
+
+Set `CORS_ORIGINS` in Render to the exact browser origin(s) that call this API,
+separated by commas. Include the scheme and port when needed, but do not add a
+trailing slash. For example:
+
+```env
+CORS_ORIGINS=https://coochbehartravels.com,https://admin.coochbehartravels.com
+```
+
+The public file endpoint is `POST /api/v1/public/files/upload`. The frontend must
+send the same long-lived token in the `X-Upload-Key` header and use HTTPS:
+
+```text
+X-Upload-Key: <UPLOAD_KEY>
+```
+
+The endpoint validates the key, file size, media type, and allowed folder before
+uploading to Cloudinary. Save the returned `public_id` in the relevant business
+record when associating the uploaded file.
 
 *Example for local PostgreSQL:*
 ```env

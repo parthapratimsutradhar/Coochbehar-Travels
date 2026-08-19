@@ -10,6 +10,23 @@ from app.core.config import settings
 
 
 CLOUDINARY_ROOT_FOLDER = "Coochbehar-travels"
+ALLOWED_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "video/mp4",
+    "video/webm",
+    "application/pdf",
+}
+
+UPLOAD_ALLOWED_FOLDERS = {
+    "profile-picture",
+    "tour-packages",
+    "temporary-uploads"
+}
+
+UPLOAD_MAX_SIZE_BYTES="10"
 
 
 def _clean_folder_segment(value: str) -> str:
@@ -29,6 +46,32 @@ def build_cloudinary_folder(sub_folder: str) -> str:
             detail="sub_folder must contain at least one valid folder name",
         )
     return "/".join([CLOUDINARY_ROOT_FOLDER, *parts])
+
+
+def _validate_upload(file: UploadFile, content: bytes, sub_folder: str) -> str:
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Uploaded file is empty",
+        )
+    if len(content) > settings.UPLOAD_MAX_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Uploaded file exceeds the {settings.UPLOAD_MAX_SIZE_BYTES // (1024 * 1024)} MB limit",
+        )
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported file type",
+        )
+
+    folder_name = sub_folder.strip().replace("\\", "/").split("/", 1)[0]
+    if folder_name not in settings.UPLOAD_ALLOWED_FOLDERS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unsupported upload folder",
+        )
+    return build_cloudinary_folder(sub_folder)
 
 
 def _sign_upload_params(params: dict[str, Any]) -> str:
@@ -53,13 +96,7 @@ async def upload_file_to_cloudinary(file: UploadFile, sub_folder: str) -> dict[s
         )
 
     content = await file.read()
-    if not content:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Uploaded file is empty",
-        )
-
-    folder = build_cloudinary_folder(sub_folder)
+    folder = _validate_upload(file, content, sub_folder)
     timestamp = int(time.time())
     upload_params = {
         "folder": folder,

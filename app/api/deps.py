@@ -1,5 +1,6 @@
 import uuid
-from fastapi import Depends, HTTPException, Request, Response, status
+import hmac
+from fastapi import Depends, Header, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -14,6 +15,22 @@ from app.repository.user_repo import UserRepository
 from app.utils.security import decode_access_token
 
 security_bearer = HTTPBearer(auto_error=False)
+
+
+def require_upload_key(x_upload_key: str | None = Header(default=None)) -> None:
+    """Authorize the public upload endpoint with the configured static key."""
+    configured_key = settings.UPLOAD_KEY
+    if not configured_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="File upload authentication is not configured.",
+        )
+    if not x_upload_key or not hmac.compare_digest(x_upload_key, configured_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid upload key.",
+            headers={"WWW-Authenticate": "X-Upload-Key"},
+        )
 
 
 def _get_token_payload(credentials: HTTPAuthorizationCredentials | None) -> dict:

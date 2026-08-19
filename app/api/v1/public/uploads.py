@@ -1,5 +1,6 @@
-from fastapi import APIRouter, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
+from app.api.deps import require_upload_key
 from app.schemas.upload import FileUploadResponse
 from app.services.cloudinary_service import upload_file_to_cloudinary
 
@@ -15,16 +16,12 @@ router = APIRouter(
     response_model=FileUploadResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Upload a file to Cloudinary",
+    dependencies=[Depends(require_upload_key)],
 )
 async def upload_file(
-    sub_folder: str = Query(
-        ...,
-        min_length=1,
-        description="Sub-folder under Coochbehar-travels",
-    ),
     file: UploadFile = File(...),
 ):
-    result = await upload_file_to_cloudinary(file=file, sub_folder=sub_folder)
+    result = await upload_file_to_cloudinary(file=file, sub_folder="temporary-uploads")
     return FileUploadResponse(
         url=result["secure_url"],
         public_id=result["public_id"],

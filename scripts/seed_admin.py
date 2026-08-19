@@ -14,14 +14,14 @@ DEFAULT_ADMINS = [
     {
         "name": "System Admin",
         "email": "ppsdev6@gmail.com",
-        "mobile": "+919876543210",
+        "mobile": "919876543210",
         "role": UserRole.ADMIN,
         "user_code": "USR-ADMIN01",
     },
     {
         "name": "System Admin",
         "email": "modaksubham866@gmail.com",
-        "mobile": "+919876543211",
+        "mobile": "919876543211",
         "role": UserRole.ADMIN,
         "user_code": "USR-ADMIN02",
     },
