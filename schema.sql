@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict bxdkinSRQQtAJbTilvUX68ZAogJH93AhaGTdSnk14MAgqipmhex5gHbJSzxHYXS
+\restrict MfchE69Aqdk77LsehmHashYiagsW7v8N5rDGDfg5qqLP7vlKFKhCjS64Y5rGHET
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -461,11 +461,7 @@ CREATE TABLE public.tour_variants (
     is_active boolean NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    key character varying(50),
-    display_order integer,
     badge character varying(50),
-    season_type character varying(50),
-    currency character varying(10) DEFAULT 'INR'::character varying,
     availability character varying(20) DEFAULT 'AVAILABLE'::character varying
 );
 
@@ -1284,5 +1280,5 @@ ALTER TABLE ONLY public.visitors
 -- PostgreSQL database dump complete
 --
 
-\unrestrict bxdkinSRQQtAJbTilvUX68ZAogJH93AhaGTdSnk14MAgqipmhex5gHbJSzxHYXS
+\unrestrict MfchE69Aqdk77LsehmHashYiagsW7v8N5rDGDfg5qqLP7vlKFKhCjS64Y5rGHET
 

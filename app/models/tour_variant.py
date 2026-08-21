@@ -62,30 +62,9 @@ class TourVariant(ActiveEntity):
         Integer,
     )
 
-    key: Mapped[str | None] = mapped_column(
-        String(50),
-        nullable=True,
-    )
-
-    display_order: Mapped[int | None] = mapped_column(
-        Integer,
-        nullable=True,
-        default=1,
-    )
-
     badge: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
-    )
-
-    season_type: Mapped[str | None] = mapped_column(
-        String(50),
-        nullable=True,
-    )
-
-    currency: Mapped[str | None] = mapped_column(
-        String(10),
-        default="INR",
     )
 
     availability: Mapped[str | None] = mapped_column(
