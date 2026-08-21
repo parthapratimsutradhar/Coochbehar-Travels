@@ -17,13 +17,7 @@ class TourDetail(UUIDEntity):
         ),
         primary_key=True,
     )
-    
-    tour_detail_code: Mapped[str] = mapped_column(
-        String(20),
-        unique=True,
-        index=True,
-    )
-    
+        
     banner: Mapped[dict] = mapped_column(
         JSONB,
         nullable=False,

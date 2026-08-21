@@ -52,7 +52,6 @@ class VisitorSessionResponse(VisitorSessionBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    session_code: str
     page_views: int
     duration_seconds: int
     started_at: datetime
@@ -75,7 +74,6 @@ class VisitorEventResponse(VisitorEventBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    event_code: str
     created_at: datetime
 
 

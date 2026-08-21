@@ -559,8 +559,8 @@ def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClien
 
 def test_21_room_and_vehicle_float_types(db_session):
     """21. Test that Room and Vehicle models use float/Decimal for prices."""
-    room = Room(room_code="RM-101", room_number="101", price_per_night=Decimal("2500.50"), is_active=True)
-    vehicle = Vehicle(vehicle_code="VH-01", name="Innova Crysta", registration_number="WB-64-1234", capacity=7, price_per_day=Decimal("3200.75"), is_active=True)
+    room = Room(room_number="101", price_per_night=Decimal("2500.50"), is_active=True)
+    vehicle = Vehicle(name="Innova Crysta", registration_number="WB-64-1234", capacity=7, price_per_day=Decimal("3200.75"), is_active=True)
     db_session.add(room)
     db_session.add(vehicle)
     db_session.commit()

@@ -8,12 +8,6 @@ from app.models.base import UUIDEntity
 class VisitorSession(UUIDEntity):
     __tablename__ = "visitor_sessions"
 
-    session_code: Mapped[str] = mapped_column(
-        String(20),
-        unique=True,
-        index=True,
-    )
-
     visitor_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("visitors.id", ondelete="CASCADE"),
         index=True,

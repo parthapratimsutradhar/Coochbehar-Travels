@@ -17,7 +17,7 @@ class TourVariant(ActiveEntity):
         nullable=False,
     )
 
-    variant_code: Mapped[str] = mapped_column(
+    slug: Mapped[str] = mapped_column(
         String(30),
         unique=True,
         index=True,

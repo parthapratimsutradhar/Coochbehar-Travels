@@ -7,12 +7,6 @@ from decimal import Decimal
 class Vehicle(ActiveEntity):
     __tablename__ = "vehicles"
 
-    vehicle_code: Mapped[str] = mapped_column(
-        String(20),
-        unique=True,
-        index=True,
-    )
-
     name: Mapped[str] = mapped_column(
         String(100),
     )

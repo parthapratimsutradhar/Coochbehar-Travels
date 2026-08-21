@@ -144,9 +144,7 @@ class VisitorRepository:
         utm_term: str | None = None,
     ) -> VisitorSession:
         """Create a new browsing session."""
-        session_code = f"SES-{uuid.uuid4().hex[:8].upper()}"
         session = VisitorSession(
-            session_code=session_code,
             visitor_id=visitor_id,
             landing_page=landing_page,
             referrer=referrer,
@@ -245,9 +243,7 @@ class VisitorRepository:
         event_metadata: dict | None = None,
     ) -> VisitorEvent:
         """Log a single visitor interaction event."""
-        event_code = f"EVT-{uuid.uuid4().hex[:8].upper()}"
         event = VisitorEvent(
-            event_code=event_code,
             visitor_id=visitor_id,
             session_id=session_id,
             event_name=event_name,
@@ -266,9 +262,7 @@ class VisitorRepository:
         """Bulk-insert multiple events in a single transaction."""
         created: list[VisitorEvent] = []
         for data in events_data:
-            event_code = f"EVT-{uuid.uuid4().hex[:8].upper()}"
             event = VisitorEvent(
-                event_code=event_code,
                 visitor_id=data["visitor_id"],
                 session_id=data["session_id"],
                 event_name=data["event_name"],

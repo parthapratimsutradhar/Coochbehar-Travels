@@ -9,12 +9,6 @@ from app.models.base import UUIDEntity
 class VisitorEvent(UUIDEntity):
     __tablename__ = "visitor_events"
 
-    event_code: Mapped[str] = mapped_column(
-        String(20),
-        unique=True,
-        index=True,
-    )
-
     visitor_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("visitors.id", ondelete="CASCADE"),
         index=True,

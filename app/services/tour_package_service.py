@@ -224,7 +224,7 @@ class TourPackageService:
             id=variant.id,
             key=key,
             display_order=display_order,
-            variant_code=variant.variant_code,
+            slug=variant.slug,
             name=variant.name,
             badge=badge,
             season_type=season_type,

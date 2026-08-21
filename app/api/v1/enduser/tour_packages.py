@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.enums import TourType
 from app.db.database import get_db
 from app.schemas.pagination import PaginatedResponse
-from app.schemas.response import SuccessResponse
+from app.schemas.response import SuccessResponse, ErrorResponse
 from app.schemas.tour_package import (
     TourPackageDetailResponse,
     TourPackageFilterParams,

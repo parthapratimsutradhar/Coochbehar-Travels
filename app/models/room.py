@@ -8,12 +8,6 @@ from app.models.base import ActiveEntity
 class Room(ActiveEntity):
     __tablename__ = "rooms"
 
-    room_code: Mapped[str | None] = mapped_column(
-        String(20),
-        unique=True,
-        index=True,
-    )
-
     room_number: Mapped[str | None] = mapped_column(
         String(20),
         unique=True,

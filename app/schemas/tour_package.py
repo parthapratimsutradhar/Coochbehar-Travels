@@ -34,7 +34,7 @@ class TourSeasonResponse(BaseModel):
     id: uuid.UUID
     key: str | None = Field(None, description="Season identifier key e.g. tulip, summer, autumn")
     display_order: int | None = Field(None, description="Display sorting order")
-    variant_code: str
+    slug: str
     name: str
     badge: str | None = Field(None, description="Badge text e.g. Most Popular, Family Special")
     season_type: str | None = Field(None, description="Season category e.g. SPRING, SUMMER, AUTUMN")
