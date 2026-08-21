@@ -13,11 +13,11 @@ from app.schemas.auth import (
     OtpRequestResponse,
 )
 from app.schemas.customer import CustomerResponse, CustomerUpdate
-from app.schemas.response import SuccessResponse
+from app.schemas.response import SuccessResponse, ErrorResponse
 from app.services.auth_service import AuthService
 
 router = APIRouter(
-    prefix="/enduser/auth",
+    prefix="/auth",
     tags=["Enduser - Customer Authentication"],
 )
 
@@ -25,6 +25,7 @@ router = APIRouter(
 @router.post(
     "/otp/request",
     response_model=SuccessResponse[OtpRequestResponse],
+    responses={422: {"model": ErrorResponse}},
     summary="Request Customer Login / Register OTP",
     description="Dispatch a passwordless 6-digit OTP to a traveler's mobile number or email.",
 )
@@ -35,7 +36,7 @@ def request_customer_otp(
     auth_service = AuthService(db)
     message, identifier, id_type, expires_in, raw_otp = auth_service.request_customer_otp(
         identifier=payload.identifier,
-        purpose=payload.purpose,
+        purpose=getattr(payload.purpose, "value", payload.purpose),
         visitor_id=payload.visitor_id,
     )
     return SuccessResponse(
@@ -52,6 +53,7 @@ def request_customer_otp(
 @router.post(
     "/otp/verify",
     response_model=SuccessResponse[CustomerTokenResponse],
+    responses={422: {"model": ErrorResponse}},
     summary="Verify Customer OTP, Auto-Register & Link Visitor",
     description="Verifies the OTP, auto-creates a customer profile if first-time traveler, links web visitor telemetry, creates a 30-day session, and returns a 15-minute access JWT.",
 )
@@ -65,11 +67,11 @@ def verify_customer_otp(
     ip_address = request.client.host if request.client else None
 
     auth_service = AuthService(db)
-    access_token, raw_refresh_token, customer = auth_service.verify_customer_otp(
+    access_token, raw_refresh_token= auth_service.verify_customer_otp(
         identifier=payload.identifier,
         otp=payload.otp,
         name=payload.name,
-        purpose=payload.purpose,
+        purpose=getattr(payload.purpose, "value", payload.purpose),
         visitor_id=payload.visitor_id,
         user_agent=user_agent,
         ip_address=ip_address,
@@ -82,8 +84,7 @@ def verify_customer_otp(
         data=CustomerTokenResponse(
             access_token=access_token,
             token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            customer=CustomerResponse.model_validate(customer),
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
         ),
     )
 
@@ -91,6 +92,7 @@ def verify_customer_otp(
 @router.post(
     "/google",
     response_model=SuccessResponse[CustomerTokenResponse],
+    responses={422: {"model": ErrorResponse}},
     summary="Customer Continue with Google",
     description="Authenticate or auto-register a traveler via Google OAuth ID token and automatically link web visitor telemetry.",
 )
@@ -104,7 +106,7 @@ async def google_login_customer(
     ip_address = request.client.host if request.client else None
 
     auth_service = AuthService(db)
-    access_token, raw_refresh_token, customer = await auth_service.google_login_customer(
+    access_token, raw_refresh_token = await auth_service.google_login_customer(
         id_token=payload.id_token,
         visitor_id=payload.visitor_id,
         user_agent=user_agent,
@@ -118,8 +120,7 @@ async def google_login_customer(
         data=CustomerTokenResponse(
             access_token=access_token,
             token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            customer=CustomerResponse.model_validate(customer),
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
         ),
     )
 
@@ -138,9 +139,10 @@ def get_current_customer_profile(
     )
 
 
-@router.put(
+@router.patch(
     "/me",
     response_model=SuccessResponse[CustomerResponse],
+    responses={422: {"model": ErrorResponse}},
     summary="Update Customer Profile",
 )
 def update_customer_profile(

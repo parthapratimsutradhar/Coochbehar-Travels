@@ -21,7 +21,7 @@ def _get_token_payload(credentials: HTTPAuthorizationCredentials | None) -> dict
     if not credentials or not credentials.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            message=AuthError.UNAUTHORIZED,
+            detail=AuthError.UNAUTHORIZED,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -30,7 +30,7 @@ def _get_token_payload(credentials: HTTPAuthorizationCredentials | None) -> dict
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            message="Invalid or expired access token.",
+            detail="Invalid or expired access token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return payload
@@ -47,14 +47,14 @@ def get_current_admin_or_staff(
     if actor_type not in ["ADMIN", "STAFF"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            message="Admin/Staff access required.",
+            detail="Admin/Staff access required.",
         )
 
     user_id_str = payload.get("sub")
     if not user_id_str:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            message="Token subject missing.",
+            detail="Token subject missing.",
         )
 
     try:
@@ -62,7 +62,7 @@ def get_current_admin_or_staff(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            message="Invalid user ID in token.",
+            detail="Invalid user ID in token.",
         )
 
     user_repo = UserRepository(db)
@@ -70,7 +70,7 @@ def get_current_admin_or_staff(
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            message="User not found or inactive.",
+            detail="User not found or inactive.",
         )
 
     return user
@@ -86,7 +86,7 @@ def get_current_admin(
     if current_user.role not in (UserRole.ADMIN, UserRole.STAFF):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            message=AuthError.ACCESS_DENIED,
+            detail=AuthError.ACCESS_DENIED,
         )
     return current_user
 
@@ -98,7 +98,7 @@ def get_current_admin_only(
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            message="Administrator access required.",
+            detail="Administrator access required.",
         )
     return current_user
 
@@ -114,14 +114,14 @@ def get_current_customer(
     if actor_type != "CUSTOMER":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            message="Customer access required.",
+            detail="Customer access required.",
         )
 
     customer_id_str = payload.get("sub")
     if not customer_id_str:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            message="Token subject missing.",
+            detail="Token subject missing.",
         )
 
     try:
@@ -129,7 +129,7 @@ def get_current_customer(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            message="Invalid customer ID in token.",
+            detail="Invalid customer ID in token.",
         )
 
     customer_repo = CustomerRepository(db)
@@ -137,7 +137,7 @@ def get_current_customer(
     if not customer:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            message="Customer profile not found.",
+            detail="Customer profile not found.",
         )
 
     return customer
@@ -152,28 +152,28 @@ def get_current_actor(
     actor_type = payload.get("actor_type")
     sub = payload.get("sub")
     if not actor_type or not sub:
-        raise HTTPException(status_code=401, message="Invalid token claims.")
+        raise HTTPException(status_code=401, detail="Invalid token claims.")
 
     try:
         sub_id = uuid.UUID(sub)
     except (ValueError, AttributeError):
-        raise HTTPException(status_code=401, message="Invalid actor ID in token.")
+        raise HTTPException(status_code=401, detail="Invalid actor ID in token.")
 
     if actor_type in ("ADMIN", "STAFF"):
         user_repo = UserRepository(db)
         user = user_repo.get_by_id(sub_id)
         if not user or not user.is_active:
-            raise HTTPException(status_code=401, message="User inactive or not found.")
+            raise HTTPException(status_code=401, detail="User inactive or not found.")
         return user, actor_type
 
     if actor_type == "CUSTOMER":
         customer_repo = CustomerRepository(db)
         customer = customer_repo.get_by_id(sub_id)
         if not customer:
-            raise HTTPException(status_code=401, message="Customer not found.")
+            raise HTTPException(status_code=401, detail="Customer not found.")
         return customer, "CUSTOMER"
 
-    raise HTTPException(status_code=401, message="Invalid actor type in token.")
+    raise HTTPException(status_code=401, detail="Invalid actor type in token.")
 
 
 def get_current_access_token_payload(

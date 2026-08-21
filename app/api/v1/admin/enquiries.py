@@ -58,7 +58,7 @@ def get_enquiry(
     if not enquiry:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            message=f"Enquiry with ID {enquiry_id} not found",
+            detail=f"Enquiry with ID {enquiry_id} not found",
         )
     return SuccessResponse(
         message="Enquiry fetched successfully",
@@ -81,7 +81,7 @@ def update_enquiry(
     if not enquiry:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            message=f"Enquiry with ID {enquiry_id} not found",
+            detail=f"Enquiry with ID {enquiry_id} not found",
         )
 
     update_data = payload.model_dump(exclude_unset=True)

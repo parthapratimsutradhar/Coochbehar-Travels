@@ -1,9 +1,9 @@
 from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
-
-from app.core.enums import UserRole
+from app.core.enums import AdminOtpPurpose, CustomerOtpPurpose, UserRole
 from app.schemas.customer import CustomerResponse
+from app.core.config import settings
 
 
 # ── Admin Schemas ──────────────────────────────────────────────────────
@@ -17,9 +17,9 @@ class AdminOtpRequestSchema(BaseModel):
         min_length=3,
         max_length=255,
     )
-    purpose: str = Field(
+    purpose: AdminOtpPurpose = Field(
         default="LOGIN",
-        description="LOGIN, VERIFY_MOBILE, VERIFY_EMAIL, or DELETE_ACCOUNT",
+        description="Admin authentication purpose: LOGIN, VERIFY_MOBILE, VERIFY_EMAIL, or DELETE_ACCOUNT",
     )
 
 
@@ -56,9 +56,9 @@ class CustomerOtpRequestSchema(BaseModel):
         min_length=3,
         max_length=255,
     )
-    purpose: str = Field(
+    purpose: CustomerOtpPurpose = Field(
         default="LOGIN",
-        description="LOGIN, VERIFY_MOBILE, VERIFY_EMAIL, or DELETE_ACCOUNT",
+        description="Customer authentication purpose: SIGNUP, LOGIN, VERIFY_MOBILE, VERIFY_EMAIL, or DELETE_ACCOUNT",
     )
     visitor_id: UUID | None = Field(
         default=None,
@@ -76,7 +76,10 @@ class CustomerOtpVerifySchema(BaseModel):
         max_length=100,
         description="Customer name (used if registering a new customer profile)",
     )
-    purpose: str = Field(default="LOGIN")
+    purpose: CustomerOtpPurpose = Field(
+        default="LOGIN",
+        description="Customer authentication purpose: LOGIN or SIGNUP",
+    )
     visitor_id: UUID | None = Field(
         default=None,
         description="Optional anonymous visitor ID to automatically link telemetry",
@@ -96,10 +99,11 @@ class OtpRequestResponse(BaseModel):
     identifier: str
     identifier_type: str
     expires_in_sec: int = Field(default=300, description="OTP validity in seconds")
-    dev_otp: str | None = Field(
-        default=None,
-        description="OTP value returned only in development/test environment for convenience",
-    )
+    if settings.IS_DEVELOPMENT:
+        dev_otp: str | None = Field(
+            default=None,
+            description="OTP value returned only in development/test environment for convenience",
+        )
 
 
 class UserResponse(BaseModel):
@@ -128,7 +132,6 @@ class CustomerTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int = Field(default=900, description="Access token expiration in seconds (15 minutes)")
-    customer: CustomerResponse
 
 
 class RefreshResponse(BaseModel):

@@ -74,7 +74,7 @@ def get_lead(
     if not lead:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            message=f"Lead with ID {lead_id} not found",
+            detail=f"Lead with ID {lead_id} not found",
         )
     return SuccessResponse(
         message="Lead fetched successfully",
@@ -133,7 +133,7 @@ def update_lead(
     if not lead:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            message=f"Lead with ID {lead_id} not found",
+            detail=f"Lead with ID {lead_id} not found",
         )
 
     update_data = payload.model_dump(exclude_unset=True)
@@ -165,7 +165,7 @@ def log_lead_activity(
     if not lead:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            message=f"Lead with ID {lead_id} not found",
+            detail=f"Lead with ID {lead_id} not found",
         )
 
     activity = LeadActivity(

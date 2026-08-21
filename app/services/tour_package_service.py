@@ -77,7 +77,7 @@ class TourPackageService:
         if package is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                message=f"Tour package with slug '{slug}' not found",
+                detail=f"Tour package with slug '{slug}' not found",
             )
         return self._format_package_detail(package)
 
@@ -88,7 +88,7 @@ class TourPackageService:
         if package is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                message=f"Tour package with id '{package_id}' not found",
+                detail=f"Tour package with id '{package_id}' not found",
             )
         return self._format_package_detail(package)
 

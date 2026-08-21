@@ -1,109 +1,149 @@
 import uuid
-from datetime import datetime
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.models.visitor import Visitor
-from app.models.visitor_event import VisitorEvent
-from app.models.visitor_session import VisitorSession
 from app.schemas.response import SuccessResponse
 from app.schemas.visitor import (
-    VisitorCreate,
-    VisitorEventCreate,
+    EventBatchRequest,
+    EventBatchResponse,
+    EventTrackRequest,
+    SessionEndRequest,
+    SessionHeartbeatRequest,
+    SessionStartRequest,
     VisitorEventResponse,
+    VisitorIdentifyRequest,
+    VisitorIdentifyResponse,
     VisitorResponse,
-    VisitorSessionCreate,
     VisitorSessionResponse,
 )
+from app.services.tracking_service import TrackingService
 
 router = APIRouter(
     prefix="/visitors",
-    tags=["Visitors & Telemetry"],
+    tags=["Visitors & Tracking"],
 )
 
 
 @router.post(
-    "",
-    response_model=SuccessResponse[VisitorResponse],
-    status_code=status.HTTP_201_CREATED,
-    summary="Track or identify a web visitor",
-    description="Initialize a new visitor tracking ID or update last_seen for an existing visitor fingerprint.",
+    "/identify",
+    response_model=SuccessResponse[VisitorIdentifyResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Identify or upsert a web visitor",
+    description="Identify visitor by browser fingerprint. Creates a new visitor record or updates device/location data for existing visitors.",
 )
-def track_visitor(
-    payload: VisitorCreate,
+def identify_visitor(
+    payload: VisitorIdentifyRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    visitor = None
-    if payload.fingerprint:
-        stmt = select(Visitor).where(Visitor.fingerprint == payload.fingerprint)
-        visitor = db.execute(stmt).scalar_one_or_none()
+    ip_address = payload.ip_address or (request.client.host if request.client else None)
+    user_agent = request.headers.get("user-agent")
 
-    if visitor:
-        visitor.last_seen = datetime.now()
-        if payload.customer_id and not visitor.customer_id:
-            visitor.customer_id = payload.customer_id
-        db.commit()
-        db.refresh(visitor)
-        return SuccessResponse(
-            message="Visitor updated successfully",
-            data=VisitorResponse.model_validate(visitor),
-        )
-
-    visitor_code = f"VIS-{uuid.uuid4().hex[:8].upper()}"
-    visitor = Visitor(
-        visitor_code=visitor_code,
+    service = TrackingService(db)
+    visitor, is_new = service.identify_visitor(
         fingerprint=payload.fingerprint,
-        ip_address=payload.ip_address,
+        ip_address=ip_address,
         country=payload.country,
         state=payload.state,
         city=payload.city,
-        browser=payload.browser,
+        browser=payload.browser or user_agent,
         os=payload.os,
         device=payload.device,
         customer_id=payload.customer_id,
-        lead_score=payload.lead_score,
     )
-    db.add(visitor)
-    db.commit()
-    db.refresh(visitor)
+
     return SuccessResponse(
-        message="Visitor tracked successfully",
-        data=VisitorResponse.model_validate(visitor),
+        message="Visitor identified successfully",
+        data=VisitorIdentifyResponse(
+            visitor=VisitorResponse.model_validate(visitor),
+            is_new=is_new,
+        ),
     )
 
 
 @router.post(
-    "/sessions",
+    "/sessions/start",
     response_model=SuccessResponse[VisitorSessionResponse],
     status_code=status.HTTP_201_CREATED,
-    summary="Start a visitor session",
-    description="Record a new web browsing session for a visitor.",
+    summary="Start a new visitor navigation session",
+    description="Record a new web browsing session with landing page, referrer, and UTM campaign parameters.",
 )
 def create_session(
-    payload: VisitorSessionCreate,
+    payload: SessionStartRequest,
     db: Session = Depends(get_db),
 ):
-    session_code = f"SES-{uuid.uuid4().hex[:8].upper()}"
-    session = VisitorSession(
-        session_code=session_code,
+    service = TrackingService(db)
+    session = service.start_session(
         visitor_id=payload.visitor_id,
         landing_page=payload.landing_page,
-        exit_page=payload.exit_page,
         referrer=payload.referrer,
         utm_source=payload.utm_source,
         utm_medium=payload.utm_medium,
         utm_campaign=payload.utm_campaign,
         utm_term=payload.utm_term,
-        page_views=1,
     )
-    db.add(session)
-    db.commit()
-    db.refresh(session)
     return SuccessResponse(
         message="Visitor session created successfully",
+        data=VisitorSessionResponse.model_validate(session),
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/heartbeat",
+    response_model=SuccessResponse[VisitorSessionResponse],
+    summary="Session keep-alive heartbeat",
+    description="Update exit page and page view count periodically during active session.",
+)
+def heartbeat_session(
+    session_id: uuid.UUID,
+    payload: SessionHeartbeatRequest,
+    db: Session = Depends(get_db),
+):
+    service = TrackingService(db)
+    session = service.heartbeat(
+        session_id=session_id,
+        current_page=payload.current_page,
+        page_views_delta=payload.page_views_delta,
+    )
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session with ID {session_id} not found",
+        )
+
+    return SuccessResponse(
+        message="Session heartbeat recorded",
+        data=VisitorSessionResponse.model_validate(session),
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/end",
+    response_model=SuccessResponse[VisitorSessionResponse],
+    summary="End visitor session",
+    description="Finalise session, record final exit page, and compute total active session duration.",
+)
+def end_session(
+    session_id: uuid.UUID,
+    payload: SessionEndRequest,
+    db: Session = Depends(get_db),
+):
+    service = TrackingService(db)
+    session = service.end_session(
+        session_id=session_id,
+        exit_page=payload.exit_page,
+    )
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session with ID {session_id} not found",
+        )
+
+    return SuccessResponse(
+        message="Session ended successfully",
         data=VisitorSessionResponse.model_validate(session),
     )
 
@@ -112,43 +152,48 @@ def create_session(
     "/events",
     response_model=SuccessResponse[VisitorEventResponse],
     status_code=status.HTTP_201_CREATED,
-    summary="Log visitor interaction event",
-    description="Record telemetry events (page clicks, tour package views, form submissions).",
+    summary="Log a single visitor event",
+    description="Record interaction event (page view, tour package click, enquiry trigger). Dynamically updates visitor lead score.",
 )
 def log_event(
-    payload: VisitorEventCreate,
+    payload: EventTrackRequest,
     db: Session = Depends(get_db),
 ):
-    event_code = f"EVT-{uuid.uuid4().hex[:8].upper()}"
-    event = VisitorEvent(
-        event_code=event_code,
+    service = TrackingService(db)
+    event = service.track_event(
         visitor_id=payload.visitor_id,
         session_id=payload.session_id,
         event_name=payload.event_name,
         page=payload.page,
-        event_metadata=payload.event_metadata,
+        metadata=payload.event_metadata,
     )
-    db.add(event)
 
-    # Increment visitor lead score based on engagement
-    stmt = select(Visitor).where(Visitor.id == payload.visitor_id)
-    visitor = db.execute(stmt).scalar_one_or_none()
-    if visitor:
-        visitor.lead_score += 5
-        visitor.last_seen = datetime.now()
-
-    # Increment session page views if page view event
-    stmt_sess = select(VisitorSession).where(VisitorSession.id == payload.session_id)
-    session = db.execute(stmt_sess).scalar_one_or_none()
-    if session:
-        session.page_views += 1
-        if payload.page:
-            session.exit_page = payload.page
-
-    db.commit()
-    db.refresh(event)
     return SuccessResponse(
         message="Visitor event logged successfully",
         data=VisitorEventResponse.model_validate(event),
+    )
+
+
+@router.post(
+    "/events/batch",
+    response_model=SuccessResponse[EventBatchResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="Batch log multiple visitor interaction events",
+    description="Bulk ingest analytics events buffered by frontend SDKs (up to 50 events per batch).",
+)
+def log_events_batch(
+    payload: EventBatchRequest,
+    db: Session = Depends(get_db),
+):
+    service = TrackingService(db)
+    events_data = [item.model_dump() for item in payload.events]
+    created_events = service.track_events_batch(events_data)
+
+    return SuccessResponse(
+        message=f"Successfully ingested {len(created_events)} visitor events",
+        data=EventBatchResponse(
+            accepted_count=len(created_events),
+            events=[VisitorEventResponse.model_validate(e) for e in created_events],
+        ),
     )
 

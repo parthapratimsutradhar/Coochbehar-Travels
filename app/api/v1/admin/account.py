@@ -81,12 +81,12 @@ def update_account(
 ):
 	account = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
 	if not account or account.role not in (UserRole.ADMIN, UserRole.STAFF):
-		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, message="Admin or staff account not found.")
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin or staff account not found.")
 
 	if payload.email and db.execute(select(User).where(User.email == payload.email.strip().lower(), User.id != user_id)).scalar_one_or_none():
-		raise HTTPException(status_code=status.HTTP_409_CONFLICT, message="Email is already in use.")
+		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already in use.")
 	if payload.mobile and db.execute(select(User).where(User.mobile == payload.mobile.strip(), User.id != user_id)).scalar_one_or_none():
-		raise HTTPException(status_code=status.HTTP_409_CONFLICT, message="Mobile is already in use.")
+		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Mobile is already in use.")
 
 	update_data = payload.model_dump(exclude_unset=True)
 	if "email" in update_data:
@@ -99,7 +99,7 @@ def update_account(
 		db.commit()
 	except IntegrityError:
 		db.rollback()
-		raise HTTPException(status_code=status.HTTP_409_CONFLICT, message="Account contact messages are already in use.")
+		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Account contact messages are already in use.")
 	db.refresh(account)
 	return ActionResponse(message="Account updated successfully.")
 
@@ -118,9 +118,9 @@ def delete_account(
 ):
 	account = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
 	if not account or account.role not in (UserRole.ADMIN, UserRole.STAFF):
-		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, message="Admin or staff account not found.")
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin or staff account not found.")
 	if payload.identifier.strip().lower() != current_admin.email.lower() and payload.identifier.strip() != current_admin.mobile:
-		raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, message="OTP identifier must belong to the authenticated administrator.")
+		raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="OTP identifier must belong to the authenticated administrator.")
 
 	AuthService(db).verify_admin_otp_for_action(
 		identifier=payload.identifier,

@@ -5,6 +5,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
+# ── Base & Legacy Schemas (Preserved for backwards compatibility) ──────
+
 class VisitorBase(BaseModel):
     fingerprint: str | None = Field(default=None, max_length=255)
     ip_address: str | None = Field(default=None, max_length=45)
@@ -75,3 +77,109 @@ class VisitorEventResponse(VisitorEventBase):
     id: UUID
     event_code: str
     created_at: datetime
+
+
+# ── Enhanced Enduser Tracking Schemas ─────────────────────────────────
+
+class VisitorIdentifyRequest(BaseModel):
+    fingerprint: str | None = Field(default=None, max_length=255, description="Client browser fingerprint")
+    ip_address: str | None = Field(default=None, max_length=45)
+    country: str | None = Field(default=None, max_length=100)
+    state: str | None = Field(default=None, max_length=100)
+    city: str | None = Field(default=None, max_length=100)
+    browser: str | None = Field(default=None, max_length=100)
+    os: str | None = Field(default=None, max_length=100)
+    device: str | None = Field(default=None, max_length=100)
+    customer_id: UUID | None = None
+
+
+class VisitorIdentifyResponse(BaseModel):
+    visitor: VisitorResponse
+    is_new: bool = Field(description="True if visitor record was newly created")
+
+
+class SessionStartRequest(BaseModel):
+    visitor_id: UUID
+    landing_page: str | None = Field(default=None, description="URL of entry page")
+    referrer: str | None = Field(default=None, description="HTTP Referrer URL")
+    utm_source: str | None = Field(default=None, max_length=100)
+    utm_medium: str | None = Field(default=None, max_length=100)
+    utm_campaign: str | None = Field(default=None, max_length=100)
+    utm_term: str | None = Field(default=None, max_length=100)
+
+
+class SessionHeartbeatRequest(BaseModel):
+    current_page: str | None = Field(default=None, description="Current page URL")
+    page_views_delta: int = Field(default=0, ge=0, description="Additional page views since last heartbeat")
+
+
+class SessionEndRequest(BaseModel):
+    exit_page: str | None = Field(default=None, description="URL of exit page")
+
+
+class EventTrackRequest(BaseModel):
+    visitor_id: UUID
+    session_id: UUID
+    event_name: str = Field(..., max_length=100, description="e.g. tour_package_view, enquiry_submit, scroll_depth_50")
+    page: str | None = Field(default=None, description="Page URL where event occurred")
+    event_metadata: dict[str, Any] | None = Field(default=None, description="Arbitrary event payload JSON")
+
+
+class EventBatchRequest(BaseModel):
+    events: list[EventTrackRequest] = Field(..., min_length=1, max_length=50, description="Batch of up to 50 events")
+
+
+class EventBatchResponse(BaseModel):
+    accepted_count: int
+    events: list[VisitorEventResponse]
+
+
+class VisitorProfileResponse(BaseModel):
+    visitor: VisitorResponse
+    sessions: list[VisitorSessionResponse]
+    recent_events: list[VisitorEventResponse]
+    total_events: int
+    total_sessions: int
+
+
+# ── Admin Analytics Response Schemas ─────────────────────────────────
+
+class AnalyticsOverviewResponse(BaseModel):
+    total_visitors: int
+    visitors_today: int
+    active_sessions: int
+    total_events_today: int
+    average_lead_score: float
+    high_intent_visitors_count: int
+
+
+class TopPageItem(BaseModel):
+    page: str
+    views: int
+    unique_visitors: int
+
+
+class TopEventItem(BaseModel):
+    event_name: str
+    count: int
+    category: str | None = None
+
+
+class UtmPerformanceItem(BaseModel):
+    utm_source: str | None
+    utm_medium: str | None
+    utm_campaign: str | None
+    session_count: int
+    conversion_count: int
+    avg_duration_seconds: float
+
+
+class FunnelStageItem(BaseModel):
+    stage: str
+    visitor_count: int
+    conversion_rate: float  # Percentage of initial stage
+
+
+class LeadScoreDistributionItem(BaseModel):
+    score_range: str
+    count: int

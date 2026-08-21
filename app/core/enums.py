@@ -9,6 +9,20 @@ class ActorType(str, Enum):
     USER = "USER"
     CUSTOMER = "CUSTOMER"
 
+class AdminOtpPurpose(str, Enum):
+    LOGIN = "LOGIN"
+    VERIFY_MOBILE = "VERIFY_MOBILE"
+    VERIFY_EMAIL = "VERIFY_EMAIL"
+    DELETE_ACCOUNT = "DELETE_ACCOUNT"
+
+class CustomerOtpPurpose(str, Enum):
+    LOGIN = "LOGIN"
+    SIGNUP = "SIGNUP"
+    VERIFY_MOBILE = "VERIFY_MOBILE"
+    VERIFY_EMAIL = "VERIFY_EMAIL"
+    DELETE_ACCOUNT = "DELETE_ACCOUNT"
+    
+
 
 class LeadStatus(str, Enum):
     NEW = "NEW"

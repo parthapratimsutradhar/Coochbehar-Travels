@@ -7,16 +7,11 @@ from scalar_fastapi import get_scalar_api_reference
 
 from app.core.config import settings
 from app.core.exception_handlers import register_exception_handlers
-from app.api.v1.admin.auth import router as admin_auth_router
-from app.api.v1.admin.account import router as admin_account_router
-from app.api.v1.admin.enquiries import router as admin_enquiries_router
-from app.api.v1.admin.leads import router as admin_leads_router
-from app.api.v1.sessions import router as sessions_router
-from app.api.v1.enduser.auth import router as enduser_auth_router
-from app.api.v1.enduser.enquiries import router as enquiries_router
-from app.api.v1.enduser.tour_packages import router as tour_packages_router
-from app.api.v1.enduser.visitors import router as visitors_router
-from app.api.v1.public.uploads import router as uploads_router
+from app.api.v1.admin.urls import router as admin_router
+from app.api.v1.enduser.urls import router as enduser_router
+from app.api.v1.public.urls import router as public_router
+from app.api.v1.shared.urls import router as shared_router
+
 
 app = FastAPI(
     title="Coochbehar Travels API",
@@ -38,16 +33,10 @@ register_exception_handlers(app)
 
 
 # ── API routers ───────────────────────────────────────────────────────
-app.include_router(sessions_router, prefix="/api/v1")  # /api/v1/sessions/*
-app.include_router(admin_auth_router, prefix="/api/v1")  # /api/v1/admin/auth/otp/*
-app.include_router(admin_account_router, prefix="/api/v1")  # /api/v1/admin/account/*
-app.include_router(enduser_auth_router, prefix="/api/v1")  # /api/v1/enduser/auth/otp/*
-app.include_router(tour_packages_router, prefix="/api/v1")
-app.include_router(enquiries_router, prefix="/api/v1")
-app.include_router(visitors_router, prefix="/api/v1")
-app.include_router(admin_leads_router, prefix="/api/v1")
-app.include_router(admin_enquiries_router, prefix="/api/v1")
-app.include_router(uploads_router, prefix="/api/v1")
+app.include_router(shared_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
+app.include_router(enduser_router, prefix="/api/v1")
+app.include_router(public_router, prefix="/api/v1")
 
 
 # ── Filtered OpenAPI helpers ──────────────────────────────────────────
@@ -104,14 +93,14 @@ def _filter_schema(
 
 
 def _enduser_openapi() -> dict:
-    """Enduser docs: /api/v1/enduser/*, public enduser routes, and shared sessions."""
+    """Enduser docs: /api/v1/*, public enduser routes, and shared sessions."""
     full = app.openapi()
     return _filter_schema(
         full,
         title="Coochbehar Travels — Enduser API",
         description="Customer-facing APIs: Customer Auth, Tour Packages, Enquiries, Visitors, Telemetry & Session Management.",
         include={
-            "/api/v1/enduser",
+            "/api/v1/auth",
             "/api/v1/tour-packages",
             "/api/v1/enquiries",
             "/api/v1/visitors",

@@ -50,7 +50,7 @@ def build_cloudinary_folder(sub_folder: str) -> str:
     if not parts:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            message="sub_folder must contain at least one valid folder name",
+            detail="sub_folder must contain at least one valid folder name",
         )
     return "/".join([CLOUDINARY_ROOT_FOLDER, *parts])
 
@@ -59,7 +59,7 @@ def _validate_upload(file: UploadFile, content: bytes, sub_folder: str) -> str:
     if not content:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            message="Uploaded file is empty",
+            detail="Uploaded file is empty",
         )
     max_size = (
         UPLOAD_VIDEO_MAX_SIZE
@@ -69,19 +69,19 @@ def _validate_upload(file: UploadFile, content: bytes, sub_folder: str) -> str:
     if len(content) > max_size:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            message=f"Uploaded file exceeds the {max_size // (1024 * 1024)} MB limit",
+            detail=f"Uploaded file exceeds the {max_size // (1024 * 1024)} MB limit",
         )
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            message="Unsupported file type",
+            detail="Unsupported file type",
         )
 
     folder_name = sub_folder.strip().replace("\\", "/").split("/", 1)[0]
     if folder_name not in UPLOAD_ALLOWED_FOLDERS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            message="Unsupported upload folder",
+            detail="Unsupported upload folder",
         )
     return build_cloudinary_folder(sub_folder)
 
@@ -148,12 +148,12 @@ async def upload_content_to_cloudinary(
     ):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            message="Cloudinary is not configured",
+            detail="Cloudinary is not configured",
         )
     if settings.CLOUDINARY_API_SECRET == settings.CLOUDINARY_API_KEY:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            message="Cloudinary API secret is invalid. Set CLOUDINARY_API_SECRET to the hidden API Secret from your Cloudinary dashboard, not the API Key.",
+            detail="Cloudinary API secret is invalid. Set CLOUDINARY_API_SECRET to the hidden API Secret from your Cloudinary dashboard, not the API Key.",
         )
 
     file = UploadFile(
@@ -195,7 +195,7 @@ async def upload_content_to_cloudinary(
             error = response.text
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            message=f"Cloudinary upload failed: {error or 'unknown error'}",
+            detail=f"Cloudinary upload failed: {error or 'unknown error'}",
         )
 
     result = response.json()
