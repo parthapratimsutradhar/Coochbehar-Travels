@@ -25,7 +25,7 @@ router = APIRouter(
 @router.get(
 	"",
 	response_model=PaginatedResponse[UserResponse],
-	responses={403: {"model": ErrorResponse}},
+	responses={403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
 	summary="List admin and staff accounts",
 )
 def list_accounts(

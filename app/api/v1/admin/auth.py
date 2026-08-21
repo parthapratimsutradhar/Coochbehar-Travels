@@ -13,7 +13,7 @@ from app.schemas.auth import (
     OtpRequestResponse,
     UserResponse,
 )
-from app.schemas.response import SuccessResponse, ActionResponse
+from app.schemas.response import SuccessResponse, ActionResponse, ErrorResponse
 from app.services.auth_service import AuthService
 
 router = APIRouter(
@@ -25,6 +25,7 @@ router = APIRouter(
 @router.post(
     "/otp/request",
     response_model=SuccessResponse[OtpRequestResponse],
+    responses={422: {"model": ErrorResponse}},
     summary="Request Admin OTP",
     description="Generate and dispatch a passwordless 6-digit OTP to the registered admin/staff email or mobile.",
 )
@@ -51,6 +52,7 @@ def request_admin_otp(
 @router.post(
     "/otp/verify",
     response_model=SuccessResponse[AdminTokenResponse],
+    responses={422: {"model": ErrorResponse}},
     summary="Verify Admin OTP & Login",
     description="Verify the 6-digit OTP, create a 30-day refresh session, set HttpOnly cookie, and return a 15-minute access JWT.",
 )
@@ -87,6 +89,7 @@ def verify_admin_otp(
 @router.post(
     "/google",
     response_model=SuccessResponse[AdminTokenResponse],
+    responses={422: {"model": ErrorResponse}},
     summary="Admin Continue with Google",
     description="Authenticate an active Admin account via Google OAuth ID token.",
 )
