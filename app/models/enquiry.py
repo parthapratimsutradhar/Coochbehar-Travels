@@ -111,6 +111,7 @@ class Enquiry(BaseEntity):
         nullable=True
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
     visitor = relationship("Visitor", back_populates="enquiries")
     customer = relationship("Customer", back_populates="enquiries")
     package = relationship("TourPackage", back_populates="enquiries")

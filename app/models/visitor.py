@@ -82,6 +82,7 @@ class Visitor(UUIDEntity):
         nullable=False,
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
     customer = relationship("Customer", back_populates="visitors")
     sessions = relationship("VisitorSession", back_populates="visitor", cascade="all, delete-orphan")
     events = relationship("VisitorEvent", back_populates="visitor", cascade="all, delete-orphan")

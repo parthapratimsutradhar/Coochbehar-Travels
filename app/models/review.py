@@ -73,6 +73,7 @@ class Review(BaseEntity):
         nullable=False,
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
     tour_package = relationship(
         "TourPackage",
         back_populates="reviews",

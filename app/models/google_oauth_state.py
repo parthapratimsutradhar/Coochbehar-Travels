@@ -57,4 +57,5 @@ class GoogleOAuthState(UUIDEntity):
         default=False,
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
     visitor = relationship("Visitor")

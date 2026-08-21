@@ -78,5 +78,6 @@ class AuthSession(UUIDEntity):
         nullable=True,
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
     user = relationship("User", back_populates="auth_sessions")
     customer = relationship("Customer", back_populates="auth_sessions")

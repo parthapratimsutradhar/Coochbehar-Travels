@@ -50,6 +50,7 @@ class User(ActiveEntity):
         nullable=True,
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
     lead_activities = relationship(
         "LeadActivity",
         back_populates="user",

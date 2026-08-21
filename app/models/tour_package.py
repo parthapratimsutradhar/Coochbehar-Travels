@@ -52,6 +52,7 @@ class TourPackage(ActiveEntity):
         default=False,
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
     variants = relationship(
         "TourVariant",
         back_populates="package",

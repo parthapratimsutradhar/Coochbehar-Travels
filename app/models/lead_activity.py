@@ -41,6 +41,6 @@ class LeadActivity(BaseEntity):
         index=True,
     )
 
-
+# ── Relationships ───────────────────────────────────────────────────────
     lead = relationship("Lead", back_populates="activities")
     user = relationship("User", back_populates="lead_activities")

@@ -88,7 +88,7 @@ class Lead(BaseEntity):
         nullable=True,
     )
 
-
+# ── Relationships ───────────────────────────────────────────────────────
     enquiry = relationship("Enquiry", back_populates="lead")
     customer = relationship("Customer", back_populates="leads")
     visitor = relationship("Visitor", back_populates="leads")

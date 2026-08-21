@@ -64,6 +64,7 @@ class TourDetail(UUIDEntity):
         nullable=False,
     )  
 
+# ── Relationships ───────────────────────────────────────────────────────
     variant = relationship(
         "TourVariant",
         back_populates="details",

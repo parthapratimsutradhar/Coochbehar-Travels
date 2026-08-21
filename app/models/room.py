@@ -32,4 +32,5 @@ class Room(ActiveEntity):
         nullable=True,
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
     description: Mapped[str | None] = mapped_column(Text)

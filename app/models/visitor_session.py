@@ -67,6 +67,7 @@ class VisitorSession(UUIDEntity):
         nullable=True,
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
     visitor = relationship(
         "Visitor",
         back_populates="sessions",

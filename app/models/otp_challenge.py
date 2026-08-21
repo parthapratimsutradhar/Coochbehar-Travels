@@ -85,5 +85,6 @@ class OtpChallenge(UUIDEntity):
         index=True,
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
     visitor = relationship("Visitor")
     customer = relationship("Customer")

@@ -45,6 +45,7 @@ class VisitorEvent(UUIDEntity):
         server_default=func.now(),
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
     visitor = relationship(
         "Visitor",
         back_populates="events",

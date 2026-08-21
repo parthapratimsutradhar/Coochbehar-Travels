@@ -63,6 +63,7 @@ class Customer(BaseEntity):
         default=False,
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
     visitors = relationship("Visitor", back_populates="customer")
     enquiries = relationship("Enquiry", back_populates="customer")
     leads = relationship("Lead", back_populates="customer")
