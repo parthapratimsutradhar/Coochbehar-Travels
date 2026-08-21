@@ -18,6 +18,7 @@ from app.schemas.tour_package import (
     TourPackageDetailResponse,
     TourPackageFilterParams,
     TourPackageListItem,
+    TourPackageVariantDetailPayload,
 )
 from app.services.tour_package_service import TourPackageService
 
@@ -64,6 +65,10 @@ def list_tour_packages(
         None,
         description="Filter by tour type: DOMESTIC or INTERNATIONAL",
     ),
+    season: str | None = Query(
+        None,
+        description="Filter by variant season name (case-insensitive)",
+    ),
     is_featured: bool | None = Query(
         None,
         description="Filter by featured status",
@@ -101,6 +106,7 @@ def list_tour_packages(
     filters = TourPackageFilterParams(
         destination=destination,
         type=type,
+        season=season,
         is_featured=is_featured,
         is_active=is_active,
         min_price=min_price,
@@ -119,10 +125,8 @@ def list_tour_packages(
     response_model=SuccessResponse[TourPackageDetailResponse],
     summary="Get tour package details by slug",
     description=(
-        "Retrieve the full details of a tour package including all its "
-        "variants and their associated tour details (banner, gallery, "
-        "highlights, inclusions, exclusions, itinerary, departure dates, "
-        "and route stops)."
+        "Retrieve the full details of a tour package including its default "
+        "variant, other variants, and package reviews."
     ),
     responses={
         200: {"description": "Tour package with full variant details"},
@@ -140,5 +144,30 @@ def get_tour_package(
     return SuccessResponse(
         message="Tour package fetched successfully",
         data=detail,
+    )
+
+
+@router.get(
+    "/{slug}/variants/{variant_slug}",
+    response_model=SuccessResponse[TourPackageVariantDetailPayload],
+    summary="Get a specific variant for a tour package",
+    description="Return a single variant payload plus the remaining variants in the same package.",
+    responses={
+        200: {"description": "Specific tour variant details"},
+        404: {"description": "Package or variant not found"},
+    },
+)
+def get_tour_package_variant(
+    slug: str,
+    variant_slug: str,
+    db: Session = Depends(get_db),
+):
+    """Fetch a specific package variant by package slug and variant slug."""
+
+    service = TourPackageService(db)
+    payload = service.get_variant_by_slug(slug, variant_slug)
+    return SuccessResponse(
+        message="Variant fetched successfully",
+        data=payload,
     )
 

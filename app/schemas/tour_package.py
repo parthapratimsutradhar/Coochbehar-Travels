@@ -16,12 +16,25 @@ class ReviewItemResponse(BaseModel):
 
     id: uuid.UUID
     review_code: str
+    reviewer_by: str
+    reviewer_pic: str | None = None
     name: str
     rating: int
     review: str
-    is_verified: bool = False
-    is_published: bool = True
+    review_gallery: list[Any] = Field(default_factory=list)
     created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class VariantSummaryResponse(BaseModel):
+    """Lightweight variant info used in package and variant responses."""
+
+    slug: str
+    name: str
+    season_name: str | None = None
+    badge: str | None = None
+    availability: str | None = "AVAILABLE"
 
     model_config = {"from_attributes": True}
 
@@ -65,10 +78,37 @@ class TourSeasonResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TourPackageVariantDetailResponse(BaseModel):
+    """Detailed variant payload for a package variant route."""
+
+    id: uuid.UUID
+    slug: str
+    name: str
+    badge: str | None = None
+    season_name: str | None = None
+    banner: str | None = None
+    valid_from: date
+    valid_to: date
+    duration_days: int
+    duration_nights: int
+    price: float = Field(..., description="Base price")
+    seats: int | None = None
+    availability: str = Field("AVAILABLE", description="Availability status")
+    route: list[Any] = Field(default_factory=list)
+    highlights: list[Any] = Field(default_factory=list)
+    departure_dates: list[Any] = Field(default_factory=list)
+    gallery: list[Any] = Field(default_factory=list)
+    itinerary: list[Any] = Field(default_factory=list)
+    inclusions: list[Any] = Field(default_factory=list)
+    exclusions: list[Any] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
 # ── Tour Package Schemas ─────────────────────────────────────────────
 
 class TourPackageListItem(BaseModel):
-    """Lightweight representation used in paginated list responses."""
+    """Representation used in paginated public list responses."""
 
     id: uuid.UUID
     tour_code: str
@@ -77,37 +117,15 @@ class TourPackageListItem(BaseModel):
     destination: str
     type: TourType
     description: str | None = None
-    is_featured: bool
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-
-    starting_price: float | None = Field(
-        None,
-        description="Lowest base_price across active variants",
-    )
-    duration_days: int | None = Field(
-        None,
-        description="Duration days from the default variant",
-    )
-    duration_nights: int | None = Field(
-        None,
-        description="Duration nights from the default variant",
-    )
-    duration: str | None = Field(
-        None,
-        description="Formatted duration string (e.g. '13N | 14D')",
-    )
-    variant_count: int = Field(
-        0,
-        description="Total number of active variants/seasons",
-    )
+    season_name: str | None = None
+    badge: str | None = None
+    banner: str | None = None
 
     model_config = {"from_attributes": True}
 
 
 class TourPackageDetailResponse(BaseModel):
-    """Full tour package response with package-level reviews and a list of seasonal variants (seasons)."""
+    """Full tour package response with package-level reviews and selected/default variant payloads."""
 
     id: uuid.UUID
     tour_code: str
@@ -116,19 +134,18 @@ class TourPackageDetailResponse(BaseModel):
     destination: str
     type: TourType
     description: str | None = None
-    is_featured: bool
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-
-    # Package-level reviews
     reviews: list[ReviewItemResponse] = Field(default_factory=list, description="Reviews for this tour package")
+    default_variant: TourPackageVariantDetailResponse | None = None
+    other_variants: list[VariantSummaryResponse] = Field(default_factory=list)
 
-    # Seasonal variants
-    seasons: list[TourSeasonResponse] = Field(
-        default_factory=list,
-        description="Seasonal variants for this tour package, each with its own route, dates, itinerary & gallery",
-    )
+    model_config = {"from_attributes": True}
+
+
+class TourPackageVariantDetailPayload(BaseModel):
+    """Payload returned by the /{package_slug}/variants/{variant_slug} route."""
+
+    variant: TourPackageVariantDetailResponse
+    other_variants: list[VariantSummaryResponse] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -145,6 +162,10 @@ class TourPackageFilterParams(BaseModel):
     type: TourType | None = Field(
         None,
         description="Filter by tour type: DOMESTIC or INTERNATIONAL",
+    )
+    season: str | None = Field(
+        None,
+        description="Filter by active variant season name (case-insensitive)",
     )
     is_featured: bool | None = Field(
         None,

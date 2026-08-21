@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload, contains_eager
 
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
+from app.models.review import Review
 from app.schemas.tour_package import TourPackageFilterParams
 
 
@@ -22,8 +23,7 @@ class TourPackageRepository:
 
     # ── helpers ───────────────────────────────────────────────────────
 
-    @staticmethod
-    def _apply_filters(query, filters: TourPackageFilterParams):
+    def _apply_filters(self, query, filters: TourPackageFilterParams):
         """Apply WHERE clauses based on the filter params."""
 
         if filters.destination is not None:
@@ -33,6 +33,17 @@ class TourPackageRepository:
 
         if filters.type is not None:
             query = query.filter(TourPackage.type == filters.type)
+
+        if filters.season is not None:
+            season_term = f"%{filters.season}%"
+            query = query.filter(
+                TourPackage.id.in_(
+                    self.db.query(TourVariant.package_id)
+                    .filter(TourVariant.is_active == True)
+                    .filter(TourVariant.season_name.ilike(season_term))
+                    .distinct()
+                )
+            )
 
         if filters.is_featured is not None:
             query = query.filter(TourPackage.is_featured == filters.is_featured)
@@ -196,7 +207,7 @@ class TourPackageRepository:
             self.db.query(TourPackage)
             .options(
                 joinedload(TourPackage.variants).joinedload(TourVariant.details),
-                joinedload(TourPackage.reviews),
+                joinedload(TourPackage.reviews).joinedload(Review.customer),
             )
             .filter(TourPackage.slug == slug)
             .first()
@@ -209,7 +220,7 @@ class TourPackageRepository:
             self.db.query(TourPackage)
             .options(
                 joinedload(TourPackage.variants).joinedload(TourVariant.details),
-                joinedload(TourPackage.reviews),
+                joinedload(TourPackage.reviews).joinedload(Review.customer),
             )
             .filter(TourPackage.id == package_id)
             .first()

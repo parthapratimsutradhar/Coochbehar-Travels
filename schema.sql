@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict MfchE69Aqdk77LsehmHashYiagsW7v8N5rDGDfg5qqLP7vlKFKhCjS64Y5rGHET
+\restrict ObTgqOoVY2iDGh4lUk3OCTCjftVVktUrSu2bIRJGkifwBzqxrU6QPetKMGBrRFh
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -385,7 +385,6 @@ ALTER TABLE public.reviews OWNER TO postgres;
 
 CREATE TABLE public.rooms (
     id uuid NOT NULL,
-    room_code character varying(20),
     room_number character varying(20),
     room_type character varying(50),
     capacity integer,
@@ -405,7 +404,6 @@ ALTER TABLE public.rooms OWNER TO postgres;
 
 CREATE TABLE public.tour_details (
     variant_id uuid NOT NULL,
-    tour_detail_code character varying(20) NOT NULL,
     banner jsonb NOT NULL,
     gallery jsonb NOT NULL,
     highlights jsonb NOT NULL,
@@ -448,7 +446,6 @@ ALTER TABLE public.tour_packages OWNER TO postgres;
 CREATE TABLE public.tour_variants (
     id uuid NOT NULL,
     package_id uuid NOT NULL,
-    variant_code character varying(30) NOT NULL,
     name character varying(100) NOT NULL,
     season_name character varying(100),
     valid_from date NOT NULL,
@@ -462,7 +459,8 @@ CREATE TABLE public.tour_variants (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     badge character varying(50),
-    availability character varying(20) DEFAULT 'AVAILABLE'::character varying
+    availability character varying(20) DEFAULT 'AVAILABLE'::character varying,
+    slug character varying(30) NOT NULL
 );
 
 
@@ -495,7 +493,6 @@ ALTER TABLE public.users OWNER TO postgres;
 
 CREATE TABLE public.vehicles (
     id uuid NOT NULL,
-    vehicle_code character varying(20) NOT NULL,
     name character varying(100) NOT NULL,
     registration_number character varying(50) NOT NULL,
     capacity integer NOT NULL,
@@ -514,7 +511,6 @@ ALTER TABLE public.vehicles OWNER TO postgres;
 
 CREATE TABLE public.visitor_events (
     id uuid NOT NULL,
-    event_code character varying(20) NOT NULL,
     visitor_id uuid NOT NULL,
     session_id uuid NOT NULL,
     event_name character varying(100) NOT NULL,
@@ -532,7 +528,6 @@ ALTER TABLE public.visitor_events OWNER TO postgres;
 
 CREATE TABLE public.visitor_sessions (
     id uuid NOT NULL,
-    session_code character varying(20) NOT NULL,
     visitor_id uuid NOT NULL,
     landing_page text,
     exit_page text,
@@ -945,20 +940,6 @@ CREATE UNIQUE INDEX ix_reviews_review_code ON public.reviews USING btree (review
 
 
 --
--- Name: ix_rooms_room_code; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX ix_rooms_room_code ON public.rooms USING btree (room_code);
-
-
---
--- Name: ix_tour_details_tour_detail_code; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX ix_tour_details_tour_detail_code ON public.tour_details USING btree (tour_detail_code);
-
-
---
 -- Name: ix_tour_packages_destination; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -987,10 +968,10 @@ CREATE INDEX ix_tour_variants_package_id ON public.tour_variants USING btree (pa
 
 
 --
--- Name: ix_tour_variants_variant_code; Type: INDEX; Schema: public; Owner: postgres
+-- Name: ix_tour_variants_slug; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE UNIQUE INDEX ix_tour_variants_variant_code ON public.tour_variants USING btree (variant_code);
+CREATE UNIQUE INDEX ix_tour_variants_slug ON public.tour_variants USING btree (slug);
 
 
 --
@@ -1015,20 +996,6 @@ CREATE UNIQUE INDEX ix_users_user_code ON public.users USING btree (user_code);
 
 
 --
--- Name: ix_vehicles_vehicle_code; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX ix_vehicles_vehicle_code ON public.vehicles USING btree (vehicle_code);
-
-
---
--- Name: ix_visitor_events_event_code; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX ix_visitor_events_event_code ON public.visitor_events USING btree (event_code);
-
-
---
 -- Name: ix_visitor_events_event_name; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -1047,13 +1014,6 @@ CREATE INDEX ix_visitor_events_session_id ON public.visitor_events USING btree (
 --
 
 CREATE INDEX ix_visitor_events_visitor_id ON public.visitor_events USING btree (visitor_id);
-
-
---
--- Name: ix_visitor_sessions_session_code; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX ix_visitor_sessions_session_code ON public.visitor_sessions USING btree (session_code);
 
 
 --
@@ -1280,5 +1240,5 @@ ALTER TABLE ONLY public.visitors
 -- PostgreSQL database dump complete
 --
 
-\unrestrict MfchE69Aqdk77LsehmHashYiagsW7v8N5rDGDfg5qqLP7vlKFKhCjS64Y5rGHET
+\unrestrict ObTgqOoVY2iDGh4lUk3OCTCjftVVktUrSu2bIRJGkifwBzqxrU6QPetKMGBrRFh
 
