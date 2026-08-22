@@ -151,7 +151,10 @@ def test_tour_package_endpoints_return_default_variant_data():
     assert first_item["destination"] == "Himachal Pradesh"
     assert first_item["season_name"] == "Summer Special"
     assert first_item["badge"] == "Most Popular"
-    assert first_item["banner"] == "https://example.com/default-banner.jpg"
+    assert first_item["banner"] == {
+        "image": "https://example.com/default-banner.jpg",
+        "video": None,
+    }
 
     detail_response = client.get("/api/v1/tour-packages/himachal-summer")
     assert detail_response.status_code == 200

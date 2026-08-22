@@ -9,6 +9,15 @@ from pydantic import BaseModel, Field
 from app.core.enums import TourType
 
 
+# ── Media sub-schemas ───────────────────────────────────────────────
+
+class BannerResponse(BaseModel):
+    """Banner media returned for a package or variant."""
+
+    image: str | None = None
+    video: str | None = None
+
+
 # ── Review sub-schema ────────────────────────────────────────────────
 
 class ReviewItemResponse(BaseModel):
@@ -39,6 +48,47 @@ class VariantSummaryResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RouteStopResponse(BaseModel):
+    id: str | None = None
+    city: str | None = None
+    nights: int | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class HighlightResponse(BaseModel):
+    id: str | None = None
+    text: str
+
+    model_config = {"extra": "allow"}
+
+
+class DepartureDateResponse(BaseModel):
+    id: str | None = None
+    date: date
+
+    model_config = {"extra": "allow"}
+
+
+class GalleryItemResponse(BaseModel):
+    id: str | None = None
+    alt: str | None = None
+    url: str
+    type: str | None = None
+    display_order: int | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class ItineraryItemResponse(BaseModel):
+    id: str | None = None
+    day: int | str
+    title: str | None = None
+    description: str | None = None
+
+    model_config = {"extra": "allow"}
+
+
 # ── Season / Variant Sub-Schema ─────────────────────────────────────
 
 class TourSeasonResponse(BaseModel):
@@ -67,11 +117,11 @@ class TourSeasonResponse(BaseModel):
     is_default: bool | None = None
 
     # Season-specific details
-    route: list[Any] = Field(default_factory=list, description="Route stops e.g. [{id: 'r1', place: 'Katra (2N)'}]")
-    highlights: list[Any] = Field(default_factory=list, description="Highlights e.g. [{id: 'h1', text: 'Gondola ride'}]")
-    dates: list[Any] = Field(default_factory=list, description="Departure dates e.g. [{id: 'd1', date: '23 Mar 2026'}]")
-    gallery: list[Any] = Field(default_factory=list, description="Gallery photos e.g. [{id: 'g1', photoId: '...'}]")
-    itinerary: list[Any] = Field(default_factory=list, description="Itinerary days e.g. [{id: 'i1', day: '...', description: '...'}]")
+    route: list[RouteStopResponse] = Field(default_factory=list)
+    highlights: list[HighlightResponse] = Field(default_factory=list)
+    dates: list[DepartureDateResponse] = Field(default_factory=list)
+    gallery: list[GalleryItemResponse] = Field(default_factory=list)
+    itinerary: list[ItineraryItemResponse] = Field(default_factory=list)
     inclusions: list[Any] = Field(default_factory=list, description="Inclusions list")
     exclusions: list[Any] = Field(default_factory=list, description="Exclusions list")
 
@@ -86,7 +136,7 @@ class TourPackageVariantDetailResponse(BaseModel):
     name: str
     badge: str | None = None
     season_name: str | None = None
-    banner: str | None = None
+    banner: BannerResponse | None = None
     valid_from: date
     valid_to: date
     duration_days: int
@@ -94,13 +144,13 @@ class TourPackageVariantDetailResponse(BaseModel):
     price: float = Field(..., description="Base price")
     seats: int | None = None
     availability: str = Field("AVAILABLE", description="Availability status")
-    route: list[Any] = Field(default_factory=list)
-    highlights: list[Any] = Field(default_factory=list)
-    departure_dates: list[Any] = Field(default_factory=list)
-    gallery: list[Any] = Field(default_factory=list)
-    itinerary: list[Any] = Field(default_factory=list)
-    inclusions: list[Any] = Field(default_factory=list)
-    exclusions: list[Any] = Field(default_factory=list)
+    route: list[RouteStopResponse] = Field(default_factory=list)
+    highlights: list[HighlightResponse] = Field(default_factory=list)
+    departure_dates: list[DepartureDateResponse] = Field(default_factory=list)
+    gallery: list[GalleryItemResponse] = Field(default_factory=list)
+    itinerary: list[ItineraryItemResponse] = Field(default_factory=list)
+    inclusions: list[str] = Field(default_factory=list)
+    exclusions: list[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -119,7 +169,7 @@ class TourPackageListItem(BaseModel):
     description: str | None = None
     season_name: str | None = None
     badge: str | None = None
-    banner: str | None = None
+    banner: BannerResponse | None = None
 
     model_config = {"from_attributes": True}
 

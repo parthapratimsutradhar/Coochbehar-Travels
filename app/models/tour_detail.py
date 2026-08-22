@@ -1,5 +1,6 @@
 import uuid
-from sqlalchemy import ForeignKey, String
+from typing import Any
+from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
@@ -18,42 +19,42 @@ class TourDetail(UUIDEntity):
         primary_key=True,
     )
         
-    banner: Mapped[dict] = mapped_column(
+    banner: Mapped[str | dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
     )
 
-    gallery: Mapped[dict] = mapped_column(
+    gallery: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
     )
     
-    highlights: Mapped[dict] = mapped_column(
+    highlights: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
     )
     
-    inclusions: Mapped[dict] = mapped_column(
+    inclusions: Mapped[list[str]] = mapped_column(
         JSONB,
         nullable=False,
     )
     
-    exclusions: Mapped[dict] = mapped_column(
+    exclusions: Mapped[list[str]] = mapped_column(
         JSONB,
         nullable=False,
     )
     
-    departures_dates: Mapped[dict] = mapped_column(
+    departures_dates: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
     )  
     
-    itinerary: Mapped[dict] = mapped_column(
+    itinerary: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
     )
     
-    route_stops: Mapped[dict] = mapped_column(
+    route_stops: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
     )  

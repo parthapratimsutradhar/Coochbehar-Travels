@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict ObTgqOoVY2iDGh4lUk3OCTCjftVVktUrSu2bIRJGkifwBzqxrU6QPetKMGBrRFh
+\restrict Lt0vl5H6fuGp5wZYXkQfUImeFiX1j5G4vKobzXnUrPqxngAEEXuKNijHwN7Hh3U
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -412,7 +412,15 @@ CREATE TABLE public.tour_details (
     departures_dates jsonb NOT NULL,
     itinerary jsonb NOT NULL,
     route_stops jsonb NOT NULL,
-    id uuid NOT NULL
+    id uuid NOT NULL,
+    CONSTRAINT ck_tour_details_banner_json_type CHECK ((jsonb_typeof(banner) = ANY (ARRAY['string'::text, 'object'::text]))),
+    CONSTRAINT ck_tour_details_departures_dates_is_array CHECK ((jsonb_typeof(departures_dates) = 'array'::text)),
+    CONSTRAINT ck_tour_details_exclusions_is_array CHECK ((jsonb_typeof(exclusions) = 'array'::text)),
+    CONSTRAINT ck_tour_details_gallery_is_array CHECK ((jsonb_typeof(gallery) = 'array'::text)),
+    CONSTRAINT ck_tour_details_highlights_is_array CHECK ((jsonb_typeof(highlights) = 'array'::text)),
+    CONSTRAINT ck_tour_details_inclusions_is_array CHECK ((jsonb_typeof(inclusions) = 'array'::text)),
+    CONSTRAINT ck_tour_details_itinerary_is_array CHECK ((jsonb_typeof(itinerary) = 'array'::text)),
+    CONSTRAINT ck_tour_details_route_stops_is_array CHECK ((jsonb_typeof(route_stops) = 'array'::text))
 );
 
 
@@ -1240,5 +1248,5 @@ ALTER TABLE ONLY public.visitors
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ObTgqOoVY2iDGh4lUk3OCTCjftVVktUrSu2bIRJGkifwBzqxrU6QPetKMGBrRFh
+\unrestrict Lt0vl5H6fuGp5wZYXkQfUImeFiX1j5G4vKobzXnUrPqxngAEEXuKNijHwN7Hh3U
 

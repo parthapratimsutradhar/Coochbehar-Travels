@@ -50,7 +50,7 @@ class TourPackageService:
 
             item["season_name"] = default_variant.season_name if default_variant else None
             item["badge"] = default_variant.badge if default_variant else None
-            item["banner"] = self._extract_banner_url(default_variant.details) if default_variant and default_variant.details else None
+            item["banner"] = self._extract_banner_media(default_variant.details) if default_variant and default_variant.details else None
 
             dn = item.get("duration_nights")
             dd = item.get("duration_days")
@@ -141,14 +141,17 @@ class TourPackageService:
         return active_variants[0]
 
     @staticmethod
-    def _extract_banner_url(details) -> str | None:
+    def _extract_banner_media(details) -> dict[str, str | None] | None:
         if not details:
             return None
         banner = getattr(details, "banner", None)
         if isinstance(banner, dict):
-            return banner.get("cover_image") or banner.get("url") or banner.get("image") or banner.get("src")
+            return {
+                "image": banner.get("cover_image") or banner.get("url") or banner.get("image") or banner.get("src"),
+                "video": banner.get("video") or banner.get("video_url"),
+            }
         if isinstance(banner, str):
-            return banner
+            return {"image": banner, "video": None}
         return None
 
     @staticmethod
@@ -222,9 +225,14 @@ class TourPackageService:
         details = variant.details
         if details:
             if isinstance(details.banner, dict):
-                banner_value = details.banner.get("cover_image") or details.banner.get("url") or details.banner.get("image") or details.banner.get("src")
+                banner_image = details.banner.get("cover_image") or details.banner.get("url") or details.banner.get("image") or details.banner.get("src")
+                banner_video = details.banner.get("video") or details.banner.get("video_url")
+                banner_value = {
+                    "image": banner_image,
+                    "video": banner_video,
+                }
             elif isinstance(details.banner, str):
-                banner_value = details.banner
+                banner_value = {"image": details.banner, "video": None}
             else:
                 banner_value = None
 
