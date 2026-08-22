@@ -9,12 +9,6 @@ from app.models.base import BaseEntity
 class LeadActivity(BaseEntity):
     __tablename__ = "lead_activities"
 
-    lead_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("leads.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,

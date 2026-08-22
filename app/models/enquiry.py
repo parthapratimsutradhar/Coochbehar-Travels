@@ -67,6 +67,15 @@ class Enquiry(BaseEntity):
         nullable=True,
     )
 
+    enquirer_name: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    enquirer_phone: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
 
     room_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("rooms.id"),
@@ -82,30 +91,37 @@ class Enquiry(BaseEntity):
         String(150),
         nullable=True
     )
+
     travel_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True
     )
+
     travel_duration: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True
     )
+
     pax_no: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True
     )
+
     no_room: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True
     )
+
     vehicle_type: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True
     )
+
     meal_plan: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True
-        )
+    )
+
     special_requirements: Mapped[str | None] = mapped_column(
         Text,
         nullable=True

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Lt0vl5H6fuGp5wZYXkQfUImeFiX1j5G4vKobzXnUrPqxngAEEXuKNijHwN7Hh3U
+\restrict ZnT5dWq8H9xis4huCIjZvPJ13doTLgbuWQdm0rFopLUmw1POSfSrmzKJENQ1L1z
 
 -- Dumped from database version 18.4
 -- Dumped by pg_dump version 18.4
@@ -236,7 +236,9 @@ CREATE TABLE public.enquiries (
     no_room integer,
     vehicle_type character varying(50),
     meal_plan character varying(50),
-    special_requirements text
+    special_requirements text,
+    enquirer_name character varying(50),
+    enquirer_phone character varying(20)
 );
 
 
@@ -266,7 +268,6 @@ ALTER TABLE public.google_oauth_states OWNER TO postgres;
 
 CREATE TABLE public.lead_activities (
     id uuid NOT NULL,
-    lead_id uuid NOT NULL,
     user_id uuid,
     channel public.enquiry_channel NOT NULL,
     activity_type character varying(50) NOT NULL,
@@ -412,15 +413,7 @@ CREATE TABLE public.tour_details (
     departures_dates jsonb NOT NULL,
     itinerary jsonb NOT NULL,
     route_stops jsonb NOT NULL,
-    id uuid NOT NULL,
-    CONSTRAINT ck_tour_details_banner_json_type CHECK ((jsonb_typeof(banner) = ANY (ARRAY['string'::text, 'object'::text]))),
-    CONSTRAINT ck_tour_details_departures_dates_is_array CHECK ((jsonb_typeof(departures_dates) = 'array'::text)),
-    CONSTRAINT ck_tour_details_exclusions_is_array CHECK ((jsonb_typeof(exclusions) = 'array'::text)),
-    CONSTRAINT ck_tour_details_gallery_is_array CHECK ((jsonb_typeof(gallery) = 'array'::text)),
-    CONSTRAINT ck_tour_details_highlights_is_array CHECK ((jsonb_typeof(highlights) = 'array'::text)),
-    CONSTRAINT ck_tour_details_inclusions_is_array CHECK ((jsonb_typeof(inclusions) = 'array'::text)),
-    CONSTRAINT ck_tour_details_itinerary_is_array CHECK ((jsonb_typeof(itinerary) = 'array'::text)),
-    CONSTRAINT ck_tour_details_route_stops_is_array CHECK ((jsonb_typeof(route_stops) = 'array'::text))
+    id uuid NOT NULL
 );
 
 
@@ -836,13 +829,6 @@ CREATE INDEX ix_google_oauth_states_visitor_id ON public.google_oauth_states USI
 
 
 --
--- Name: ix_lead_activities_lead_id; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX ix_lead_activities_lead_id ON public.lead_activities USING btree (lead_id);
-
-
---
 -- Name: ix_lead_activities_next_follow_up_at; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -1125,14 +1111,6 @@ ALTER TABLE ONLY public.google_oauth_states
 
 
 --
--- Name: lead_activities lead_activities_lead_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.lead_activities
-    ADD CONSTRAINT lead_activities_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES public.leads(id) ON DELETE CASCADE;
-
-
---
 -- Name: lead_activities lead_activities_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1248,5 +1226,5 @@ ALTER TABLE ONLY public.visitors
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Lt0vl5H6fuGp5wZYXkQfUImeFiX1j5G4vKobzXnUrPqxngAEEXuKNijHwN7Hh3U
+\unrestrict ZnT5dWq8H9xis4huCIjZvPJ13doTLgbuWQdm0rFopLUmw1POSfSrmzKJENQ1L1z
 
