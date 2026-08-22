@@ -268,6 +268,7 @@ ALTER TABLE public.google_oauth_states OWNER TO postgres;
 
 CREATE TABLE public.lead_activities (
     id uuid NOT NULL,
+    lead_id uuid NOT NULL,
     user_id uuid,
     channel public.enquiry_channel NOT NULL,
     activity_type character varying(50) NOT NULL,
@@ -279,6 +280,13 @@ CREATE TABLE public.lead_activities (
 
 
 ALTER TABLE public.lead_activities OWNER TO postgres;
+
+--
+-- Name: lead_activities lead_activities_lead_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.lead_activities
+    ADD CONSTRAINT lead_activities_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES public.leads(id) ON DELETE CASCADE;
 
 --
 -- Name: leads; Type: TABLE; Schema: public; Owner: postgres
@@ -833,6 +841,12 @@ CREATE INDEX ix_google_oauth_states_visitor_id ON public.google_oauth_states USI
 --
 
 CREATE INDEX ix_lead_activities_next_follow_up_at ON public.lead_activities USING btree (next_follow_up_at);
+
+--
+-- Name: ix_lead_activities_lead_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX ix_lead_activities_lead_id ON public.lead_activities USING btree (lead_id);
 
 
 --

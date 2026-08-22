@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.core.enums import EnquiryChannel, EnquiryType, LeadSource, LeadStatus
@@ -88,6 +88,8 @@ def create_custom_tour_request(
         channel=EnquiryChannel.WEBSITE,
         subject=f"Custom Tour to {payload.destination}",
         message=payload.special_requirements,
+        enquirer_name=payload.name,
+        enquirer_phone=payload.mobile,
         destination=payload.destination,
         travel_date=payload.travel_date,
         travel_duration=payload.travel_duration,
@@ -107,8 +109,8 @@ def create_custom_tour_request(
         enquiry_id=enquiry.id,
         customer_id=payload.customer_id,
         visitor_id=payload.visitor_id,
-        full_name=payload.name,
-        mobile=payload.mobile,
+        full_name=enquiry.enquirer_name,
+        mobile=enquiry.enquirer_phone,
         status=LeadStatus.NEW,
         source=LeadSource.WEBSITE,
         notes=f"Custom tour request for {payload.destination} ({payload.pax_no} pax, {payload.no_room} rooms)",

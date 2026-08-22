@@ -90,11 +90,9 @@ Coochbehar-Travels/
     ├── models/                           # SQLAlchemy Data Models
     │   ├── __init__.py                   # Central export for all ORM models
     │   ├── base.py                       # Declarative Base class
-    │   ├── custom_tour_request.py        # Custom tour request model
     │   ├── lead.py                       # Lead management model
     │   ├── review.py                     # Package reviews model
     │   ├── room.py                       # Hotel room inventory model
-    │   ├── room_booking.py               # Hotel room reservation model
     │   ├── tour_departure.py             # Scheduled tour departure model
     │   ├── tour_gallery.py               # Tour photo/video media model
     │   ├── tour_highlight.py             # Tour package features model
@@ -103,7 +101,6 @@ Coochbehar-Travels/
     │   ├── tour_route_stop.py            # Key transit stops & locations model
     │   ├── user.py                       # System user & admin model
     │   ├── vehicle.py                    # Transport vehicle fleet model
-    │   ├── vehicle_booking.py            # Vehicle rental reservation model
     │   ├── visitor.py                    # Web visitor identifier model
     │   ├── visitor_event.py              # Granular visitor event tracking model
     │   └── visitor_session.py            # Visitor navigation session model
@@ -210,6 +207,20 @@ Once the server is running, access the interactive Scalar API documentation at:
 
 * 🌈 **Scalar Documentation**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) (or [http://127.0.0.1:8000/scalar](http://127.0.0.1:8000/scalar))
 
+### Enquiry API
+
+End-user enquiry routes are grouped under `/api/v1/enquiries`:
+
+| Method | Path | Purpose |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/enquiries` | Submit an enquiry and create its sales lead. |
+| `POST` | `/api/v1/enquiries/custom` | Submit a custom tour request and create its sales lead. |
+| `GET` | `/api/v1/admin/enquiries` | List enquiries with optional status and type filters. |
+| `GET` | `/api/v1/admin/enquiries/{enquiry_id}` | Retrieve an enquiry, including custom tour and requester contact fields. |
+| `PATCH` | `/api/v1/admin/enquiries/{enquiry_id}` | Update enquiry status, subject, or message. |
+
+Custom requests are stored in `enquiries` with `enquiry_type=CUSTOM_TOUR`. Their `name` and `mobile` values are persisted as `enquirer_name` and `enquirer_phone`, and the linked `leads` row is created automatically.
+
 ---
 
 ## 🗄️ Database Architecture & Entities
@@ -218,8 +229,10 @@ Once the server is running, access the interactive Scalar API documentation at:
 erDiagram
     VISITOR ||--o{ VISITOR_SESSION : "initiates"
     VISITOR_SESSION ||--o{ VISITOR_EVENT : "logs"
-    VISITOR ||--o{ LEAD : "converts to"
-    VISITOR ||--o{ CUSTOM_TOUR_REQUEST : "submits"
+    VISITOR ||--o{ ENQUIRY : "submits"
+    CUSTOMER ||--o{ ENQUIRY : "submits"
+    ENQUIRY ||--o| LEAD : "creates"
+    LEAD ||--o{ LEAD_ACTIVITY : "records"
     
     TOUR_PACKAGE ||--o{ TOUR_ITINERARY : "contains"
     TOUR_PACKAGE ||--o{ TOUR_HIGHLIGHT : "features"
