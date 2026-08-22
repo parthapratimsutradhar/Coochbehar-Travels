@@ -200,18 +200,43 @@ class TourPackageRepository:
 
         return results, total_count
 
-    def get_by_slug(self, slug: str) -> TourPackage | None:
+    def get_active_for_selection(
+        self,
+        search: str | None = None,
+        limit: int = 5,
+    ) -> list[TourPackage]:
+        """Return active packages with at least one active variant for selectors."""
+
+        query = (
+            self.db.query(TourPackage)
+            .options(joinedload(TourPackage.variants).joinedload(TourVariant.details))
+            .filter(TourPackage.is_active == True)  # noqa: E712
+            .filter(TourPackage.variants.any(TourVariant.is_active == True))  # noqa: E712
+        )
+        if search:
+            term = f"%{search}%"
+            query = query.filter(
+                or_(
+                    TourPackage.title.ilike(term),
+                    TourPackage.destination.ilike(term),
+                )
+            )
+        return query.order_by(TourPackage.title.asc()).limit(limit).all()
+
+    def get_by_slug(self, slug: str, active_only: bool = False) -> TourPackage | None:
         """Fetch a single tour package by slug, eagerly loading variants, details, and reviews."""
 
-        return (
+        query = (
             self.db.query(TourPackage)
             .options(
                 joinedload(TourPackage.variants).joinedload(TourVariant.details),
                 joinedload(TourPackage.reviews).joinedload(Review.customer),
             )
             .filter(TourPackage.slug == slug)
-            .first()
         )
+        if active_only:
+            query = query.filter(TourPackage.is_active == True)  # noqa: E712
+        return query.first()
 
     def get_by_id(self, package_id) -> TourPackage | None:
         """Fetch a single tour package by id, eagerly loading variants, details, and reviews."""

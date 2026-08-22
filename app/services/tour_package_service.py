@@ -19,6 +19,8 @@ from app.schemas.tour_package import (
     TourPackageDetailResponse,
     TourPackageFilterParams,
     TourPackageListItem,
+    TourPackageSelectionItem,
+    TourPackageSelectionVariant,
     TourSeasonResponse,
 )
 
@@ -76,10 +78,43 @@ class TourPackageService:
             pagination=pagination,
         )
 
+    def list_packages_for_selection(
+        self,
+        search: str | None = None,
+    ) -> list[TourPackageSelectionItem]:
+        """Return the compact active-package payload used by selectors."""
+
+        packages = self.repo.get_active_for_selection(search=search, limit=5)
+        items = []
+        for package in packages:
+            active_variants = [variant for variant in package.variants if variant.is_active]
+            default_variant = self._get_default_variant(package)
+            banner = (
+                self._extract_banner_media(default_variant.details)
+                if default_variant and default_variant.details
+                else None
+            )
+            items.append(
+                TourPackageSelectionItem(
+                    id=package.id,
+                    title=package.title,
+                    banner=banner,
+                    variants=[
+                        TourPackageSelectionVariant(
+                            id=variant.id,
+                            name=variant.name,
+                            season_name=variant.season_name,
+                        )
+                        for variant in active_variants
+                    ],
+                )
+            )
+        return items
+
     def get_package_by_slug(self, slug: str) -> TourPackageDetailResponse:
         """Fetch full tour package details formatted for consumer frontend."""
 
-        package = self.repo.get_by_slug(slug)
+        package = self.repo.get_by_slug(slug, active_only=True)
         if package is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -101,7 +136,7 @@ class TourPackageService:
     def get_variant_by_slug(self, package_slug: str, variant_slug: str):
         """Fetch a specific variant for a given package slug."""
 
-        package = self.repo.get_by_slug(package_slug)
+        package = self.repo.get_by_slug(package_slug, active_only=True)
         if package is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

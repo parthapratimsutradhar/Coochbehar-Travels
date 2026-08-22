@@ -5,8 +5,6 @@ retrieval. These endpoints are read-only and do not require
 authentication.
 """
 
-import uuid
-
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -18,6 +16,7 @@ from app.schemas.tour_package import (
     TourPackageDetailResponse,
     TourPackageFilterParams,
     TourPackageListItem,
+    TourPackageSelectionItem,
     TourPackageVariantDetailPayload,
 )
 from app.services.tour_package_service import TourPackageService
@@ -26,6 +25,29 @@ router = APIRouter(
     prefix="/tour-packages",
     tags=["Tour Packages"],
 )
+
+
+@router.get(
+    "/select",
+    response_model=SuccessResponse[list[TourPackageSelectionItem]],
+    responses={422: {"model": ErrorResponse}},
+    summary="List active packages for selection",
+    description="Return up to five active packages, optionally filtered by title or destination.",
+)
+def list_packages_for_selection(
+    search: str | None = Query(
+        None,
+        description="Search by package title or destination",
+    ),
+    db: Session = Depends(get_db),
+):
+    """Return a compact list of active packages for package selection."""
+
+    service = TourPackageService(db)
+    return SuccessResponse(
+        message="Active packages fetched successfully",
+        data=service.list_packages_for_selection(search),
+    )
 
 
 @router.get(
@@ -69,20 +91,6 @@ def list_tour_packages(
         None,
         description="Filter by featured status",
     ),
-    is_active: bool | None = Query(
-        None,
-        description="Filter by active status (defaults to showing all)",
-    ),
-    min_price: float | None = Query(
-        None,
-        ge=0,
-        description="Minimum starting price (inclusive)",
-    ),
-    max_price: float | None = Query(
-        None,
-        ge=0,
-        description="Maximum starting price (inclusive)",
-    ),
     search: str | None = Query(
         None,
         description="Free-text search across title and destination",
@@ -104,9 +112,7 @@ def list_tour_packages(
         type=type,
         season=season,
         is_featured=is_featured,
-        is_active=is_active,
-        min_price=min_price,
-        max_price=max_price,
+        is_active=True,
         search=search,
         sort_by=sort_by,
         sort_order=sort_order,

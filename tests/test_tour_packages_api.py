@@ -130,6 +130,16 @@ def create_package_and_variants():
             is_published=True,
         )
     )
+    session.add(
+        TourPackage(
+            tour_code="TP-1002",
+            slug="inactive-tour",
+            title="Inactive Tour",
+            destination="Goa",
+            type="DOMESTIC",
+            is_active=False,
+        )
+    )
     session.commit()
     return package
 
@@ -140,6 +150,35 @@ def test_tour_package_endpoints_return_default_variant_data():
     client = TestClient(app)
 
     create_package_and_variants()
+
+    session = TestingSessionLocal()
+    for index in range(6):
+        package = TourPackage(
+            tour_code=f"TP-20{index:02d}",
+            slug=f"selector-tour-{index}",
+            title=f"Selector Tour {index}",
+            destination="Selector Destination",
+            type="DOMESTIC",
+            is_active=True,
+        )
+        session.add(package)
+        session.flush()
+        session.add(
+            TourVariant(
+                package_id=package.id,
+                slug=f"selector-variant-{index}",
+                name=f"Selector Variant {index}",
+                season_name="Selector Season",
+                valid_from=date(2026, 4, 1),
+                valid_to=date(2026, 6, 30),
+                duration_days=5,
+                duration_nights=4,
+                base_price=2499,
+                is_default=True,
+                is_active=True,
+            )
+        )
+    session.commit()
 
     list_response = client.get(
         "/api/v1/tour-packages",
@@ -156,6 +195,23 @@ def test_tour_package_endpoints_return_default_variant_data():
         "video": None,
     }
 
+    inactive_list_response = client.get(
+        "/api/v1/tour-packages",
+        params={"is_active": "false"},
+    )
+    assert inactive_list_response.status_code == 200
+    assert all(item["slug"] != "inactive-tour" for item in inactive_list_response.json()["data"])
+
+    selection_response = client.get(
+        "/api/v1/tour-packages/select",
+        params={"search": "Selector Destination"},
+    )
+    assert selection_response.status_code == 200
+    selection_data = selection_response.json()["data"]
+    assert len(selection_data) == 5
+    assert set(selection_data[0]) == {"id", "title", "banner", "variants"}
+    assert set(selection_data[0]["variants"][0]) == {"id", "name", "season_name"}
+
     detail_response = client.get("/api/v1/tour-packages/himachal-summer")
     assert detail_response.status_code == 200
     detail_data = detail_response.json()["data"]
@@ -171,5 +227,13 @@ def test_tour_package_endpoints_return_default_variant_data():
     assert variant_data["variant"]["season_name"] == "Couple Retreat"
     assert variant_data["variant"]["badge"] == "Top Rated"
     assert len(variant_data["other_variants"]) == 1
+
+    inactive_detail_response = client.get("/api/v1/tour-packages/inactive-tour")
+    assert inactive_detail_response.status_code == 404
+
+    inactive_variant_response = client.get(
+        "/api/v1/tour-packages/inactive-tour/variants/any-variant"
+    )
+    assert inactive_variant_response.status_code == 404
 
     app.dependency_overrides.clear()

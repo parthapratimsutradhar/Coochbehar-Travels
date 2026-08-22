@@ -18,6 +18,23 @@ class BannerResponse(BaseModel):
     video: str | None = None
 
 
+class TourPackageSelectionVariant(BaseModel):
+    """Lightweight active variant used by package selectors."""
+
+    id: uuid.UUID
+    name: str
+    season_name: str | None = None
+
+
+class TourPackageSelectionItem(BaseModel):
+    """Compact active package payload used when selecting a package."""
+
+    id: uuid.UUID
+    title: str
+    banner: BannerResponse | None = None
+    variants: list[TourPackageSelectionVariant] = Field(default_factory=list)
+
+
 # ── Review sub-schema ────────────────────────────────────────────────
 
 class ReviewItemResponse(BaseModel):
