@@ -1,13 +1,12 @@
 from datetime import date, datetime
 from uuid import UUID
-
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
-
 from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType
 
 
 class EnquiryBase(BaseModel):
-    enquiry_type: EnquiryType
+    enquiry_type: Literal[EnquiryType.FIXED_TOUR] = EnquiryType.FIXED_TOUR
     channel: EnquiryChannel
     package_id: UUID | None = None
     variant_id: UUID | None = None
@@ -16,6 +15,8 @@ class EnquiryBase(BaseModel):
 
 
 class EnquiryCreate(EnquiryBase):
+    name: str | None = Field(default=None, max_length=100)
+    mobile: str | None = Field(default=None, max_length=20)
     visitor_id: UUID | None = None
     customer_id: UUID | None = None
 

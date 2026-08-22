@@ -219,7 +219,7 @@ End-user enquiry routes are grouped under `/api/v1/enquiries`:
 | `GET` | `/api/v1/admin/enquiries/{enquiry_id}` | Retrieve an enquiry, including custom tour and requester contact fields. |
 | `PATCH` | `/api/v1/admin/enquiries/{enquiry_id}` | Update enquiry status, subject, or message. |
 
-Custom requests are stored in `enquiries` with `enquiry_type=CUSTOM_TOUR`. Their `name` and `mobile` values are persisted as `enquirer_name` and `enquirer_phone`, and the linked `leads` row is created automatically.
+Fixed and custom requests accept `name` and `mobile` contact fields. They are persisted as `enquirer_name` and `enquirer_phone`, which preserves anonymous visitor contact details, and the linked `leads` row is created automatically. Custom requests are stored with `enquiry_type=CUSTOM_TOUR`.
 
 ---
 

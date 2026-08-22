@@ -31,6 +31,7 @@ router = APIRouter(
 @router.get(
     "",
     response_model=PaginatedResponse[TourPackageListItem],
+    responses={422: {"model": ErrorResponse}},
     summary="List all tour packages",
     description=(
         "Retrieve a paginated list of tour packages with optional filters "
@@ -39,11 +40,6 @@ router = APIRouter(
         "variant price), duration from the default variant, and the total "
         "count of active variants."
     ),
-    responses={
-        200: {
-            "description": "Paginated list of tour packages",
-        },
-    },
 )
 def list_tour_packages(
     page: int = Query(
@@ -123,15 +119,12 @@ def list_tour_packages(
 @router.get(
     "/{slug}",
     response_model=SuccessResponse[TourPackageDetailResponse],
+    responses={422: {"model": ErrorResponse}},
     summary="Get tour package details by slug",
     description=(
         "Retrieve the full details of a tour package including its default "
         "variant, other variants, and package reviews."
     ),
-    responses={
-        200: {"description": "Tour package with full variant details"},
-        404: {"description": "Tour package not found"},
-    },
 )
 def get_tour_package(
     slug: str,
@@ -150,12 +143,9 @@ def get_tour_package(
 @router.get(
     "/{slug}/variants/{variant_slug}",
     response_model=SuccessResponse[TourPackageVariantDetailPayload],
+    responses={422: {"model": ErrorResponse}},
     summary="Get a specific variant for a tour package",
     description="Return a single variant payload plus the remaining variants in the same package.",
-    responses={
-        200: {"description": "Specific tour variant details"},
-        404: {"description": "Package or variant not found"},
-    },
 )
 def get_tour_package_variant(
     slug: str,

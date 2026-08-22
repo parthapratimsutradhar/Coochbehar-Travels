@@ -170,6 +170,7 @@ class TourPackageListItem(BaseModel):
     season_name: str | None = None
     badge: str | None = None
     banner: BannerResponse | None = None
+    is_featured: bool    
 
     model_config = {"from_attributes": True}
 

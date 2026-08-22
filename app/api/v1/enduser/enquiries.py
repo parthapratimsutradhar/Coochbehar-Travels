@@ -7,12 +7,9 @@ from app.core.enums import EnquiryChannel, EnquiryType, LeadSource, LeadStatus
 from app.db.database import get_db
 from app.models.enquiry import Enquiry
 from app.models.lead import Lead
-from app.schemas.custom_tour_request import (
-    CustomTourRequestCreate,
-    CustomTourRequestResponse,
-)
-from app.schemas.enquiry import EnquiryCreate, EnquiryResponse
-from app.schemas.response import SuccessResponse
+from app.schemas.custom_tour_request import CustomTourRequestCreate
+from app.schemas.enquiry import EnquiryCreate
+from app.schemas.response import ActionResponse, ErrorResponse
 
 router = APIRouter(
     prefix="/enquiries",
@@ -22,8 +19,9 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=SuccessResponse[EnquiryResponse],
+    response_model=ActionResponse,
     status_code=status.HTTP_201_CREATED,
+    responses={422: {"model": ErrorResponse}},
     summary="Submit a new enquiry",
     description="Submit an enquiry (Fixed Tour, Custom Tour, or General query). Automatically creates a sales Lead record.",
 )
@@ -43,6 +41,8 @@ def create_enquiry(
         variant_id=payload.variant_id,
         subject=payload.subject,
         message=payload.message,
+        enquirer_name=payload.name,
+        enquirer_phone=payload.mobile,
     )
     db.add(enquiry)
     db.flush()
@@ -54,23 +54,21 @@ def create_enquiry(
         enquiry_id=enquiry.id,
         customer_id=payload.customer_id,
         visitor_id=payload.visitor_id,
-        full_name=payload.subject or f"Enquiry Lead {enquiry_code}",
+        full_name=payload.name or payload.subject or f"Enquiry Lead {enquiry_code}",
+        mobile=payload.mobile,
         status=LeadStatus.NEW,
         source=LeadSource.WEBSITE,
         notes=payload.message,
     )
     db.add(lead)
     db.commit()
-    db.refresh(enquiry)
-    return SuccessResponse(
-        message="Enquiry submitted successfully",
-        data=EnquiryResponse.model_validate(enquiry),
-    )
+    return ActionResponse(message="Enquiry submitted successfully")
 
 
 @router.post(
     "/custom",
-    response_model=SuccessResponse[CustomTourRequestResponse],
+    response_model=ActionResponse,
+    responses={422: {"model": ErrorResponse}},
     status_code=status.HTTP_201_CREATED,
     summary="Submit a custom tour request",
     description="Submit a custom tour request with group size, vehicle, and hotel requirements.",
@@ -117,29 +115,4 @@ def create_custom_tour_request(
     )
     db.add(lead)
     db.commit()
-    db.refresh(enquiry)
-
-    res_data = CustomTourRequestResponse(
-        id=enquiry.id,
-        request_code=enquiry.enquiry_code,
-        enquiry_id=enquiry.id,
-        visitor_id=enquiry.visitor_id,
-        customer_id=enquiry.customer_id,
-        name=payload.name,
-        mobile=payload.mobile,
-        destination=payload.destination,
-        travel_date=payload.travel_date,
-        travel_duration=payload.travel_duration,
-        pax_no=payload.pax_no,
-        no_room=payload.no_room,
-        vehicle_type=payload.vehicle_type,
-        meal_plan=payload.meal_plan,
-        special_requirements=payload.special_requirements,
-        status=enquiry.status.value,
-        created_at=enquiry.created_at,
-        updated_at=enquiry.updated_at,
-    )
-    return SuccessResponse(
-        message="Custom tour request submitted successfully",
-        data=res_data,
-    )
+    return ActionResponse(message="Custom tour request submitted successfully")
