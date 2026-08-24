@@ -16,6 +16,7 @@ from app.models.user import User
 from app.schemas.auth import (
     AuthSessionResponse,
     RefreshResponse,
+    RefreshSessionRequest,
 )
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.auth_service import AuthService
@@ -30,14 +31,18 @@ router = APIRouter(
     "/refresh",
     response_model=SuccessResponse[RefreshResponse],
     summary="Renew Access Token",
-    description="Rotates the refresh token from the HttpOnly cookie, preserves original 30-day max expiration, and returns a new 15-minute access JWT.",
+    description="Rotates the refresh token from HttpOnly cookie or payload/header fallback, preserves original 30-day max expiration, and returns a new 15-minute access JWT.",
 )
 def refresh(
     request: Request,
     response: Response,
+    payload: RefreshSessionRequest | None = None,
     db: Session = Depends(get_db),
 ):
-    raw_refresh_token = extract_refresh_token(request)
+    raw_refresh_token = (
+        (payload.refresh_token.strip() if payload and payload.refresh_token else None)
+        or extract_refresh_token(request)
+    )
     user_agent = request.headers.get("user-agent")
     ip_address = request.client.host if request.client else None
 
@@ -60,6 +65,7 @@ def refresh(
             access_token=new_access_token,
             token_type="bearer",
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            refresh_token=new_raw_refresh_token,
         ),
     )
 
@@ -73,9 +79,13 @@ def refresh(
 def logout(
     request: Request,
     response: Response,
+    payload: RefreshSessionRequest | None = None,
     db: Session = Depends(get_db),
 ):
-    raw_refresh_token = extract_refresh_token(request)
+    raw_refresh_token = (
+        (payload.refresh_token.strip() if payload and payload.refresh_token else None)
+        or extract_refresh_token(request)
+    )
     auth_service = AuthService(db)
     auth_service.logout(raw_refresh_token)
     clear_refresh_cookie(response)

@@ -160,9 +160,16 @@ def test_1_admin_pure_otp_login(client: TestClient, test_user: User):
     assert "access_token" in data
     assert data["token_type"] == "bearer"
     assert data["expires_in"] == 15 * 60
-    assert data["user"]["email"] == test_user.email
-    assert data["user"]["profile_pic"] == test_user.profile_pic
-    assert "refresh_token" not in data
+    assert "refresh_token" in data
+
+    me_res = client.get(
+        "/api/v1/admin/auth/me",
+        headers={"Authorization": f"Bearer {data['access_token']}"},
+    )
+    assert me_res.status_code == 200
+    me_data = me_res.json()["data"]
+    assert me_data["email"] == test_user.email
+    assert me_data["profile_pic"] == test_user.profile_pic
 
     assert settings.REFRESH_COOKIE_NAME in verify_res.cookies
 
@@ -171,22 +178,29 @@ def test_2_customer_pure_otp_login_and_autoregistration(client: TestClient, db_s
     """2. Test Customer OTP flow with auto-registration for a new traveler."""
     new_mobile = "+919988776655"
     req_res = client.post(
-        "/api/v1/enduser/auth/otp/request",
+        "/api/v1/auth/otp/request",
         json={"identifier": new_mobile},
     )
     assert req_res.status_code == 200
     otp = req_res.json()["data"]["dev_otp"]
 
     verify_res = client.post(
-        "/api/v1/enduser/auth/otp/verify",
+        "/api/v1/auth/otp/verify",
         json={"identifier": new_mobile, "otp": otp, "name": "Alice Explorer"},
     )
     assert verify_res.status_code == 200
     data = verify_res.json()["data"]
     assert "access_token" in data
-    assert data["customer"]["name"] == "Alice Explorer"
-    assert data["customer"]["mobile"] == new_mobile
     assert settings.REFRESH_COOKIE_NAME in verify_res.cookies
+
+    me_res = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {data['access_token']}"},
+    )
+    assert me_res.status_code == 200
+    me_data = me_res.json()["data"]
+    assert me_data["name"] == "Alice Explorer"
+    assert me_data["mobile"] == new_mobile
 
     customer = db_session.query(Customer).filter_by(mobile=new_mobile).first()
     assert customer is not None
@@ -202,13 +216,13 @@ def test_3_customer_visitor_telemetry_linking(client: TestClient, db_session):
 
     customer_email = "explorer@travel.com"
     req_res = client.post(
-        "/api/v1/enduser/auth/otp/request",
+        "/api/v1/auth/otp/request",
         json={"identifier": customer_email, "visitor_id": str(visitor.id)},
     )
     otp = req_res.json()["data"]["dev_otp"]
 
     verify_res = client.post(
-        "/api/v1/enduser/auth/otp/verify",
+        "/api/v1/auth/otp/verify",
         json={
             "identifier": customer_email,
             "otp": otp,
@@ -217,7 +231,14 @@ def test_3_customer_visitor_telemetry_linking(client: TestClient, db_session):
         },
     )
     assert verify_res.status_code == 200
-    cust_id = uuid.UUID(verify_res.json()["data"]["customer"]["id"])
+    data = verify_res.json()["data"]
+
+    me_res = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {data['access_token']}"},
+    )
+    assert me_res.status_code == 200
+    cust_id = uuid.UUID(me_res.json()["data"]["id"])
 
     db_session.refresh(visitor)
     assert visitor.customer_id == cust_id
@@ -541,18 +562,25 @@ def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClien
     )
 
     res = client.post(
-        "/api/v1/enduser/auth/google",
+        "/api/v1/auth/google",
         json={"id_token": google_token, "visitor_id": str(visitor.id)},
     )
     assert res.status_code == 200
     data = res.json()["data"]
     assert "access_token" in data
-    assert data["customer"]["name"] == "Sandra Adventurer"
-    assert data["customer"]["email"] == "sandra.adventurer@gmail.com"
-    assert data["customer"]["profile_pic"] == "https://res.cloudinary.com/example/image/upload/profile-picture/customer.jpg"
+
+    me_res = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {data['access_token']}"},
+    )
+    assert me_res.status_code == 200
+    me_data = me_res.json()["data"]
+    assert me_data["name"] == "Sandra Adventurer"
+    assert me_data["email"] == "sandra.adventurer@gmail.com"
+    assert me_data["profile_pic"] == "https://res.cloudinary.com/example/image/upload/profile-picture/customer.jpg"
 
     # Assert visitor is linked to new customer
-    cust_id = uuid.UUID(data["customer"]["id"])
+    cust_id = uuid.UUID(me_data["id"])
     db_session.refresh(visitor)
     assert visitor.customer_id == cust_id
 

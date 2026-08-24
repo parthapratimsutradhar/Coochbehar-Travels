@@ -185,14 +185,20 @@ def get_current_access_token_payload(
 
 
 def extract_refresh_token(request: Request) -> str | None:
-    """Extract refresh token from HttpOnly cookie with fallback support."""
+    """Extract refresh token from HttpOnly cookie, custom header, or request state with fallback support."""
     token = request.cookies.get(settings.REFRESH_COOKIE_NAME)
     if token:
         return token
-    return (
+    token = (
         request.cookies.get("refresh_token")
         or request.cookies.get("__Host-refresh_token")
     )
+    if token:
+        return token
+    token = request.headers.get("x-refresh-token") or request.headers.get("refresh-token")
+    if token:
+        return token.strip()
+    return None
 
 
 def set_refresh_cookie(
@@ -200,32 +206,40 @@ def set_refresh_cookie(
     refresh_token: str,
     expires_at: datetime | None = None,
 ) -> None:
-    """Set the HttpOnly refresh-token cookie with consistent settings."""
+    """Set the HttpOnly refresh-token cookie with consistent settings and CHIPS partitioning support."""
     if expires_at is None:
         max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600
     else:
         expiration = expires_at.replace(tzinfo=timezone.utc) if expires_at.tzinfo is None else expires_at
         max_age = max(0, int((expiration - datetime.now(timezone.utc)).total_seconds()))
-    response.set_cookie(
-        key=settings.REFRESH_COOKIE_NAME,
-        value=refresh_token,
-        max_age=max_age,
-        expires=max_age,
-        path=settings.REFRESH_COOKIE_PATH,
-        httponly=True,
-        secure=settings.REFRESH_COOKIE_SECURE,
-        samesite=settings.REFRESH_COOKIE_SAMESITE,
-    )
+
+    cookie_kwargs = {
+        "key": settings.REFRESH_COOKIE_NAME,
+        "value": refresh_token,
+        "max_age": max_age,
+        "expires": max_age,
+        "path": settings.REFRESH_COOKIE_PATH,
+        "httponly": True,
+        "secure": settings.REFRESH_COOKIE_SECURE,
+        "samesite": settings.REFRESH_COOKIE_SAMESITE,
+    }
+    if settings.REFRESH_COOKIE_SAMESITE.lower() == "none" and settings.REFRESH_COOKIE_SECURE:
+        cookie_kwargs["partitioned"] = True
+
+    response.set_cookie(**cookie_kwargs)
 
 
 def clear_refresh_cookie(response: Response) -> None:
     """Delete all possible refresh-token cookies."""
-    response.delete_cookie(
-        key=settings.REFRESH_COOKIE_NAME,
-        path=settings.REFRESH_COOKIE_PATH,
-        httponly=True,
-        secure=settings.REFRESH_COOKIE_SECURE,
-        samesite=settings.REFRESH_COOKIE_SAMESITE,
-    )
+    cookie_kwargs = {
+        "path": settings.REFRESH_COOKIE_PATH,
+        "httponly": True,
+        "secure": settings.REFRESH_COOKIE_SECURE,
+        "samesite": settings.REFRESH_COOKIE_SAMESITE,
+    }
+    if settings.REFRESH_COOKIE_SAMESITE.lower() == "none" and settings.REFRESH_COOKIE_SECURE:
+        cookie_kwargs["partitioned"] = True
+
+    response.delete_cookie(key=settings.REFRESH_COOKIE_NAME, **cookie_kwargs)
     response.delete_cookie(key="refresh_token", path="/")
     response.delete_cookie(key="__Host-refresh_token", path="/")

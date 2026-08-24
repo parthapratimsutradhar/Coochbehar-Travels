@@ -58,7 +58,9 @@ class Settings:
         "1",
         "yes",
     )
-    REFRESH_COOKIE_SAMESITE: str = os.getenv("REFRESH_COOKIE_SAMESITE", "lax")
+    REFRESH_COOKIE_SAMESITE: str = os.getenv(
+        "REFRESH_COOKIE_SAMESITE", "lax" if IS_DEVELOPMENT else "none"
+    ).lower()
     REFRESH_COOKIE_PATH: str = os.getenv("REFRESH_COOKIE_PATH", "/")
 
     # ── OTP ──────────────────────────────────────────────────────────

@@ -84,7 +84,8 @@ def verify_customer_otp(
         data=CustomerTokenResponse(
             access_token=access_token,
             token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            refresh_token=raw_refresh_token,
         ),
     )
 
@@ -120,7 +121,8 @@ async def google_login_customer(
         data=CustomerTokenResponse(
             access_token=access_token,
             token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            refresh_token=raw_refresh_token,
         ),
     )
 

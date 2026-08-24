@@ -121,10 +121,21 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
+class RefreshSessionRequest(BaseModel):
+    refresh_token: str | None = Field(
+        default=None,
+        description="Optional refresh token in body as fallback for cross-origin environments",
+    )
+
+
 class AdminTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int = Field(default=900, description="Access token expiration in seconds (15 minutes)")
+    refresh_token: str | None = Field(
+        default=None,
+        description="Refresh token for environments where cross-origin 3rd-party cookies are restricted",
+    )
 
 
 
@@ -132,12 +143,20 @@ class CustomerTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int = Field(default=900, description="Access token expiration in seconds (15 minutes)")
+    refresh_token: str | None = Field(
+        default=None,
+        description="Refresh token for environments where cross-origin 3rd-party cookies are restricted",
+    )
 
 
 class RefreshResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int = Field(default=900, description="Access token expiration in seconds (15 minutes)")
+    refresh_token: str | None = Field(
+        default=None,
+        description="Rotated refresh token for environments where cross-origin 3rd-party cookies are restricted",
+    )
 
 
 class AuthSessionResponse(BaseModel):

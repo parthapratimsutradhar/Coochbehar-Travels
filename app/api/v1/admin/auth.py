@@ -81,7 +81,8 @@ def verify_admin_otp(
         data=AdminTokenResponse(
             access_token=access_token,
             token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            refresh_token=raw_refresh_token,
         ),
     )
 
@@ -116,7 +117,8 @@ async def google_login_admin(
         data=AdminTokenResponse(
             access_token=access_token,
             token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            refresh_token=raw_refresh_token,
         ),
     )
 
