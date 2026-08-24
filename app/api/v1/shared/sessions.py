@@ -43,7 +43,7 @@ def refresh(
 
     auth_service = AuthService(db)
     try:
-        new_access_token, new_raw_refresh_token = auth_service.refresh_session(
+        new_access_token, new_raw_refresh_token, absolute_expires_at = auth_service.refresh_session(
             raw_refresh_token=raw_refresh_token,
             user_agent=user_agent,
             ip_address=ip_address,
@@ -52,7 +52,7 @@ def refresh(
         clear_refresh_cookie(response)
         raise
 
-    set_refresh_cookie(response, new_raw_refresh_token)
+    set_refresh_cookie(response, new_raw_refresh_token, absolute_expires_at)
 
     return SuccessResponse(
         message="Token refreshed successfully.",

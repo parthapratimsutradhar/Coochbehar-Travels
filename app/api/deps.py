@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -194,9 +195,17 @@ def extract_refresh_token(request: Request) -> str | None:
     )
 
 
-def set_refresh_cookie(response: Response, refresh_token: str) -> None:
+def set_refresh_cookie(
+    response: Response,
+    refresh_token: str,
+    expires_at: datetime | None = None,
+) -> None:
     """Set the HttpOnly refresh-token cookie with consistent settings."""
-    max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600
+    if expires_at is None:
+        max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600
+    else:
+        expiration = expires_at.replace(tzinfo=timezone.utc) if expires_at.tzinfo is None else expires_at
+        max_age = max(0, int((expiration - datetime.now(timezone.utc)).total_seconds()))
     response.set_cookie(
         key=settings.REFRESH_COOKIE_NAME,
         value=refresh_token,

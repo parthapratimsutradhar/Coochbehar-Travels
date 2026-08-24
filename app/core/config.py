@@ -46,12 +46,14 @@ class Settings:
         os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30")
     )
     REFRESH_TOKEN_INACTIVITY_HOURS: int = int(
-        os.getenv("REFRESH_TOKEN_INACTIVITY_HOURS", "24")
+        os.getenv("REFRESH_TOKEN_INACTIVITY_HOURS", "72")
     )
 
     # ── Cookie Configuration ─────────────────────────────────────────
     REFRESH_COOKIE_NAME: str = os.getenv("REFRESH_COOKIE_NAME", "refresh_token")
-    REFRESH_COOKIE_SECURE: bool = os.getenv("REFRESH_COOKIE_SECURE", "False").lower() in (
+    REFRESH_COOKIE_SECURE: bool = os.getenv(
+        "REFRESH_COOKIE_SECURE", "false" if IS_DEVELOPMENT else "true"
+    ).lower() in (
         "true",
         "1",
         "yes",

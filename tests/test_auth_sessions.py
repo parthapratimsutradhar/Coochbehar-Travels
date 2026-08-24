@@ -322,10 +322,10 @@ def test_9_refresh_session_expired_after_30_days(client: TestClient, test_user: 
     assert "maximum 30-day limit reached" in res.json()["message"]
 
 
-def test_10_refresh_session_rejected_after_24_hours_inactivity(
+def test_10_refresh_session_rejected_after_3_days_inactivity(
     client: TestClient, test_user: User, db_session
 ):
-    """10. Test that refresh session is rejected if inactive for > 24 hours."""
+    """10. Test that refresh session is rejected if inactive for > 3 days."""
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
         "/api/v1/admin/auth/otp/verify",
@@ -334,12 +334,12 @@ def test_10_refresh_session_rejected_after_24_hours_inactivity(
     cookies = dict(login_res.cookies)
 
     session = db_session.query(AuthSession).filter_by(user_id=test_user.id).first()
-    session.last_used_at = datetime.now(timezone.utc) - timedelta(hours=25)
+    session.last_used_at = datetime.now(timezone.utc) - timedelta(hours=73)
     db_session.commit()
 
     res = client.post("/api/v1/sessions/refresh", cookies=cookies)
     assert res.status_code == 401
-    assert "24 hours of inactivity" in res.json()["message"]
+    assert "3 days of inactivity" in res.json()["message"]
 
 
 def test_11_active_user_can_continue_refreshing(client: TestClient, test_user: User):

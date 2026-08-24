@@ -12,7 +12,7 @@ class AuthSession(UUIDEntity):
 
     Supports both internal staff/admin (User) and enduser/travelers (Customer).
     Tracks issued opaque refresh tokens by their cryptographic hash,
-    enforcing absolute 30-day expiration, 24-hour inactivity timeout,
+    enforcing absolute 30-day expiration and sliding inactivity timeout,
     and automatic token rotation / replay detection.
     """
 

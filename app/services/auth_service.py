@@ -508,10 +508,10 @@ class AuthService:
         raw_refresh_token: str | None,
         user_agent: str | None = None,
         ip_address: str | None = None,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, datetime]:
         """Validate refresh token, rotate session preserving absolute 30-day expiration,
 
-        and return (new_access_token, new_raw_refresh_token).
+        and return (new_access_token, new_raw_refresh_token, absolute_expiration).
         """
         if not raw_refresh_token:
             raise HTTPException(
@@ -564,7 +564,7 @@ class AuthService:
             self.session_repo.revoke_session(session)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh session expired due to 24 hours of inactivity.",
+                detail="Refresh session expired due to 3 days of inactivity.",
             )
 
         if session.actor_type in ("ADMIN", "STAFF") and session.user_id is not None:
@@ -613,7 +613,7 @@ class AuthService:
             extra_claims={"session_id": str(new_session.id)},
         )
 
-        return access_token, new_raw_refresh_token
+        return access_token, new_raw_refresh_token, expires_at
 
     def logout(self, raw_refresh_token: str | None) -> None:
         """Revoke the session associated with the provided refresh token."""
