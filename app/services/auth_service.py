@@ -627,11 +627,13 @@ class AuthService:
         self,
         user_id: uuid.UUID | None = None,
         customer_id: uuid.UUID | None = None,
+        exclude_session_id: uuid.UUID | None = None,
     ) -> int:
-        """Revoke all active sessions for the specified user or customer."""
+        """Revoke active sessions while optionally preserving the current session."""
         return self.session_repo.revoke_all_for_actor(
             user_id=user_id,
             customer_id=customer_id,
+            exclude_session_id=exclude_session_id,
         )
 
     def get_actor_sessions(

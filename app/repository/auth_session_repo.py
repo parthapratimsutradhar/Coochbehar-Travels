@@ -83,8 +83,9 @@ class AuthSessionRepository:
         self,
         user_id: uuid.UUID | None = None,
         customer_id: uuid.UUID | None = None,
+        exclude_session_id: uuid.UUID | None = None,
     ) -> int:
-        """Revoke all active sessions for a user or customer (e.g. logout-all or reuse detection)."""
+        """Revoke active sessions, optionally preserving one session."""
         now = datetime.now(timezone.utc)
         stmt = update(AuthSession).where(AuthSession.revoked_at.is_(None)).values(revoked_at=now)
         if user_id:
@@ -93,6 +94,8 @@ class AuthSessionRepository:
             stmt = stmt.where(AuthSession.customer_id == customer_id)
         else:
             return 0
+        if exclude_session_id:
+            stmt = stmt.where(AuthSession.id != exclude_session_id)
 
         result = self.db.execute(stmt)
         self.db.commit()

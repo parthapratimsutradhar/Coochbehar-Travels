@@ -424,7 +424,7 @@ def test_13_logout(client: TestClient, test_user: User, db_session):
 
 
 def test_14_logout_all(client: TestClient, test_user: User, db_session):
-    """14. Test that logout-all revokes all active sessions for the user."""
+    """14. Test that logout-all preserves the calling session only."""
     req1 = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     log1 = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req1.json()["data"]["dev_otp"]})
     token1 = log1.json()["data"]["access_token"]
@@ -437,7 +437,7 @@ def test_14_logout_all(client: TestClient, test_user: User, db_session):
     logout_all_res = client.post("/api/v1/sessions/logout-all", headers={"Authorization": f"Bearer {token1}"})
     assert logout_all_res.status_code == 200
 
-    assert client.post("/api/v1/sessions/refresh", cookies=cookies1).status_code == 401
+    assert client.post("/api/v1/sessions/refresh", cookies=cookies1).status_code == 200
     assert client.post("/api/v1/sessions/refresh", cookies=cookies2).status_code == 401
 
 

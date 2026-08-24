@@ -100,17 +100,31 @@ def logout(
 )
 def logout_all(
     response: Response,
+    access_token_payload: dict = Depends(get_current_access_token_payload),
     actor_info: tuple[User | Customer, str] = Depends(get_current_actor),
     db: Session = Depends(get_db),
 ):
     actor, actor_type = actor_info
+    current_session_id = None
+    session_id_claim = access_token_payload.get("session_id")
+    if session_id_claim:
+        try:
+            current_session_id = uuid.UUID(session_id_claim)
+        except (ValueError, AttributeError):
+            current_session_id = None
+
     auth_service = AuthService(db)
     if actor_type in ("ADMIN", "STAFF"):
-        auth_service.logout_all_for_actor(user_id=actor.id)
+        auth_service.logout_all_for_actor(
+            user_id=actor.id,
+            exclude_session_id=current_session_id,
+        )
     else:
-        auth_service.logout_all_for_actor(customer_id=actor.id)
+        auth_service.logout_all_for_actor(
+            customer_id=actor.id,
+            exclude_session_id=current_session_id,
+        )
 
-    clear_refresh_cookie(response)
     return ActionResponse(message="Successfully logged out of all active sessions.")
 
 
