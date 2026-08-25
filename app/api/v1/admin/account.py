@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin_only
 from app.core.enums import UserRole
+from app.core.messages.error import AccessError, UserError
+from app.core.messages.success import UserSuccess
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.account import AdminDeleteProfileRequest, AdminProfileUpdate
@@ -54,7 +56,7 @@ def list_accounts(
 	).scalars().all()
 	total_pages = (total_items + page_size - 1) // page_size
 	return PaginatedResponse[UserResponse](
-		message="Accounts retrieved successfully.",
+		message=UserSuccess.RETRIEVED,
 		data=[UserResponse.model_validate(account) for account in accounts],
 		pagination=PaginationMeta(
 			current_page=page,
@@ -81,12 +83,12 @@ def update_account(
 ):
 	account = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
 	if not account or account.role not in (UserRole.ADMIN, UserRole.STAFF):
-		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin or staff account not found.")
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=UserError.USER_NOT_FOUND)
 
 	if payload.email and db.execute(select(User).where(User.email == payload.email.strip().lower(), User.id != user_id)).scalar_one_or_none():
-		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already in use.")
+		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=UserError.EMAIL_ALREADY_EXISTS)
 	if payload.mobile and db.execute(select(User).where(User.mobile == payload.mobile.strip(), User.id != user_id)).scalar_one_or_none():
-		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Mobile is already in use.")
+		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=UserError.MOBILE_ALREADY_EXISTS)
 
 	update_data = payload.model_dump(exclude_unset=True)
 	if "email" in update_data:
@@ -99,9 +101,9 @@ def update_account(
 		db.commit()
 	except IntegrityError:
 		db.rollback()
-		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Account contact messages are already in use.")
+		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=UserError.CONTACT_ALREADY_EXISTS)
 	db.refresh(account)
-	return ActionResponse(message="Account updated successfully.")
+	return ActionResponse(message=UserSuccess.UPDATED)
 
 
 @router.delete(
@@ -118,9 +120,9 @@ def delete_account(
 ):
 	account = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
 	if not account or account.role not in (UserRole.ADMIN, UserRole.STAFF):
-		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin or staff account not found.")
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=UserError.USER_NOT_FOUND)
 	if payload.identifier.strip().lower() != current_admin.email.lower() and payload.identifier.strip() != current_admin.mobile:
-		raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="OTP identifier must belong to the authenticated administrator.")
+		raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=AccessError.OTP_ADMIN_REQUIRED)
 
 	AuthService(db).verify_admin_otp_for_action(
 		identifier=payload.identifier,
@@ -129,5 +131,5 @@ def delete_account(
 	)
 	account.is_active = False
 	db.commit()
-	return ActionResponse(message="Account deleted successfully.")
+	return ActionResponse(message=UserSuccess.DELETED)
 

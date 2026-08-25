@@ -1,8 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-
-from app.core.enums import ErrorCode, StatusCode
+from fastapi.responses import JSONResponse 
+from app.core.messages.error import SystemError, ErrorCode
 
 
 def _error_response(
@@ -63,8 +62,8 @@ async def validation_exception_handler(
         })
 
     return _error_response(
-        status_code=StatusCode.UNPROCESSABLE_ENTITY,
-        message="Validation failed",
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        message=SystemError.VALIDATION_FAILED,
         code=ErrorCode.VALIDATION_ERROR,
         details=details,
     )
@@ -72,8 +71,8 @@ async def validation_exception_handler(
 
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     return _error_response(
-        status_code=StatusCode.INTERNAL_SERVER_ERROR,
-        message="An unexpected error occurred",
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        message=SystemError.UNEXPECTED,
         code=ErrorCode.INTERNAL_SERVER_ERROR,
     )
 

@@ -14,7 +14,12 @@ class EnquiryBase(BaseModel):
     message: str | None = None
 
 
-class EnquiryCreate(EnquiryBase):
+class EnquiryCreate(BaseModel):
+    package_id: UUID | None = None
+    variant_id: UUID | None = None
+    channel: EnquiryChannel
+    subject: str | None = Field(default=None, max_length=200)
+    message: str | None = None
     name: str | None = Field(default=None, max_length=100)
     mobile: str | None = Field(default=None, max_length=20)
     visitor_id: UUID | None = None

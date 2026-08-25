@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
+from app.core.messages.error import PackageError
 from app.repository.tour_package_repo import TourPackageRepository
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.tour_package import (
@@ -118,7 +119,7 @@ class TourPackageService:
         if package is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tour package with slug '{slug}' not found",
+                detail=PackageError.PACKAGE_NOT_FOUND,
             )
         return self._format_package_detail(package)
 
@@ -129,7 +130,7 @@ class TourPackageService:
         if package is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tour package with id '{package_id}' not found",
+                detail=PackageError.PACKAGE_NOT_FOUND,
             )
         return self._format_package_detail(package)
 
@@ -140,7 +141,7 @@ class TourPackageService:
         if package is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tour package with slug '{package_slug}' not found",
+                detail=PackageError.PACKAGE_NOT_FOUND,
             )
 
         variant = None

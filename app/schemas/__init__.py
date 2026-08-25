@@ -26,6 +26,7 @@ from app.schemas.lead import (
     LeadResponse,
     LeadUpdate,
 )
+from app.schemas.review import ReviewCreate, ReviewResponse
 from app.schemas.upload import FileUploadResponse
 from app.schemas.visitor import (
     AnalyticsOverviewResponse,
@@ -69,6 +70,8 @@ __all__ = [
     "LeadCreate",
     "LeadResponse",
     "LeadUpdate",
+    "ReviewCreate",
+    "ReviewResponse",
     "FileUploadResponse",
     "VisitorCreate",
     "VisitorEventCreate",

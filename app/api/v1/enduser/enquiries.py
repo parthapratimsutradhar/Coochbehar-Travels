@@ -1,9 +1,7 @@
 import uuid
-
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
-
-from app.core.enums import EnquiryChannel, EnquiryType, LeadSource, LeadStatus
+from app.core.enums import EnquiryType, LeadSource, LeadStatus
 from app.db.database import get_db
 from app.models.enquiry import Enquiry
 from app.models.lead import Lead
@@ -35,7 +33,7 @@ def create_enquiry(
         enquiry_code=enquiry_code,
         visitor_id=payload.visitor_id,
         customer_id=payload.customer_id,
-        enquiry_type=payload.enquiry_type,
+        enquiry_type=EnquiryType.FIXED_TOUR,
         channel=payload.channel,
         package_id=payload.package_id,
         variant_id=payload.variant_id,
@@ -82,8 +80,8 @@ def create_custom_tour_request(
         enquiry_code=enquiry_code,
         visitor_id=payload.visitor_id,
         customer_id=payload.customer_id,
-        enquiry_type=EnquiryType.CUSTOM_TOUR,
-        channel=EnquiryChannel.WEBSITE,
+        enquiry_type=EnquiryType.enquiry_type,
+        channel=payload.channel,
         subject=f"Custom Tour to {payload.destination}",
         message=payload.special_requirements,
         enquirer_name=payload.name,

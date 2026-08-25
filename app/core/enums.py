@@ -1,13 +1,15 @@
-from enum import Enum, IntEnum
+from enum import Enum
 
 
 class UserRole(str, Enum):
     ADMIN = "ADMIN"
     STAFF = "STAFF"
-    
+
+
 class ActorType(str, Enum):
     USER = "USER"
     CUSTOMER = "CUSTOMER"
+
 
 class AdminOtpPurpose(str, Enum):
     LOGIN = "LOGIN"
@@ -15,13 +17,13 @@ class AdminOtpPurpose(str, Enum):
     VERIFY_EMAIL = "VERIFY_EMAIL"
     DELETE_ACCOUNT = "DELETE_ACCOUNT"
 
+
 class CustomerOtpPurpose(str, Enum):
     LOGIN = "LOGIN"
     SIGNUP = "SIGNUP"
     VERIFY_MOBILE = "VERIFY_MOBILE"
     VERIFY_EMAIL = "VERIFY_EMAIL"
     DELETE_ACCOUNT = "DELETE_ACCOUNT"
-    
 
 
 class LeadStatus(str, Enum):
@@ -81,6 +83,7 @@ class TourType(str, Enum):
 
 
 class MealPlan(str, Enum):
+    ANY = "ANY"
     NONE = "NONE"
     CP = "CP"
     MAP = "MAP"
@@ -88,6 +91,8 @@ class MealPlan(str, Enum):
 
 
 class VehicleType(str, Enum):
+    ANY = "ANY"
+    NONE = "NONE"
     FOUR_SEATER = "4-seater"
     SIX_SEATER = "6-seater"
     TEMPO = "Tempo"
@@ -99,33 +104,8 @@ class OauthPurpose(str, Enum):
     CUSTOMER_LINK = "CUSTOMER_LINK"
 
 
-class StatusCode(IntEnum):
-    BAD_REQUEST = 400
-    UNAUTHORIZED = 401
-    FORBIDDEN = 403
-    NOT_FOUND = 404
-    CONFLICT = 409
-    UNPROCESSABLE_ENTITY = 422
-    INTERNAL_SERVER_ERROR = 500
-
-
-class ErrorCode(str, Enum):
-    BAD_REQUEST = "BAD_REQUEST"
-    UNAUTHORIZED = "UNAUTHORIZED"
-    FORBIDDEN = "FORBIDDEN"
-    NOT_FOUND = "NOT_FOUND"
-    CONFLICT = "CONFLICT"
-    VALIDATION_ERROR = "VALIDATION_ERROR"
-    INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
-
-    @classmethod
-    def from_status_code(cls, status_code: int) -> "ErrorCode | str":
-        return {
-            StatusCode.BAD_REQUEST: cls.BAD_REQUEST,
-            StatusCode.UNAUTHORIZED: cls.UNAUTHORIZED,
-            StatusCode.FORBIDDEN: cls.FORBIDDEN,
-            StatusCode.NOT_FOUND: cls.NOT_FOUND,
-            StatusCode.CONFLICT: cls.CONFLICT,
-            StatusCode.UNPROCESSABLE_ENTITY: cls.VALIDATION_ERROR,
-            StatusCode.INTERNAL_SERVER_ERROR: cls.INTERNAL_SERVER_ERROR,
-        }.get(status_code, "ERROR")
+class CustomerTourStatus(str, Enum):
+    PLANNED = "PLANNED"
+    CONFIRMED = "CONFIRMED"
+    CANCELLED = "CANCELLED"
+    COMPLETED = "COMPLETED"

@@ -6,6 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.enums import LeadSource, LeadStatus
+from app.core.messages.error import LeadError
+from app.core.messages.success import LeadSuccess
 from app.db.database import get_db
 from app.models.lead import Lead
 from app.models.lead_activity import LeadActivity
@@ -55,7 +57,7 @@ def list_leads(
     stmt = stmt.offset(skip).limit(limit)
     leads = db.execute(stmt).scalars().all()
     return SuccessResponse(
-        message="Leads fetched successfully",
+        message=LeadSuccess.RETRIEVED,
         data=[LeadResponse.model_validate(l) for l in leads],
     )
 
@@ -74,10 +76,10 @@ def get_lead(
     if not lead:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lead with ID {lead_id} not found",
+            detail=LeadError.LEAD_NOT_FOUND,
         )
     return SuccessResponse(
-        message="Lead fetched successfully",
+        message=LeadSuccess.RETRIEVED,
         data=LeadResponse.model_validate(lead),
     )
 
@@ -113,7 +115,7 @@ def create_lead(
     stmt = select(Lead).options(selectinload(Lead.activities)).where(Lead.id == lead.id)
     created = db.execute(stmt).scalar_one()
     return SuccessResponse(
-        message="Lead created successfully",
+        message=LeadSuccess.CREATED,
         data=LeadResponse.model_validate(created),
     )
 
@@ -133,7 +135,7 @@ def update_lead(
     if not lead:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lead with ID {lead_id} not found",
+            detail=LeadError.LEAD_NOT_FOUND,
         )
 
     update_data = payload.model_dump(exclude_unset=True)
@@ -143,7 +145,7 @@ def update_lead(
     db.commit()
     db.refresh(lead)
     return SuccessResponse(
-        message="Lead updated successfully",
+        message=LeadSuccess.UPDATED,
         data=LeadResponse.model_validate(lead),
     )
 
@@ -165,7 +167,7 @@ def log_lead_activity(
     if not lead:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lead with ID {lead_id} not found",
+            detail=LeadError.LEAD_NOT_FOUND,
         )
 
     activity = LeadActivity(

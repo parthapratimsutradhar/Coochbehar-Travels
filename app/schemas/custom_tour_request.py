@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from uuid import UUID
-
+from typing import Literal
+from app.core.enums import EnquiryChannel, EnquiryType, VehicleType, MealPlan
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -17,8 +18,26 @@ class CustomTourRequestBase(BaseModel):
     special_requirements: str | None = None
 
 
-class CustomTourRequestCreate(CustomTourRequestBase):
-    enquiry_id: UUID | None = None
+
+class CustomTourRequestCreate(BaseModel):
+    name: str = Field(..., max_length=100)
+    mobile: str = Field(..., max_length=20)
+    destination: str = Field(..., max_length=150)
+    travel_date: date | None = None
+    travel_duration: str | None = Field(default=None, max_length=50)
+
+    pax_no: int = Field(default=4, ge=1)
+    no_room: int = Field(default=2, ge=1)
+
+    vehicle_type: VehicleType | None = None
+    meal_plan: MealPlan | None = None
+    special_requirements: str | None = None
+    enquiry_type: Literal[
+        EnquiryType.CUSTOM_TOUR,
+        EnquiryType.ROOM_REQUEST,
+        EnquiryType.VEHICLE_REQUEST,
+    ] | None = None
+    channel: EnquiryChannel | None = None
     visitor_id: UUID | None = None
     customer_id: UUID | None = None
 

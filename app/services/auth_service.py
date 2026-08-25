@@ -71,7 +71,7 @@ class AuthService:
 
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="SMS OTP delivery is not configured. Use an email identifier for OTP login.",
+            detail=AuthError.SMS_NOT_CONFIGURED,
         )
 
     # ── ADMIN OTP FLOWS ────────────────────────────────────────────────
@@ -92,7 +92,7 @@ class AuthService:
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Admin or staff user not found with this identifier.",
+                detail=AuthError.ADMIN_NOT_FOUND,
             )
 
         raw_otp = generate_otp(6)
@@ -131,14 +131,14 @@ class AuthService:
         if not challenge:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No active OTP challenge found. Please request a new OTP.",
+                detail=AuthError.OTP_NOT_FOUND,
             )
 
         if challenge.attempts >= challenge.max_attempts:
             self.otp_repo.invalidate_existing(cleaned, purpose=purpose)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Maximum verification attempts exceeded. Please request a new OTP.",
+                detail=AuthError.OTP_ATTEMPTS_EXCEEDED,
             )
 
         if not verify_otp(otp, challenge.otp_hash):
@@ -159,7 +159,7 @@ class AuthService:
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Admin user account is inactive or disabled.",
+                detail=AuthError.ADMIN_INACTIVE,
             )
 
         raw_refresh_token = generate_secure_token(64)
@@ -204,13 +204,13 @@ class AuthService:
         if not challenge:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No active OTP challenge found. Please request a new OTP.",
+                detail=AuthError.OTP_NOT_FOUND,
             )
         if challenge.attempts >= challenge.max_attempts:
             self.otp_repo.invalidate_existing(cleaned, purpose=purpose)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Maximum verification attempts exceeded. Please request a new OTP.",
+                detail=AuthError.OTP_ATTEMPTS_EXCEEDED,
             )
         if not verify_otp(otp, challenge.otp_hash):
             attempts = self.otp_repo.increment_attempts(challenge)
@@ -229,7 +229,7 @@ class AuthService:
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Admin user account is inactive or disabled.",
+                detail=AuthError.ADMIN_INACTIVE,
             )
         return user
 
@@ -245,7 +245,7 @@ class AuthService:
         if not google_data:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Google OAuth token.",
+                detail=AuthError.INVALID_GOOGLE_TOKEN,
             )
 
         email = google_data["email"]
@@ -253,7 +253,7 @@ class AuthService:
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="No active Admin account found for this Google email.",
+                detail=AuthError.GOOGLE_ADMIN_NOT_FOUND,
             )
 
         if google_data.get("picture"):
@@ -300,7 +300,7 @@ class AuthService:
         if purpose not in {item.value for item in CustomerOtpPurpose}:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Customer OTP purpose must be LOGIN or SIGNUP.",
+                detail=AuthError.INVALID_OTP_PURPOSE,
             )
 
         cleaned, id_type = self.normalize_identifier(identifier)
@@ -344,7 +344,7 @@ class AuthService:
         if purpose not in {item.value for item in CustomerOtpPurpose}:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Customer OTP purpose must be LOGIN or SIGNUP.",
+                detail=AuthError.INVALID_OTP_PURPOSE,
             )
 
         cleaned, _ = self.normalize_identifier(identifier)
@@ -353,14 +353,14 @@ class AuthService:
         if not challenge:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No active OTP challenge found. Please request a new OTP.",
+                detail=AuthError.OTP_NOT_FOUND,
             )
 
         if challenge.attempts >= challenge.max_attempts:
             self.otp_repo.invalidate_existing(cleaned, purpose=purpose)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Maximum verification attempts exceeded. Please request a new OTP.",
+                detail=AuthError.OTP_ATTEMPTS_EXCEEDED,
             )
 
         if not verify_otp(otp, challenge.otp_hash):
@@ -375,7 +375,7 @@ class AuthService:
         if customer and purpose == CustomerOtpPurpose.SIGNUP.value:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="A customer account already exists for this identifier. Please use LOGIN.",
+                detail=AuthError.CUSTOMER_ALREADY_EXISTS,
             )
 
         if not customer:
@@ -447,7 +447,7 @@ class AuthService:
         if not google_data:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Google OAuth token.",
+                detail=AuthError.INVALID_GOOGLE_TOKEN,
             )
 
         email = google_data["email"]
@@ -516,7 +516,7 @@ class AuthService:
         if not raw_refresh_token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh token is missing.",
+                detail=AuthError.REFRESH_MISSING,
             )
 
         token_hash = hash_token(raw_refresh_token)
@@ -525,7 +525,7 @@ class AuthService:
         if not session:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token.",
+                detail=AuthError.REFRESH_INVALID,
             )
 
         if session.revoked_at is not None:
@@ -535,7 +535,7 @@ class AuthService:
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh token reuse detected. All active sessions have been revoked for security.",
+                detail=AuthError.REFRESH_REUSE,
             )
 
         now = datetime.now(timezone.utc)
@@ -549,7 +549,7 @@ class AuthService:
             self.session_repo.revoke_session(session)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh session has expired (maximum 30-day limit reached).",
+                detail=AuthError.REFRESH_MAX_AGE,
             )
 
         last_used_at = (
@@ -564,7 +564,7 @@ class AuthService:
             self.session_repo.revoke_session(session)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh session expired due to 3 days of inactivity.",
+                detail=AuthError.REFRESH_INACTIVE,
             )
 
         if session.actor_type in ("ADMIN", "STAFF") and session.user_id is not None:
@@ -573,7 +573,7 @@ class AuthService:
                 self.session_repo.revoke_session(session)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="User account is deactivated.",
+                    detail=AuthError.ACCOUNT_DEACTIVATED,
                 )
             access_token_subject = user.id
             access_token_role = user.role.value if hasattr(user.role, "value") else str(user.role)
@@ -586,7 +586,7 @@ class AuthService:
                 self.session_repo.revoke_session(session)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Customer profile not found.",
+                    detail=AuthError.CUSTOMER_NOT_FOUND,
                 )
             access_token_subject = customer.id
             access_token_role = "CUSTOMER"
