@@ -13,8 +13,8 @@ from app.models.customer import Customer
 from app.models.enquiry import Enquiry
 from app.models.review import Review
 from app.models.tour_package import TourPackage
-from app.schemas.response import ErrorResponse, SuccessResponse
-from app.schemas.review import ReviewCreate, ReviewResponse
+from app.schemas.response import ActionResponse, ErrorResponse
+from app.schemas.review import ReviewCreate
 
 router = APIRouter(
 	prefix="/reviews",
@@ -24,7 +24,7 @@ router = APIRouter(
 
 @router.post(
 	"",
-	response_model=SuccessResponse[ReviewResponse],
+	response_model=ActionResponse,
 	status_code=status.HTTP_201_CREATED,
 	responses={
 		401: {"model": ErrorResponse},
@@ -40,7 +40,7 @@ def create_review(
 	payload: ReviewCreate,
 	current_customer: Customer = Depends(get_current_customer),
 	db: Session = Depends(get_db),
-) -> SuccessResponse[ReviewResponse]:
+) -> ActionResponse:
 	package = db.query(TourPackage).filter(TourPackage.id == payload.package_id).first()
 	if package is None:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PackageError.PACKAGE_NOT_FOUND)
@@ -94,9 +94,5 @@ def create_review(
 	)
 	db.add(review)
 	db.commit()
-	db.refresh(review)
 
-	return SuccessResponse(
-		message="Review added successfully",
-		data=ReviewResponse.model_validate(review),
-	)
+	return ActionResponse(message="Review added successfully")

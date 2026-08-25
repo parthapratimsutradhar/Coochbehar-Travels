@@ -110,7 +110,7 @@ class CustomerTour(BaseEntity):
         index=True,
     )
 
-    # Relationships
+# ── Relationships ───────────────────────────────────────────────────────
     customer = relationship(
         "Customer",
         back_populates="tours",
