@@ -18,6 +18,7 @@ from app.schemas.custom_tour_request import (
     CustomTourRequestResponse,
 )
 from app.schemas.customer import CustomerCreate, CustomerResponse, CustomerUpdate
+from app.schemas.customer_tour import CustomerTourResponse
 from app.schemas.enquiry import EnquiryCreate, EnquiryResponse, EnquiryUpdate
 from app.schemas.lead import (
     LeadActivityCreate,
@@ -62,6 +63,7 @@ __all__ = [
     "CustomerCreate",
     "CustomerResponse",
     "CustomerUpdate",
+    "CustomerTourResponse",
     "EnquiryCreate",
     "EnquiryResponse",
     "EnquiryUpdate",

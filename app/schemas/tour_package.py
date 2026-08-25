@@ -35,6 +35,18 @@ class TourPackageSelectionItem(BaseModel):
     variants: list[TourPackageSelectionVariant] = Field(default_factory=list)
 
 
+# ── Gallery sub-schema ───────────────────────────────────────────────
+
+class GalleryItemResponse(BaseModel):
+    id: str | None = None
+    alt: str | None = None
+    url: str
+    type: str | None = None
+    display_order: int | None = None
+
+    model_config = {"extra": "allow"}
+
+
 # ── Review sub-schema ────────────────────────────────────────────────
 
 class ReviewItemResponse(BaseModel):
@@ -47,7 +59,7 @@ class ReviewItemResponse(BaseModel):
     name: str
     rating: int
     review: str
-    review_gallery: list[Any] = Field(default_factory=list)
+    review_gallery: list[GalleryItemResponse] = Field(default_factory=list)
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
@@ -83,16 +95,6 @@ class HighlightResponse(BaseModel):
 class DepartureDateResponse(BaseModel):
     id: str | None = None
     date: date
-
-    model_config = {"extra": "allow"}
-
-
-class GalleryItemResponse(BaseModel):
-    id: str | None = None
-    alt: str | None = None
-    url: str
-    type: str | None = None
-    display_order: int | None = None
 
     model_config = {"extra": "allow"}
 

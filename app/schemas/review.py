@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, Field
+
+from app.schemas.tour_package import GalleryItemResponse
 
 
 class ReviewCreate(BaseModel):
@@ -11,7 +12,7 @@ class ReviewCreate(BaseModel):
     package_id: uuid.UUID
     rating: int = Field(..., ge=1, le=5)
     review: str = Field(..., min_length=1, max_length=5000)
-    review_gallery: list[Any] = Field(default_factory=list)
+    review_gallery: list[GalleryItemResponse] = Field(default_factory=list)
 
 
 class ReviewUpdate(BaseModel):
@@ -19,7 +20,7 @@ class ReviewUpdate(BaseModel):
 
     rating: int | None = Field(None, ge=1, le=5)
     review: str | None = Field(None, min_length=1, max_length=5000)
-    review_gallery: list[Any] | None = None
+    review_gallery: list[GalleryItemResponse] | None = None
 
 
 class ReviewResponse(BaseModel):
@@ -30,7 +31,7 @@ class ReviewResponse(BaseModel):
     name: str
     rating: int
     review: str
-    review_gallery: list[Any] = Field(default_factory=list)
+    review_gallery: list[GalleryItemResponse] = Field(default_factory=list)
     is_verified: bool
     is_published: bool
     created_at: datetime

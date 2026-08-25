@@ -57,21 +57,23 @@ def _has_completed_customer_tour(db: Session, customer_id: UUID, package_id: UUI
 
 
 @router.get(
-	"/package/{package_id}",
+	"/package/{package_slug}",
 	response_model=PaginatedResponse[ReviewItemResponse],
+	response_model_exclude_unset=True,
 	responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
 	summary="List published reviews for a package",
 	description="Return published reviews, including each review's gallery, for a tour package.",
 )
 def list_package_reviews(
-	package_id: UUID,
+	package_slug: str,
 	page: int = Query(1, ge=1),
 	page_size: int = Query(10, ge=1, le=100),
 	db: Session = Depends(get_db),
 ) -> PaginatedResponse[ReviewItemResponse]:
-	package_exists = db.query(TourPackage.id).filter(TourPackage.id == package_id).first()
-	if package_exists is None:
+	package = db.query(TourPackage).filter(TourPackage.slug == package_slug).first()
+	if package is None:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PackageError.PACKAGE_NOT_FOUND)
+	package_id = package.id
 
 	query = (
 		db.query(Review)
@@ -115,19 +117,20 @@ def list_package_reviews(
 
 
 @router.get(
-	"/eligibility/{package_id}",
+	"/eligibility/{package_slug}",
 	response_model=SuccessResponse[ReviewEligibilityResponse],
 	responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
 	summary="Check whether the customer can review a package",
 )
 def get_review_eligibility(
-	package_id: UUID,
+	package_slug: str,
 	current_customer: Customer = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> SuccessResponse[ReviewEligibilityResponse]:
-	package_exists = db.query(TourPackage.id).filter(TourPackage.id == package_id).first()
-	if package_exists is None:
+	package = db.query(TourPackage).filter(TourPackage.slug == package_slug).first()
+	if package is None:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PackageError.PACKAGE_NOT_FOUND)
+	package_id = package.id
 
 	customer_review = db.query(Review).filter(
 		Review.customer_id == current_customer.id,
