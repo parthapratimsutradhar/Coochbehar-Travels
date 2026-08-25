@@ -16,6 +16,7 @@ from app.models.vehicle import Vehicle
 from app.models.visitor_event import VisitorEvent
 from app.models.visitor_session import VisitorSession
 from app.models.visitor import Visitor
+from app.models.customer_tour import CustomerTour
 
 
 __all__ = [
@@ -39,4 +40,5 @@ __all__ = [
     "VisitorEvent",
     "VisitorSession",
     "Visitor",
+    "CustomerTour",
 ]

@@ -1,18 +1,48 @@
 import uuid
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from app.api.deps import get_current_customer
 from app.core.enums import EnquiryType, LeadSource, LeadStatus
 from app.db.database import get_db
+from app.models.customer import Customer
 from app.models.enquiry import Enquiry
 from app.models.lead import Lead
 from app.schemas.custom_tour_request import CustomTourRequestCreate
-from app.schemas.enquiry import EnquiryCreate
-from app.schemas.response import ActionResponse, ErrorResponse
+from app.schemas.enquiry import EnquiryCreate, EnquiryResponse
+from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 
 router = APIRouter(
     prefix="/enquiries",
     tags=["Enquiries"],
 )
+
+
+@router.get(
+    "",
+    response_model=SuccessResponse[list[EnquiryResponse]],
+    responses={401: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    summary="List the authenticated customer's enquiries",
+    description="Retrieve enquiries submitted by the currently authenticated customer, newest first.",
+)
+def list_my_enquiries(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_customer: Customer = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+):
+    stmt = (
+        select(Enquiry)
+        .where(Enquiry.customer_id == current_customer.id)
+        .order_by(Enquiry.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    enquiries = db.execute(stmt).scalars().all()
+    return SuccessResponse(
+        message="Your enquiries fetched successfully",
+        data=[EnquiryResponse.model_validate(enquiry) for enquiry in enquiries],
+    )
 
 
 @router.post(

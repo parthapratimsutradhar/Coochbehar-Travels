@@ -4,14 +4,13 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Date,
+    Enum,
     ForeignKey,
     Integer,
     Numeric,
     String,
     Text,
-    Enum,
 )
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.enums import CustomerTourStatus
@@ -22,9 +21,13 @@ class CustomerTour(BaseEntity):
     """
     Stores a customer's previous, current, or planned tour.
 
-    Can reference an existing catalog tour package/variant, while also
-    supporting manually entered offline tours that are not present
-    in the catalog.
+    A tour may originate from:
+    - a fixed/catalog tour
+    - a custom tour enquiry
+    - an offline/manual entry
+
+    Catalog references are optional so custom tours can be tracked
+    without requiring a package or variant.
     """
 
     __tablename__ = "customer_tours"
@@ -35,14 +38,23 @@ class CustomerTour(BaseEntity):
         index=True,
     )
 
+    # Optional: present for fixed/catalog tours
     package_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("tour_packages.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
 
+    # Optional: present for fixed/catalog tours
     variant_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("tour_variants.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # Optional: identifies the enquiry/request that created this tour record
+    enquiry_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("enquiries.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -91,15 +103,14 @@ class CustomerTour(BaseEntity):
         Text,
         nullable=True,
     )
-        
+
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
 
-    # ── Relationships ─────────────────────────────────────────────
-
+    # Relationships
     customer = relationship(
         "Customer",
         back_populates="tours",
@@ -111,6 +122,11 @@ class CustomerTour(BaseEntity):
 
     variant = relationship(
         "TourVariant",
+    )
+
+    enquiry = relationship(
+        "Enquiry",
+        back_populates="customer_tour",
     )
 
     created_by = relationship(
