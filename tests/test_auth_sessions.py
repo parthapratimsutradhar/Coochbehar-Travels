@@ -15,6 +15,7 @@ from app.core.enums import UserRole
 from app.db.database import get_db
 from app.main import app
 from app.models.auth_session import AuthSession
+from app.repository.auth_session_repo import AuthSessionRepository
 from app.models.base import Base
 from app.models.customer import Customer
 from app.models.room import Room
@@ -138,6 +139,21 @@ def make_mock_google_id_token(email: str, name: str, picture: str | None = None)
 
 # ── TEST CASES ─────────────────────────────────────────────────────────
 
+def test_auth_session_default_actor_type_uses_supported_enum_values(db_session):
+    """Legacy USER values are incompatible with the actor_type enum and check constraint."""
+    repo = AuthSessionRepository(db_session)
+    user_id = uuid.uuid4()
+
+    session = repo.create_session(
+        user_id=user_id,
+        refresh_token_hash="hash-1",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+
+    assert session.actor_type == "ADMIN"
+    assert session.actor_type in {"ADMIN", "STAFF", "CUSTOMER"}
+
+
 def test_1_admin_pure_otp_login(client: TestClient, test_user: User):
     """1. Test Admin pure OTP request and verification login flow."""
     req_res = client.post(
@@ -249,7 +265,7 @@ def test_4_access_token_expiration(client: TestClient, test_user: User):
     expired_token = create_access_token(
         subject=test_user.id,
         role=test_user.role.value,
-        actor_type="USER",
+        actor_type=test_user.role.value,
         email=test_user.email,
         expires_delta=timedelta(minutes=-5),
     )

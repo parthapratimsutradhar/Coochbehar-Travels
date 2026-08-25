@@ -60,7 +60,7 @@ def create_access_token(
     payload = {
         "sub": str(subject),
         "role": role,
-        "actor_type": actor_type,  # "USER" (Admin/Staff) or "CUSTOMER" (Enduser)
+        "actor_type": actor_type,  # "ADMIN"/"STAFF" or "CUSTOMER"
         "type": "access",
         "iat": int(now.timestamp()),
         "exp": int(expire.timestamp()),

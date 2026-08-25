@@ -18,6 +18,8 @@ from app.models.visitor_session import VisitorSession
 from app.models.visitor import Visitor
 from app.models.customer_tour import CustomerTour
 from app.models.tour_wishlist import TourWishlist
+from app.models.referral import Referral
+from app.models.document import Document
 
 
 __all__ = [
@@ -43,4 +45,6 @@ __all__ = [
     "Visitor",
     "CustomerTour",
     "TourWishlist",
+    "Referral",
+    "Document",
 ]

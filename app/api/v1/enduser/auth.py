@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
-
 from app.api.deps import get_current_customer, set_refresh_cookie
 from app.core.config import settings
 from app.db.database import get_db

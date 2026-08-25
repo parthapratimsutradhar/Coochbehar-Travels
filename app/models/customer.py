@@ -64,10 +64,71 @@ class Customer(BaseEntity):
     )
 
 # ── Relationships ───────────────────────────────────────────────────────
-    visitors = relationship("Visitor", back_populates="customer")
-    enquiries = relationship("Enquiry", back_populates="customer")
-    leads = relationship("Lead", back_populates="customer")
-    reviews = relationship("Review", back_populates="customer")
-    auth_sessions = relationship("AuthSession", back_populates="customer", cascade="all, delete-orphan")
-    tours = relationship("CustomerTour", back_populates="customer")
-    tour_wishlists = relationship("TourWishlist", back_populates="customer", cascade="all, delete-orphan")
+    visitors = relationship(
+        "Visitor", 
+        back_populates="customer"
+    )
+    
+    enquiries = relationship(
+        "Enquiry", 
+        back_populates="customer"
+    )
+    
+    leads = relationship(
+        "Lead", 
+        back_populates="customer"
+    )
+    
+    reviews = relationship(
+        "Review", 
+        back_populates="customer"
+    )
+    
+    auth_sessions = relationship(
+        "AuthSession", 
+        back_populates="customer",
+        cascade="all, delete-orphan"
+    )
+    
+    tours = relationship(
+        "CustomerTour", 
+        back_populates="customer"
+    )
+    
+    tour_wishlists = relationship(
+        "TourWishlist", 
+        back_populates="customer",
+        cascade="all, delete-orphan"
+    )
+    
+    referrals_made = relationship(
+        "Referral",
+        foreign_keys="Referral.referrer_customer_id",
+        back_populates="referrer",
+        cascade="all, delete-orphan",
+    )
+
+    referral_received = relationship(
+        "Referral",
+        foreign_keys="Referral.referred_customer_id",
+        back_populates="referred_customer",
+        uselist=False,
+    )
+    
+    documents = relationship(
+        "Document",
+        foreign_keys="Document.customer_id",
+        back_populates="customer",
+    )
+
+    documents_uploaded = relationship(
+        "Document",
+        foreign_keys="Document.uploaded_by_customer_id",
+        back_populates="uploaded_by_customer",
+    )
+
+    documents_deleted = relationship(
+        "Document",
+        foreign_keys="Document.deleted_by_customer_id",
+        back_populates="deleted_by_customer",
+    )

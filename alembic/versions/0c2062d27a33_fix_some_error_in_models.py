@@ -30,6 +30,8 @@ def upgrade() -> None:
 
     actor_type_enum = postgresql.ENUM(
         "USER",
+        "ADMIN",
+        "STAFF",
         "CUSTOMER",
         name="actor_type",
     )
@@ -134,6 +136,8 @@ def downgrade() -> None:
 
     actor_type_enum = postgresql.ENUM(
         "USER",
+        "ADMIN",
+        "STAFF",
         "CUSTOMER",
         name="actor_type",
     )

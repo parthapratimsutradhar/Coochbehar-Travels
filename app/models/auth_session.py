@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import UUIDEntity
 from app.core.enums import ActorType
+from sqlalchemy import CheckConstraint
 
 
 class AuthSession(UUIDEntity):
@@ -17,6 +18,25 @@ class AuthSession(UUIDEntity):
     """
 
     __tablename__ = "auth_sessions"
+    
+    __table_args__ = (
+    CheckConstraint(
+        """
+        (
+            actor_type IN ('ADMIN', 'STAFF')
+            AND user_id IS NOT NULL
+            AND customer_id IS NULL
+        )
+        OR
+        (
+            actor_type = 'CUSTOMER'
+            AND customer_id IS NOT NULL
+            AND user_id IS NULL
+        )
+        """,
+        name="ck_auth_session_actor_owner",
+    ),
+)
 
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -35,7 +55,7 @@ class AuthSession(UUIDEntity):
     actor_type: Mapped[ActorType] = mapped_column(
         Enum(ActorType, name="actor_type"),
         nullable=False,
-        default=ActorType.USER,
+        default=ActorType.CUSTOMER,
     )
 
     refresh_token_hash: Mapped[str] = mapped_column(

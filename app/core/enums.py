@@ -7,7 +7,8 @@ class UserRole(str, Enum):
 
 
 class ActorType(str, Enum):
-    USER = "USER"
+    ADMIN = "ADMIN"
+    STAFF = "STAFF"
     CUSTOMER = "CUSTOMER"
 
 
@@ -110,3 +111,18 @@ class CustomerTourStatus(str, Enum):
     CONFIRMED = "CONFIRMED"
     CANCELLED = "CANCELLED"
     COMPLETED = "COMPLETED"
+    
+    
+class ReferralStatus(str, Enum):
+    PENDING = "PENDING"
+    CONVERTED = "CONVERTED"
+    REWARDED = "REWARDED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"    
+
+
+class DocumentType(str, Enum):
+    ID_PROOF = "ID_PROOF"
+    ADDRESS_PROOF = "ADDRESS_PROOF"
+    TOUR_DOCUMENT = "TOUR_DOCUMENT"
+    OTHER = "OTHER"    

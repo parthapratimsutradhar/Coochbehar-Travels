@@ -61,3 +61,15 @@ class User(ActiveEntity):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+
+    documents_uploaded = relationship(
+        "Document",
+        foreign_keys="Document.uploaded_by_user_id",
+        back_populates="uploaded_by_user",
+    )
+
+    documents_deleted = relationship(
+        "Document",
+        foreign_keys="Document.deleted_by_user_id",
+        back_populates="deleted_by_user",
+    )

@@ -16,7 +16,7 @@ class AuthSessionRepository:
         self,
         user_id: uuid.UUID | None = None,
         customer_id: uuid.UUID | None = None,
-        actor_type: str = "USER",
+        actor_type: str = "ADMIN",
         refresh_token_hash: str = "",
         expires_at: datetime | None = None,
         user_agent: str | None = None,
