@@ -133,3 +133,4 @@ class Enquiry(BaseEntity):
     package = relationship("TourPackage", back_populates="enquiries")
     variant = relationship("TourVariant", back_populates="enquiries")
     lead = relationship("Lead", back_populates="enquiry", uselist=False)
+    customer_tour = relationship("CustomerTour", back_populates="enquiry", uselist=False)

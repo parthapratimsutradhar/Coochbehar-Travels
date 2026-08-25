@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import DateTime, Enum, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import UUIDEntity
@@ -33,9 +33,9 @@ class AuthSession(UUIDEntity):
     )
 
     actor_type: Mapped[ActorType] = mapped_column(
-        String(20),
-        default=ActorType.USER,
+        Enum(ActorType, name="actor_type"),
         nullable=False,
+        default=ActorType.USER,
     )
 
     refresh_token_hash: Mapped[str] = mapped_column(

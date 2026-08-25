@@ -1,8 +1,9 @@
 import uuid
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, ForeignKey
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import ActiveEntity
 from decimal import Decimal
+from datetime import date
 
 
 class TourVariant(ActiveEntity):
@@ -33,12 +34,12 @@ class TourVariant(ActiveEntity):
         String(100),
     )
 
-    valid_from: Mapped[Date] = mapped_column(
+    valid_from: Mapped[date] = mapped_column(
         Date,
         nullable=False,
     )
 
-    valid_to: Mapped[Date] = mapped_column(
+    valid_to: Mapped[date] = mapped_column(
         Date,
         nullable=False,
     )

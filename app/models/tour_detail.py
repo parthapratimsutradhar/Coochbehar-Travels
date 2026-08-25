@@ -12,11 +12,13 @@ class TourDetail(UUIDEntity):
     __tablename__ = "tour_details"
 
     variant_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey(
-            "tour_variants.id",
-            ondelete="CASCADE",
-        ),
-        primary_key=True,
+            ForeignKey(
+                "tour_variants.id",
+                ondelete="CASCADE",
+            ),
+            unique=True,
+            nullable=False,
+            index=True,
     )
         
     banner: Mapped[str | dict[str, Any]] = mapped_column(

@@ -56,6 +56,7 @@ class CustomerTour(BaseEntity):
     enquiry_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("enquiries.id", ondelete="SET NULL"),
         nullable=True,
+        unique=True,
         index=True,
     )
 

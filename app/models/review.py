@@ -27,6 +27,7 @@ class Review(BaseEntity):
         String(20),
         unique=True,
         index=True,
+        nullable=False,
     )
 
     package_id: Mapped[uuid.UUID] = mapped_column(
