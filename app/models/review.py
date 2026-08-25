@@ -9,10 +9,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.models.base import BaseEntity
+from app.models.base import ActiveEntity
 
 
-class Review(BaseEntity):
+class Review(ActiveEntity):
     __tablename__ = "reviews"
 
     __table_args__ = (

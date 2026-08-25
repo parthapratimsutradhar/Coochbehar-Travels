@@ -53,3 +53,8 @@ class BaseEntity(Base, UUIDMixin, TimestampMixin):
 # Base + UUID + Timestamp + IsActive
 class ActiveEntity(BaseEntity, IsActiveMixin):
     __abstract__ = True
+    
+
+# Base + UUID + IsActive
+class ActiveUUIDEntity(Base, UUIDMixin, IsActiveMixin):
+    __abstract__ = True    

@@ -14,6 +14,14 @@ class ReviewCreate(BaseModel):
     review_gallery: list[Any] = Field(default_factory=list)
 
 
+class ReviewUpdate(BaseModel):
+    """Fields an authenticated customer may edit on their review."""
+
+    rating: int | None = Field(None, ge=1, le=5)
+    review: str | None = Field(None, min_length=1, max_length=5000)
+    review_gallery: list[Any] | None = None
+
+
 class ReviewResponse(BaseModel):
     id: uuid.UUID
     review_code: str
@@ -28,3 +36,12 @@ class ReviewResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ReviewEligibilityResponse(BaseModel):
+    """Review actions available to the authenticated customer for a package."""
+
+    package_id: uuid.UUID
+    can_review: bool
+    has_reviewed: bool
+    review: ReviewResponse | None = None

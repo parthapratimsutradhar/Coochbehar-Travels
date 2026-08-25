@@ -125,7 +125,7 @@ def create_package_and_variants():
             name="Alak Pandey",
             rating=5,
             review="Amazing experience.",
-            review_gallery=[],
+            review_gallery=[{"url": "https://example.com/review-photo.jpg"}],
             is_verified=True,
             is_published=True,
         )
@@ -203,20 +203,42 @@ def test_tour_package_endpoints_return_default_variant_data():
     assert all(item["slug"] != "inactive-tour" for item in inactive_list_response.json()["data"])
 
     selection_response = client.get(
-        "/api/v1/tour-packages/select",
-        params={"search": "Selector Destination"},
+        "/api/v1/tour-packages/select/himachal-summer",
     )
     assert selection_response.status_code == 200
     selection_data = selection_response.json()["data"]
-    assert len(selection_data) == 5
-    assert set(selection_data[0]) == {"id", "title", "banner", "variants"}
-    assert set(selection_data[0]["variants"][0]) == {"id", "name", "season_name"}
+    assert selection_data["title"] == "Himachal Summer Escape"
+    assert selection_data["banner"] == {
+        "image": "https://example.com/default-banner.jpg",
+        "video": None,
+    }
+    assert [variant["name"] for variant in selection_data["variants"]] == [
+        "Family Summer",
+        "Honeymoon Summer",
+    ]
+    assert set(selection_data["variants"][0]) == {"id", "name", "season_name"}
+
+    missing_selection_response = client.get(
+        "/api/v1/tour-packages/select/missing-tour",
+    )
+    assert missing_selection_response.status_code == 404
 
     detail_response = client.get("/api/v1/tour-packages/himachal-summer")
     assert detail_response.status_code == 200
     detail_data = detail_response.json()["data"]
     assert detail_data["default_variant"]["season_name"] == "Summer Special"
     assert len(detail_data["other_variants"]) == 1
+    assert "reviews" not in detail_data
+
+    reviews_response = client.get(
+        f"/api/v1/reviews/package/{detail_data['id']}",
+    )
+    assert reviews_response.status_code == 200
+    reviews_data = reviews_response.json()
+    assert reviews_data["pagination"]["total_items"] == 1
+    assert reviews_data["data"][0]["review_gallery"] == [
+        {"url": "https://example.com/review-photo.jpg"}
+    ]
 
     variant_response = client.get(
         "/api/v1/tour-packages/himachal-summer/variants/honeymoon-summer"

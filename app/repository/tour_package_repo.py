@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session, joinedload, contains_eager
 
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
-from app.models.review import Review
 from app.schemas.tour_package import TourPackageFilterParams
 
 
@@ -224,13 +223,12 @@ class TourPackageRepository:
         return query.order_by(TourPackage.title.asc()).limit(limit).all()
 
     def get_by_slug(self, slug: str, active_only: bool = False) -> TourPackage | None:
-        """Fetch a single tour package by slug, eagerly loading variants, details, and reviews."""
+        """Fetch a single tour package by slug, eagerly loading variants and details."""
 
         query = (
             self.db.query(TourPackage)
             .options(
                 joinedload(TourPackage.variants).joinedload(TourVariant.details),
-                joinedload(TourPackage.reviews).joinedload(Review.customer),
             )
             .filter(TourPackage.slug == slug)
         )
@@ -239,13 +237,12 @@ class TourPackageRepository:
         return query.first()
 
     def get_by_id(self, package_id) -> TourPackage | None:
-        """Fetch a single tour package by id, eagerly loading variants, details, and reviews."""
+        """Fetch a single tour package by id, eagerly loading variants and details."""
 
         return (
             self.db.query(TourPackage)
             .options(
                 joinedload(TourPackage.variants).joinedload(TourVariant.details),
-                joinedload(TourPackage.reviews).joinedload(Review.customer),
             )
             .filter(TourPackage.id == package_id)
             .first()

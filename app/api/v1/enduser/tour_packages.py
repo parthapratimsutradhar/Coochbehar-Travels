@@ -28,25 +28,22 @@ router = APIRouter(
 
 
 @router.get(
-    "/select",
-    response_model=SuccessResponse[list[TourPackageSelectionItem]],
+    "/select/{slug}",
+    response_model=SuccessResponse[TourPackageSelectionItem],
     responses={422: {"model": ErrorResponse}},
-    summary="List active packages for selection",
-    description="Return up to five active packages, optionally filtered by title or destination.",
+    summary="Get a tour package for selection",
+    description="Return one active package and its active variants for package selection.",
 )
 def list_packages_for_selection(
-    search: str | None = Query(
-        None,
-        description="Search by package title or destination",
-    ),
+    slug: str,
     db: Session = Depends(get_db),
 ):
-    """Return a compact list of active packages for package selection."""
+    """Return one compact active package for package selection."""
 
     service = TourPackageService(db)
     return SuccessResponse(
-        message="Active packages fetched successfully",
-        data=service.list_packages_for_selection(search),
+        message="Active package fetched successfully",
+        data=service.get_package_for_selection(slug),
     )
 
 
@@ -129,7 +126,7 @@ def list_tour_packages(
     summary="Get tour package details by slug",
     description=(
         "Retrieve the full details of a tour package including its default "
-        "variant, other variants, and package reviews."
+        "variant and other variants. Fetch package reviews from the reviews endpoint."
     ),
 )
 def get_tour_package(

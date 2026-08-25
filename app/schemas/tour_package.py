@@ -193,7 +193,7 @@ class TourPackageListItem(BaseModel):
 
 
 class TourPackageDetailResponse(BaseModel):
-    """Full tour package response with package-level reviews and selected/default variant payloads."""
+    """Full tour package response with selected/default variant payloads."""
 
     id: uuid.UUID
     tour_code: str
@@ -202,7 +202,6 @@ class TourPackageDetailResponse(BaseModel):
     destination: str
     type: TourType
     description: str | None = None
-    reviews: list[ReviewItemResponse] = Field(default_factory=list, description="Reviews for this tour package")
     default_variant: TourPackageVariantDetailResponse | None = None
     other_variants: list[VariantSummaryResponse] = Field(default_factory=list)
 

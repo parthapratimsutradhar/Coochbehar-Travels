@@ -16,7 +16,6 @@ from app.core.messages.error import PackageError
 from app.repository.tour_package_repo import TourPackageRepository
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.tour_package import (
-    ReviewItemResponse,
     TourPackageDetailResponse,
     TourPackageFilterParams,
     TourPackageListItem,
@@ -112,6 +111,43 @@ class TourPackageService:
             )
         return items
 
+    def get_package_for_selection(self, slug: str) -> TourPackageSelectionItem:
+        """Return one active package with its active variants for selection."""
+
+        package = self.repo.get_by_slug(slug, active_only=True)
+        if package is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=PackageError.PACKAGE_NOT_FOUND,
+            )
+
+        active_variants = [variant for variant in package.variants if variant.is_active]
+        if not active_variants:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=PackageError.PACKAGE_NOT_FOUND,
+            )
+
+        default_variant = self._get_default_variant(package)
+        banner = (
+            self._extract_banner_media(default_variant.details)
+            if default_variant and default_variant.details
+            else None
+        )
+        return TourPackageSelectionItem(
+            id=package.id,
+            title=package.title,
+            banner=banner,
+            variants=[
+                TourPackageSelectionVariant(
+                    id=variant.id,
+                    name=variant.name,
+                    season_name=variant.season_name,
+                )
+                for variant in active_variants
+            ],
+        )
+
     def get_package_by_slug(self, slug: str) -> TourPackageDetailResponse:
         """Fetch full tour package details formatted for consumer frontend."""
 
@@ -202,26 +238,7 @@ class TourPackageService:
 
     @classmethod
     def _format_package_detail(cls, package: TourPackage) -> TourPackageDetailResponse:
-        """Transform package, package-level reviews, and selected/default variants for the frontend."""
-
-        reviews: list[ReviewItemResponse] = []
-        if package.reviews:
-            for rev in package.reviews:
-                if rev.is_published:
-                    customer = rev.customer
-                    reviews.append(
-                        ReviewItemResponse(
-                            id=rev.id,
-                            review_code=rev.review_code,
-                            reviewer_by=customer.name if customer else rev.name,
-                            reviewer_pic=customer.profile_pic if customer else None,
-                            name=rev.name,
-                            rating=rev.rating,
-                            review=rev.review,
-                            review_gallery=rev.review_gallery or [],
-                            created_at=rev.created_at,
-                        )
-                    )
+        """Transform package and selected/default variants for the frontend."""
 
         active_variants = [v for v in package.variants if v.is_active]
         default_variant = cls._get_default_variant(package)
@@ -236,7 +253,6 @@ class TourPackageService:
             destination=package.destination,
             type=package.type,
             description=package.description,
-            reviews=reviews,
             default_variant=default_payload,
             other_variants=other_variants,
         )
