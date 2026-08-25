@@ -97,8 +97,13 @@ class Enquiry(BaseEntity):
         nullable=True
     )
 
-    travel_duration: Mapped[str | None] = mapped_column(
-        String(50),
+    travel_duration_day: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True
+    )
+    
+    travel_duration_night: Mapped[int | None] = mapped_column(
+        Integer,
         nullable=True
     )
 

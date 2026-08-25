@@ -10,7 +10,8 @@ class CustomTourRequestBase(BaseModel):
     mobile: str = Field(..., max_length=20)
     destination: str = Field(..., max_length=150)
     travel_date: date | None = None
-    travel_duration: str | None = Field(default=None, max_length=50)
+    travel_duration_day: int | None = Field(default=None, ge=0)
+    travel_duration_night: int | None = Field(default=None, ge=0)
     pax_no: int = Field(default=4, ge=1)
     no_room: int = Field(default=2, ge=1)
     vehicle_type: str | None = Field(default=None, max_length=50)
@@ -24,7 +25,8 @@ class CustomTourRequestCreate(BaseModel):
     mobile: str = Field(..., max_length=20)
     destination: str = Field(..., max_length=150)
     travel_date: date | None = None
-    travel_duration: str | None = Field(default=None, max_length=50)
+    travel_duration_day: int | None = Field(default=None, ge=0)
+    travel_duration_night: int | None = Field(default=None, ge=0)
 
     pax_no: int = Field(default=4, ge=1)
     no_room: int = Field(default=2, ge=1)
@@ -37,7 +39,7 @@ class CustomTourRequestCreate(BaseModel):
         EnquiryType.ROOM_REQUEST,
         EnquiryType.VEHICLE_REQUEST,
     ] | None = None
-    channel: EnquiryChannel | None = None
+    channel: Literal[EnquiryChannel.WEBSITE, EnquiryChannel.APP] = EnquiryChannel.WEBSITE
     visitor_id: UUID | None = None
     customer_id: UUID | None = None
 

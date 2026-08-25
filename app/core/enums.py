@@ -45,6 +45,7 @@ class EnquiryType(str, Enum):
 class EnquiryChannel(str, Enum):
     WEBSITE = "WEBSITE"
     WHATSAPP = "WHATSAPP"
+    APP = "APP"
     PHONE = "PHONE"
     EMAIL = "EMAIL"
     OFFLINE = "OFFLINE"

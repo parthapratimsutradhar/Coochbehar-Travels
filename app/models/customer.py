@@ -70,3 +70,4 @@ class Customer(BaseEntity):
     reviews = relationship("Review", back_populates="customer")
     auth_sessions = relationship("AuthSession", back_populates="customer", cascade="all, delete-orphan")
     tours = relationship("CustomerTour", back_populates="customer")
+    tour_wishlists = relationship("TourWishlist", back_populates="customer", cascade="all, delete-orphan")

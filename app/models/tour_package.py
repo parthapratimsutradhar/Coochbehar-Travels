@@ -69,3 +69,9 @@ class TourPackage(ActiveEntity):
         "Enquiry",
         back_populates="package",
     )
+    
+    wishlists = relationship(
+        "TourWishlist",
+        back_populates="package",
+        cascade="all, delete-orphan",
+    )

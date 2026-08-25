@@ -6,7 +6,7 @@ from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType
 
 
 class EnquiryBase(BaseModel):
-    enquiry_type: Literal[EnquiryType.FIXED_TOUR] = EnquiryType.FIXED_TOUR
+    enquiry_type: EnquiryType = EnquiryType.FIXED_TOUR
     channel: EnquiryChannel
     package_id: UUID | None = None
     variant_id: UUID | None = None
@@ -17,7 +17,7 @@ class EnquiryBase(BaseModel):
 class EnquiryCreate(BaseModel):
     package_id: UUID | None = None
     variant_id: UUID | None = None
-    channel: EnquiryChannel
+    channel: Literal[EnquiryChannel.WEBSITE, EnquiryChannel.APP] = EnquiryChannel.WEBSITE
     subject: str | None = Field(default=None, max_length=200)
     message: str | None = None
     name: str | None = Field(default=None, max_length=100)
@@ -46,7 +46,8 @@ class EnquiryResponse(EnquiryBase):
     vehicle_id: UUID | None
     destination: str | None
     travel_date: date | None
-    travel_duration: str | None
+    travel_duration_day: int | None
+    travel_duration_night: int | None
     pax_no: int | None
     no_room: int | None
     vehicle_type: str | None
