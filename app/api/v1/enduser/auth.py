@@ -74,6 +74,7 @@ def verify_customer_otp(
         visitor_id=payload.visitor_id,
         user_agent=user_agent,
         ip_address=ip_address,
+        referral_code=payload.referral_code,
     )
 
     set_refresh_cookie(response, raw_refresh_token)
@@ -111,6 +112,7 @@ async def google_login_customer(
         visitor_id=payload.visitor_id,
         user_agent=user_agent,
         ip_address=ip_address,
+        referral_code=payload.referral_code,
     )
 
     set_refresh_cookie(response, raw_refresh_token)

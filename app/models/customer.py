@@ -62,6 +62,13 @@ class Customer(BaseEntity):
         nullable=False,
         default=False,
     )
+    
+    referral_code: Mapped[str] = mapped_column(
+        String(30),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
 
 # ── Relationships ───────────────────────────────────────────────────────
     visitors = relationship(

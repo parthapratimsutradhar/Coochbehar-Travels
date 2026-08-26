@@ -84,6 +84,12 @@ class CustomerOtpVerifySchema(BaseModel):
         default=None,
         description="Optional anonymous visitor ID to automatically link telemetry",
     )
+    referral_code: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=30,
+        description="Referral code provided by the referring customer",
+    )
 
 
 class CustomerGoogleAuthSchema(BaseModel):
@@ -91,6 +97,12 @@ class CustomerGoogleAuthSchema(BaseModel):
 
     id_token: str = Field(..., description="Google ID Token issued by Google Identity Services")
     visitor_id: UUID | None = Field(default=None, description="Optional visitor UUID to link telemetry")
+    referral_code: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=30,
+        description="Referral code provided by the referring customer",
+    )
 
 
 # ── Shared Response Schemas ────────────────────────────────────────────

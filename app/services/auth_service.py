@@ -4,10 +4,11 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.enums import CustomerOtpPurpose, LeadSource, UserRole
+from app.core.enums import CustomerOtpPurpose, LeadSource, ReferralStatus, UserRole
 from app.core.messages.validation import AuthError
 from app.models.auth_session import AuthSession
 from app.models.customer import Customer
+from app.models.referral import Referral
 from app.models.user import User
 from app.repository.auth_session_repo import AuthSessionRepository
 from app.repository.customer_repo import CustomerRepository
@@ -336,6 +337,7 @@ class AuthService:
         visitor_id: uuid.UUID | None = None,
         user_agent: str | None = None,
         ip_address: str | None = None,
+        referral_code: str | None = None,
     ) -> tuple[str, str, Customer]:
         """Verify Customer OTP, find or auto-register Customer, link visitor telemetry,
 
@@ -379,6 +381,7 @@ class AuthService:
             )
 
         if not customer:
+            referrer = self._resolve_referrer(referral_code)
             customer_name = name.strip() if name else "Valued Traveler"
             if challenge.identifier_type == "EMAIL":
                 customer = self.customer_repo.create_customer(
@@ -394,6 +397,8 @@ class AuthService:
                     email=None,
                     source=LeadSource.WEBSITE,
                 )
+            if referrer:
+                self._create_referral(referrer, customer)
         elif name and customer.name == "Valued Traveler":
             customer.name = name.strip()
             self.db.commit()
@@ -441,6 +446,7 @@ class AuthService:
         visitor_id: uuid.UUID | None = None,
         user_agent: str | None = None,
         ip_address: str | None = None,
+        referral_code: str | None = None,
     ) -> tuple[str, str, Customer]:
         """Authenticate / Register customer via Google OAuth ID token."""
         google_data = verify_google_id_token(id_token)
@@ -456,12 +462,15 @@ class AuthService:
 
         customer = self.customer_repo.get_by_email(email)
         if not customer:
+            referrer = self._resolve_referrer(referral_code)
             customer = self.customer_repo.create_customer(
                 name=name,
                 email=email,
                 mobile=None,
                 source=LeadSource.WEBSITE,
             )
+            if referrer:
+                self._create_referral(referrer, customer)
             if picture:
                 customer.profile_pic = await upload_google_profile_picture(picture)
                 self.db.commit()
@@ -501,6 +510,31 @@ class AuthService:
         )
 
         return access_token, raw_refresh_token
+
+    def _resolve_referrer(self, referral_code: str | None) -> Customer | None:
+        """Resolve the stable customer invite code before creating an account."""
+        if not referral_code:
+            return None
+        normalized_code = referral_code.strip().upper()
+        referrer = self.db.query(Customer).filter(
+            Customer.referral_code == normalized_code,
+        ).first()
+        if referrer is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid referral code.",
+            )
+        return referrer
+
+    def _create_referral(self, referrer: Customer, referred: Customer) -> None:
+        referral = Referral(
+            referrer_customer_id=referrer.id,
+            referred_customer_id=referred.id,
+            status=ReferralStatus.CONVERTED,
+            converted_at=datetime.now(timezone.utc),
+        )
+        self.db.add(referral)
+        self.db.commit()
 
     # ── COMMON REFRESH & SESSION ROTATION ──────────────────────────────
     def refresh_session(

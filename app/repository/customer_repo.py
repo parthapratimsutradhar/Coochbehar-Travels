@@ -1,4 +1,6 @@
 import uuid
+import secrets
+import string
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
@@ -46,8 +48,13 @@ class CustomerRepository:
     ) -> Customer:
         """Create and persist a new customer with auto-generated customer_code."""
         customer_code = f"CUS-{uuid.uuid4().hex[:8].upper()}"
+        referral_code = "".join(
+            secrets.choice(string.ascii_letters + string.digits)
+            for _ in range(8)
+        )
         customer = Customer(
             customer_code=customer_code,
+            referral_code=referral_code,
             name=name,
             mobile=mobile.strip() if mobile else None,
             email=email.strip().lower() if email else None,

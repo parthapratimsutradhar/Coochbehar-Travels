@@ -8,7 +8,6 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Numeric,
-    String,
     Text,
     func,
 )
@@ -47,13 +46,6 @@ class Referral(UUIDEntity):
             ondelete="CASCADE",
         ),
         nullable=False,
-        index=True,
-    )
-
-    referral_code: Mapped[str] = mapped_column(
-        String(30),
-        nullable=False,
-        unique=True,
         index=True,
     )
 

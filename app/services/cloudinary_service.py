@@ -26,6 +26,8 @@ UPLOAD_ALLOWED_FOLDERS = {
     "profile-picture",
     "tour-packages",
     "temporary-uploads",
+    "customer-documents",
+    "admin-documents",
     "review-gallery"
 }
 
