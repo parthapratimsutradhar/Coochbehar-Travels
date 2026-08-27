@@ -111,7 +111,7 @@ class OtpRequestResponse(BaseModel):
     identifier: str
     identifier_type: str
     expires_in_sec: int = Field(default=300, description="OTP validity in seconds")
-    if settings.IS_DEVELOPMENT:
+    if settings.IS_DEVELOPMENT or settings.OTP_STATIC_FALLBACK:
         dev_otp: str | None = Field(
             default=None,
             description="OTP value returned only in development/test environment for convenience",

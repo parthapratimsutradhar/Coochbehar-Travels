@@ -145,6 +145,16 @@ def get_current_customer(
     return customer
 
 
+def get_optional_customer(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_bearer),
+    db: Session = Depends(get_db),
+) -> Customer | None:
+    """Return the authenticated customer when a bearer token is provided."""
+    if not credentials or not credentials.credentials:
+        return None
+    return get_current_customer(credentials=credentials, db=db)
+
+
 def get_current_actor(
     credentials: HTTPAuthorizationCredentials | None = Depends(security_bearer),
     db: Session = Depends(get_db),

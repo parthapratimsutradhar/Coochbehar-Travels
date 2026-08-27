@@ -62,6 +62,10 @@ class User(ActiveEntity):
         cascade="all, delete-orphan",
     )
 
+    notifications = relationship(
+        "Notification", back_populates="user", cascade="all, delete-orphan"
+    )
+
     documents_uploaded = relationship(
         "Document",
         foreign_keys="Document.uploaded_by_user_id",

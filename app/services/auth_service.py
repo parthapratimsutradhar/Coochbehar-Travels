@@ -59,6 +59,9 @@ class AuthService:
         return cleaned, id_type
 
     def _dispatch_otp(self, identifier: str, identifier_type: str, raw_otp: str) -> str | None:
+        if settings.OTP_STATIC_FALLBACK:
+            return settings.DEV_STATIC_OTP
+
         if identifier_type == "EMAIL":
             self.email_service.send_otp_email(
                 to_email=identifier,
@@ -96,7 +99,7 @@ class AuthService:
                 detail=AuthError.ADMIN_NOT_FOUND,
             )
 
-        raw_otp = generate_otp(6)
+        raw_otp = settings.DEV_STATIC_OTP if settings.OTP_STATIC_FALLBACK else generate_otp(6)
         hashed = hash_otp(raw_otp)
 
         self.otp_repo.invalidate_existing(cleaned, purpose=purpose)
@@ -306,7 +309,7 @@ class AuthService:
 
         cleaned, id_type = self.normalize_identifier(identifier)
 
-        raw_otp = generate_otp(6)
+        raw_otp = settings.DEV_STATIC_OTP if settings.OTP_STATIC_FALLBACK else generate_otp(6)
         hashed = hash_otp(raw_otp)
 
         self.otp_repo.invalidate_existing(cleaned, purpose=purpose)

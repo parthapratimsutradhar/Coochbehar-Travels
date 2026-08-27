@@ -96,6 +96,10 @@ class Customer(BaseEntity):
         back_populates="customer",
         cascade="all, delete-orphan"
     )
+
+    notifications = relationship(
+        "Notification", back_populates="customer", cascade="all, delete-orphan"
+    )
     
     tours = relationship(
         "CustomerTour", 

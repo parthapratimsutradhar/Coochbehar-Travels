@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload, contains_eager
 
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
+from app.models.tour_wishlist import TourWishlist
 from app.schemas.tour_package import TourPackageFilterParams
 
 
@@ -247,3 +248,9 @@ class TourPackageRepository:
             .filter(TourPackage.id == package_id)
             .first()
         )
+
+    def is_wishlisted(self, package_id, customer_id) -> bool:
+        return self.db.query(TourWishlist.id).filter(
+            TourWishlist.package_id == package_id,
+            TourWishlist.customer_id == customer_id,
+        ).first() is not None

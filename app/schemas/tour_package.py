@@ -189,6 +189,7 @@ class TourPackageListItem(BaseModel):
     badge: str | None = None
     banner: BannerResponse | None = None
     is_featured: bool    
+    is_wishlist: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -203,6 +204,7 @@ class TourPackageDetailResponse(BaseModel):
     destination: str
     type: TourType
     description: str | None = None
+    is_wishlist: bool = False
     default_variant: TourPackageVariantDetailResponse | None = None
     other_variants: list[VariantSummaryResponse] = Field(default_factory=list)
 

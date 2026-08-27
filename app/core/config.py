@@ -66,6 +66,8 @@ class Settings:
     # ── OTP ──────────────────────────────────────────────────────────
     OTP_EXPIRY_SECONDS: int = int(os.getenv("OTP_EXPIRY_SECONDS", "300"))
     OTP_MAX_ATTEMPTS: int = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
+    OTP_STATIC_FALLBACK: bool = _env_bool("OTP_STATIC_FALLBACK", False)
+    DEV_STATIC_OTP: str = os.getenv("DEV_STATIC_OTP", "123456")
 
     # ── Google OAuth ─────────────────────────────────────────────────
     GOOGLE_CLIENT_ID_WEB: str | None = _env("GOOGLE_CLIENT_ID_WEB")

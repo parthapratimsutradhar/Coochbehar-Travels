@@ -36,6 +36,7 @@ class TourPackageService:
         page: int,
         page_size: int,
         filters: TourPackageFilterParams,
+        customer_id=None,
     ) -> PaginatedResponse[TourPackageListItem]:
         """Return a paginated list of tour packages with filters applied."""
 
@@ -60,6 +61,10 @@ class TourPackageService:
                 item["duration"] = f"{dn}N | {dd}D"
             else:
                 item["duration"] = None
+
+                item["is_wishlist"] = bool(
+                    customer_id and self.repo.is_wishlisted(item["id"], customer_id)
+                )
 
             items.append(TourPackageListItem(**item))
 
@@ -148,7 +153,7 @@ class TourPackageService:
             ],
         )
 
-    def get_package_by_slug(self, slug: str) -> TourPackageDetailResponse:
+    def get_package_by_slug(self, slug: str, customer_id=None) -> TourPackageDetailResponse:
         """Fetch full tour package details formatted for consumer frontend."""
 
         package = self.repo.get_by_slug(slug, active_only=True)
@@ -157,9 +162,12 @@ class TourPackageService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=PackageError.PACKAGE_NOT_FOUND,
             )
-        return self._format_package_detail(package)
+        return self._format_package_detail(
+            package,
+            is_wishlist=bool(customer_id and self.repo.is_wishlisted(package.id, customer_id)),
+        )
 
-    def get_package_by_id(self, package_id: str) -> TourPackageDetailResponse:
+    def get_package_by_id(self, package_id: str, customer_id=None) -> TourPackageDetailResponse:
         """Fetch full tour package details by id."""
 
         package = self.repo.get_by_id(package_id)
@@ -168,7 +176,10 @@ class TourPackageService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=PackageError.PACKAGE_NOT_FOUND,
             )
-        return self._format_package_detail(package)
+        return self._format_package_detail(
+            package,
+            is_wishlist=bool(customer_id and self.repo.is_wishlisted(package.id, customer_id)),
+        )
 
     def get_variant_by_slug(self, package_slug: str, variant_slug: str):
         """Fetch a specific variant for a given package slug."""
@@ -237,7 +248,11 @@ class TourPackageService:
         }
 
     @classmethod
-    def _format_package_detail(cls, package: TourPackage) -> TourPackageDetailResponse:
+    def _format_package_detail(
+        cls,
+        package: TourPackage,
+        is_wishlist: bool = False,
+    ) -> TourPackageDetailResponse:
         """Transform package and selected/default variants for the frontend."""
 
         active_variants = [v for v in package.variants if v.is_active]
@@ -253,6 +268,7 @@ class TourPackageService:
             destination=package.destination,
             type=package.type,
             description=package.description,
+            is_wishlist=is_wishlist,
             default_variant=default_payload,
             other_variants=other_variants,
         )

@@ -110,6 +110,7 @@ def _enduser_openapi() -> dict:
             "/api/v1/documents",
             "/api/v1/referral",
             "/api/v1/sessions",
+            "/api/v1/notifications",
         },
     )
 
@@ -124,6 +125,7 @@ def _admin_openapi() -> dict:
         include={
             "/api/v1/admin",
             "/api/v1/sessions",
+            "/api/v1/notifications",
         },
     )
 

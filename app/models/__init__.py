@@ -20,6 +20,7 @@ from app.models.customer_tour import CustomerTour
 from app.models.tour_wishlist import TourWishlist
 from app.models.referral import Referral
 from app.models.document import Document
+from app.models.notification import Notification
 
 
 __all__ = [
@@ -47,4 +48,5 @@ __all__ = [
     "TourWishlist",
     "Referral",
     "Document",
+    "Notification",
 ]
