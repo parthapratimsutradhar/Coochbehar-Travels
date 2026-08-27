@@ -12,7 +12,7 @@ from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.response import ErrorResponse, SuccessResponse
 from app.services.cloudinary_service import upload_file_to_cloudinary
 
-router = APIRouter(prefix="/documents", tags=["Admin Documents"])
+router = APIRouter(prefix="/admin/documents", tags=["Admin Documents"])
 
 
 @router.get("", response_model=PaginatedResponse[DocumentResponse], responses={401: {"model": ErrorResponse}})
