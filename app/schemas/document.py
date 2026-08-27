@@ -27,6 +27,7 @@ class DocumentResponse(BaseModel):
     file_size: int | None = None
     uploaded_by: str
     can_delete: bool = False
+    type: str = None # "incoming" for customer uploads, "outgoing" for admin uploads
 
 
 class DocumentDownloadResponse(BaseModel):
