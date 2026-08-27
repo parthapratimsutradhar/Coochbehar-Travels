@@ -522,9 +522,8 @@ class AuthService:
             if picture:
                 customer.profile_pic = await upload_google_profile_picture(picture)
                 self.db.commit()
-        elif picture:
-            customer.profile_pic = await upload_google_profile_picture(picture)
-            self.db.commit()
+        else:
+            pass
 
         if visitor_id:
             self.customer_repo.link_visitor_to_customer(
