@@ -1,7 +1,7 @@
 from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_customer
@@ -102,9 +102,9 @@ def list_wishlist(
 		)
 		items.append(
 			WishlistItemResponse(
+				id=wishlist.id,
 				package_id=package_item.id,
 				**package_item.model_dump(exclude={"id"}),
-				wishlist_id=wishlist.id,
 				wishlisted_at=wishlist.created_at,
 			)
 		)

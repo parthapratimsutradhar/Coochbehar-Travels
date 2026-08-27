@@ -2,6 +2,7 @@ import uuid
 from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import UUIDEntity
+from datetime import datetime
 
 
 class TourWishlist(UUIDEntity):
@@ -31,6 +32,11 @@ class TourWishlist(UUIDEntity):
         ),
         nullable=False,
         index=True,
+    )
+    
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+        default=datetime.utcnow,
     )
 
 # ── Relationships ───────────────────────────────────────────────────
