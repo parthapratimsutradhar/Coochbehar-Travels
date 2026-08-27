@@ -5,6 +5,8 @@ from app.core.enums import AdminOtpPurpose, CustomerOtpPurpose, UserRole
 from app.schemas.customer import CustomerResponse
 from app.core.config import settings
 
+from pydantic import BaseModel, Field, field_validator
+
 
 # ── Admin Schemas ──────────────────────────────────────────────────────
 
@@ -103,6 +105,13 @@ class CustomerGoogleAuthSchema(BaseModel):
         max_length=30,
         description="Referral code provided by the referring customer",
     )
+    
+    @field_validator("referral_code", mode="before")
+    @classmethod
+    def normalize_referral_code(cls, value):
+        if value == "":
+            return None
+        return value
 
 
 # ── Shared Response Schemas ────────────────────────────────────────────
