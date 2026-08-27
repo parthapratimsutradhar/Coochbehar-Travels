@@ -1,6 +1,11 @@
 import hashlib
+import asyncio
+import importlib
 from io import BytesIO
 import re
+import shutil
+import subprocess
+import tempfile
 import time
 from typing import Any
 
@@ -32,7 +37,7 @@ UPLOAD_ALLOWED_FOLDERS = {
 }
 
 UPLOAD_IMAGE_MAX_SIZE = 10 * 1024 * 1024  # 10 MB
-UPLOAD_VIDEO_MAX_SIZE = 50 * 1024 * 1024  # 50 MB
+UPLOAD_VIDEO_MAX_SIZE = 100 * 1024 * 1024  # 100 MB
 UPLOAD_VIDEO_MAX_DURATION = 60            # seconds
 UPLOAD_RATE_LIMIT_PER_HOUR = 10
 GOOGLE_IMAGE_HOST_SUFFIX = ".googleusercontent.com"
@@ -117,6 +122,96 @@ def _validate_image_content(content: bytes, content_type: str) -> None:
         ) from exc
 
 
+def _compress_image(content: bytes, content_type: str) -> bytes:
+    from PIL import Image
+
+    with Image.open(BytesIO(content)) as image:
+        if getattr(image, "is_animated", False):
+            return content
+        output = BytesIO()
+        if content_type == "image/jpeg":
+            image.convert("RGB").save(
+                output,
+                format="JPEG",
+                quality=95,
+                optimize=True,
+                progressive=True,
+            )
+        elif content_type == "image/png":
+            image.save(output, format="PNG", optimize=True)
+        elif content_type == "image/webp":
+            image.save(output, format="WEBP", quality=95, method=6)
+        else:
+            return content
+        compressed = output.getvalue()
+    return compressed if len(compressed) < len(content) else content
+
+
+def _compress_video(content: bytes, filename: str) -> tuple[bytes, str, str]:
+    try:
+        ffmpeg = importlib.import_module("imageio_ffmpeg").get_ffmpeg_exe()
+    except ImportError:
+        ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Video compression requires FFmpeg to be installed on the server",
+        )
+
+    input_suffix = "." + filename.rsplit(".", 1)[-1] if "." in filename else ".mp4"
+    with tempfile.TemporaryDirectory() as directory:
+        input_path = f"{directory}/input{input_suffix}"
+        output_path = f"{directory}/output.mp4"
+        with open(input_path, "wb") as input_file:
+            input_file.write(content)
+        result = subprocess.run(
+            [
+                ffmpeg,
+                "-y",
+                "-i",
+                input_path,
+                "-c:v",
+                "libx264",
+                "-crf",
+                "18",
+                "-preset",
+                "medium",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-movflags",
+                "+faststart",
+                output_path,
+            ],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Uploaded video could not be compressed",
+            )
+        with open(output_path, "rb") as output_file:
+            compressed = output_file.read()
+
+    if len(compressed) >= len(content):
+        return content, filename, "video/mp4"
+    return compressed, f"{filename.rsplit('.', 1)[0] if '.' in filename else filename}.mp4", "video/mp4"
+
+
+async def _compress_upload(
+    content: bytes,
+    filename: str,
+    content_type: str,
+) -> tuple[bytes, str, str]:
+    if content_type.startswith("image/"):
+        return await asyncio.to_thread(_compress_image, content, content_type), filename, content_type
+    if content_type.startswith("video/"):
+        return await asyncio.to_thread(_compress_video, content, filename)
+    return content, filename, content_type
+
+
 def _validate_google_picture_url(picture_url: str) -> None:
     try:
         parsed = httpx.URL(picture_url)
@@ -158,12 +253,18 @@ async def upload_content_to_cloudinary(
             detail="Cloudinary API secret is invalid. Set CLOUDINARY_API_SECRET to the hidden API Secret from your Cloudinary dashboard, not the API Key.",
         )
 
+    original_file = UploadFile(
+        filename=filename,
+        file=BytesIO(content),
+        headers={"content-type": content_type},
+    )
+    folder = _validate_upload(original_file, content, sub_folder)
+    content, filename, content_type = await _compress_upload(content, filename, content_type)
     file = UploadFile(
         filename=filename,
         file=BytesIO(content),
         headers={"content-type": content_type},
     )
-    folder = _validate_upload(file, content, sub_folder)
     timestamp = int(time.time())
     upload_params = {
         "folder": folder,
