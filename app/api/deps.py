@@ -248,8 +248,6 @@ def clear_refresh_cookie(response: Response) -> None:
         "secure": settings.REFRESH_COOKIE_SECURE,
         "samesite": settings.REFRESH_COOKIE_SAMESITE,
     }
-    if settings.REFRESH_COOKIE_SAMESITE.lower() == "none" and settings.REFRESH_COOKIE_SECURE:
-        cookie_kwargs["partitioned"] = True
 
     response.delete_cookie(key=settings.REFRESH_COOKIE_NAME, **cookie_kwargs)
     response.delete_cookie(key="refresh_token", path="/")

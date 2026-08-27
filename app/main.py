@@ -101,6 +101,7 @@ def _enduser_openapi() -> dict:
         description="Customer-facing APIs: Customer Auth, Tour Packages, Enquiries, Visitors, Telemetry & Session Management.",
         include={
             "/api/v1/auth",
+            "/api/v1/account",
             "/api/v1/tour-packages",
             "/api/v1/enquiries",
             "/api/v1/visitors",

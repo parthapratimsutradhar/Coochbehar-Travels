@@ -79,6 +79,11 @@ class CustomerRepository:
         self.db.refresh(customer)
         return customer
 
+    def delete_customer(self, customer: Customer) -> None:
+        """Permanently delete a customer and its configured dependents."""
+        self.db.delete(customer)
+        self.db.commit()
+
     def link_visitor_to_customer(
         self,
         customer_id: uuid.UUID,

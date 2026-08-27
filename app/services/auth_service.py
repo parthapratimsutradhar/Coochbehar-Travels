@@ -237,6 +237,51 @@ class AuthService:
             )
         return user
 
+    def verify_customer_otp_for_action(
+        self,
+        customer: Customer,
+        identifier: str,
+        otp: str,
+        purpose: str,
+    ) -> Customer:
+        """Verify and consume a customer OTP without creating a login session."""
+        if purpose != CustomerOtpPurpose.DELETE_ACCOUNT.value:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=AuthError.INVALID_OTP_PURPOSE,
+            )
+
+        cleaned, identifier_type = self.normalize_identifier(identifier)
+        expected_identifier = customer.email if identifier_type == "EMAIL" else customer.mobile
+        if not expected_identifier or cleaned != expected_identifier:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="OTP identifier must belong to the authenticated customer.",
+            )
+
+        challenge = self.otp_repo.get_active_challenge(cleaned, purpose=purpose)
+        if not challenge:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=AuthError.OTP_NOT_FOUND,
+            )
+        if challenge.attempts >= challenge.max_attempts:
+            self.otp_repo.invalidate_existing(cleaned, purpose=purpose)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=AuthError.OTP_ATTEMPTS_EXCEEDED,
+            )
+        if not verify_otp(otp, challenge.otp_hash):
+            attempts = self.otp_repo.increment_attempts(challenge)
+            remaining = challenge.max_attempts - attempts
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid OTP. {remaining} attempt(s) remaining.",
+            )
+
+        self.otp_repo.mark_used(challenge, customer_id=customer.id)
+        return customer
+
     # ── ADMIN GOOGLE OAUTH FLOW ────────────────────────────────────────
     async def google_login_admin(
         self,
