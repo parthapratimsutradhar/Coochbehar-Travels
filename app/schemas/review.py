@@ -25,9 +25,8 @@ class ReviewUpdate(BaseModel):
 
 class ReviewResponse(BaseModel):
     id: uuid.UUID
-    review_code: str
     package_id: uuid.UUID
-    customer_id: uuid.UUID
+    customer_id: uuid.UUID | None
     name: str
     rating: int
     review: str

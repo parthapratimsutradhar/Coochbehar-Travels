@@ -53,7 +53,6 @@ class ReviewItemResponse(BaseModel):
     """Review item attached at the package level."""
 
     id: uuid.UUID
-    review_code: str
     reviewer_by: str
     reviewer_pic: str | None = None
     name: str

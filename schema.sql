@@ -372,7 +372,6 @@ COMMENT ON COLUMN public.otp_challenges.purpose IS 'LOGIN, VERIFY_MOBILE, VERIFY
 
 CREATE TABLE public.reviews (
     id uuid NOT NULL,
-    review_code character varying(20) NOT NULL,
     package_id uuid NOT NULL,
     name character varying(100) NOT NULL,
     rating integer NOT NULL,
@@ -939,13 +938,6 @@ CREATE INDEX ix_reviews_customer_id ON public.reviews USING btree (customer_id);
 --
 
 CREATE INDEX ix_reviews_package_id ON public.reviews USING btree (package_id);
-
-
---
--- Name: ix_reviews_review_code; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX ix_reviews_review_code ON public.reviews USING btree (review_code);
 
 
 --

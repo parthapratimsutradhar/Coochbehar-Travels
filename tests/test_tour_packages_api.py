@@ -119,7 +119,6 @@ def create_package_and_variants():
 
     session.add(
         Review(
-            review_code="REV-1001",
             package_id=package.id,
             customer_id=None,
             name="Alak Pandey",

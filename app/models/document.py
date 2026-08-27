@@ -40,13 +40,6 @@ class Document(ActiveEntity):
     The original uploader information is preserved even after deletion.
     """
 
-    document_code: Mapped[str] = mapped_column(
-        String(30),
-        unique=True,
-        index=True,
-        nullable=False,
-    )
-
     document_type: Mapped[DocumentType] = mapped_column(
         Enum(
             DocumentType,

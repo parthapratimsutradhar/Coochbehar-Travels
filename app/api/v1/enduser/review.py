@@ -1,4 +1,3 @@
-import uuid
 from datetime import date
 from math import ceil
 from uuid import UUID
@@ -90,7 +89,6 @@ def list_package_reviews(
 	data = [
 		ReviewItemResponse(
 			id=review.id,
-			review_code=review.review_code,
 			reviewer_by=review.customer.name if review.customer else review.name,
 			reviewer_pic=review.customer.profile_pic if review.customer else None,
 			name=review.name,
@@ -206,7 +204,6 @@ def create_review(
 		)
 
 	review = Review(
-		review_code=f"REV-{uuid.uuid4().hex[:8].upper()}",
 		package_id=payload.package_id,
 		customer_id=current_customer.id,
 		name=current_customer.name,

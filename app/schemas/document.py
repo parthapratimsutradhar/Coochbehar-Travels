@@ -10,13 +10,16 @@ class DocumentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    document_code: str
     document_type: DocumentType
     title: str
     description: str | None = None
     customer_id: uuid.UUID | None = None
+    customer_name: str | None = None
+    customer_profile_pic: str | None = None
     uploaded_by_customer_id: uuid.UUID | None = None
     uploaded_by_user_id: uuid.UUID | None = None
+    uploader_name: str | None = None
+    uploader_profile_pic: str | None = None
     uploaded_at: datetime
     file_url: str
     file_name: str

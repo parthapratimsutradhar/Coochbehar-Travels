@@ -23,12 +23,17 @@ router = APIRouter(
 
 def _serialize_document(document: Document, customer_id: uuid.UUID) -> DocumentResponse:
 	is_customer_upload = document.uploaded_by_customer_id == customer_id
+	uploader = document.uploaded_by_customer or document.uploaded_by_user
 	return DocumentResponse(
 		**{field: getattr(document, field) for field in (
-			"id", "document_code", "document_type", "title", "description",
+			"id", "document_type", "title", "description",
 			"customer_id", "uploaded_by_customer_id", "uploaded_by_user_id",
 			"uploaded_at", "file_url", "file_name", "mime_type", "file_size",
 		)},
+		customer_name=document.customer.name if document.customer else None,
+		customer_profile_pic=document.customer.profile_pic if document.customer else None,
+		uploader_name=uploader.name if uploader else None,
+		uploader_profile_pic=uploader.profile_pic if uploader else None,
 		uploaded_by="CUSTOMER" if is_customer_upload else "ADMIN",
 		can_delete=is_customer_upload,
 	)
@@ -124,7 +129,6 @@ async def upload_document(
 ) -> ActionResponse:
 	result = await upload_file_to_cloudinary(file=file, sub_folder="customer-documents")
 	document = Document(
-		document_code=f"DOC-{uuid.uuid4().hex[:10].upper()}",
 		document_type=document_type,
 		title=title.strip(),
 		description=description,

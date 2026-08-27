@@ -32,10 +32,16 @@ def list_customer_documents(
 	data = [
 		DocumentResponse(
 			**{field: getattr(document, field) for field in (
-				"id", "document_code", "document_type", "title", "description",
+				"id", "document_type", "title", "description",
 				"customer_id", "uploaded_by_customer_id", "uploaded_by_user_id",
 				"uploaded_at", "file_url", "file_name", "mime_type", "file_size",
 			)},
+			customer_name=document.customer.name if document.customer else None,
+			customer_profile_pic=document.customer.profile_pic if document.customer else None,
+			uploader_name=(document.uploaded_by_customer or document.uploaded_by_user).name
+			if document.uploaded_by_customer or document.uploaded_by_user else None,
+			uploader_profile_pic=(document.uploaded_by_customer or document.uploaded_by_user).profile_pic
+			if document.uploaded_by_customer or document.uploaded_by_user else None,
 			uploaded_by="CUSTOMER" if document.uploaded_by_customer_id else "ADMIN",
 			can_delete=False,
 		)
@@ -65,7 +71,6 @@ async def upload_customer_document(
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found.")
 	result = await upload_file_to_cloudinary(file=file, sub_folder="admin-documents")
 	document = Document(
-		document_code=f"DOC-{uuid.uuid4().hex[:10].upper()}",
 		document_type=document_type,
 		title=title.strip(),
 		description=description,
@@ -81,10 +86,14 @@ async def upload_customer_document(
 	db.refresh(document)
 	return SuccessResponse(message="Document uploaded successfully", data=DocumentResponse(
 		**{field: getattr(document, field) for field in (
-			"id", "document_code", "document_type", "title", "description",
+			"id", "document_type", "title", "description",
 			"customer_id", "uploaded_by_customer_id", "uploaded_by_user_id",
 			"uploaded_at", "file_url", "file_name", "mime_type", "file_size",
 		)},
+		customer_name=document.customer.name if document.customer else None,
+		customer_profile_pic=document.customer.profile_pic if document.customer else None,
+		uploader_name=document.uploaded_by_user.name if document.uploaded_by_user else None,
+		uploader_profile_pic=document.uploaded_by_user.profile_pic if document.uploaded_by_user else None,
 		uploaded_by="ADMIN",
 		can_delete=False,
 	))

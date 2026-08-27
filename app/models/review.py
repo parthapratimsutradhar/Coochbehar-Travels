@@ -1,4 +1,6 @@
 import uuid
+from typing import Any
+
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -20,14 +22,6 @@ class Review(ActiveEntity):
             "rating >= 1 AND rating <= 5",
             name="ck_reviews_rating",
         ),
-    )
-
-    
-    review_code: Mapped[str] = mapped_column(
-        String(20),
-        unique=True,
-        index=True,
-        nullable=False,
     )
 
     package_id: Mapped[uuid.UUID] = mapped_column(
@@ -57,7 +51,7 @@ class Review(ActiveEntity):
         nullable=False,
     )
 
-    review_gallery: Mapped[dict] = mapped_column(
+    review_gallery: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
     )
