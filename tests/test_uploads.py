@@ -51,4 +51,4 @@ def test_upload_accepts_authenticated_actor(
         app.dependency_overrides.pop(get_current_actor, None)
 
     assert response.status_code == 201
-    assert response.json()["data"]["public_id"] == "tour-packages/photo"
+    assert response.json()["data"]["public_id"] == "tour-packages/photo"
