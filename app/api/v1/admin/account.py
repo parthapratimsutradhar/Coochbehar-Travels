@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin_only
+from app.api.deps import get_current_admin_only, get_current_user
 from app.core.enums import UserRole
 from app.core.messages.error import AccessError, UserError
 from app.core.messages.success import UserSuccess
@@ -22,6 +22,29 @@ router = APIRouter(
 	prefix="/admin/account",
 	tags=["Admin - Account Management"],
 )
+
+
+def _ensure_update_permission(current_user: User, account: User) -> None:
+	if current_user.role == UserRole.ADMIN:
+		if account.role == UserRole.ADMIN and account.id != current_user.id:
+			raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=AccessError.ADMIN_REQUIRED)
+		return
+
+	if current_user.role == UserRole.STAFF:
+		if account.id != current_user.id or account.role == UserRole.ADMIN:
+			raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=AccessError.ADMIN_REQUIRED)
+		return
+
+	raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=AccessError.ADMIN_REQUIRED)
+
+
+def _ensure_delete_permission(current_user: User, account: User) -> None:
+	if current_user.role == UserRole.ADMIN:
+		if account.role == UserRole.ADMIN and account.id != current_user.id:
+			raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=AccessError.ADMIN_REQUIRED)
+		return
+
+	raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=AccessError.ADMIN_REQUIRED)
 
 
 @router.get(
@@ -78,12 +101,14 @@ def list_accounts(
 def update_account(
 	user_id: uuid.UUID,
 	payload: AdminProfileUpdate,
-	current_admin: User = Depends(get_current_admin_only),
+	current_user: User = Depends(get_current_user),
 	db: Session = Depends(get_db),
 ):
 	account = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
 	if not account or account.role not in (UserRole.ADMIN, UserRole.STAFF):
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=UserError.USER_NOT_FOUND)
+
+	_ensure_update_permission(current_user, account)
 
 	if payload.email and db.execute(select(User).where(User.email == payload.email.strip().lower(), User.id != user_id)).scalar_one_or_none():
 		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=UserError.EMAIL_ALREADY_EXISTS)
@@ -115,13 +140,15 @@ def update_account(
 def delete_account(
 	user_id: uuid.UUID,
 	payload: AdminDeleteProfileRequest,
-	current_admin: User = Depends(get_current_admin_only),
+	current_user: User = Depends(get_current_user),
 	db: Session = Depends(get_db),
 ):
 	account = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
 	if not account or account.role not in (UserRole.ADMIN, UserRole.STAFF):
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=UserError.USER_NOT_FOUND)
-	if payload.identifier.strip().lower() != current_admin.email.lower() and payload.identifier.strip() != current_admin.mobile:
+
+	_ensure_delete_permission(current_user, account)
+	if payload.identifier.strip().lower() != current_user.email.lower() and payload.identifier.strip() != current_user.mobile:
 		raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=AccessError.OTP_ADMIN_REQUIRED)
 
 	AuthService(db).verify_admin_otp_for_action(
