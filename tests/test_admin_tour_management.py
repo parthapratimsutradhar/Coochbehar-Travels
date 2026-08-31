@@ -186,6 +186,35 @@ def test_staff_can_list_tour_packages_and_variant_details(client, staff_user, db
     assert detail.json()["data"]["tour_id"] == str(package.id)
 
 
+def test_admin_detail_get_normalizes_legacy_highlight_strings(client, staff_user, db_session):
+    package = create_package(db_session)
+    variant = create_variant(db_session, package.id)
+    detail = TourDetail(
+        variant_id=variant.id,
+        banner={"image": "https://example.com/banner.jpg"},
+        gallery=[],
+        highlights=["Dal Lake shikara ride", "Gulmarg Gondola"],
+        inclusions=[],
+        exclusions=[],
+        departures_dates=[],
+        itinerary=[],
+        route_stops=[],
+    )
+    db_session.add(detail)
+    db_session.commit()
+
+    response = client.get(
+        f"/api/v1/admin/tour-details/{detail.id}",
+        headers={"Authorization": f"Bearer {make_token(staff_user)}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["highlights"] == [
+        {"id": "h1", "text": "Dal Lake shikara ride"},
+        {"id": "h2", "text": "Gulmarg Gondola"},
+    ]
+
+
 def test_admin_tour_package_list_supports_is_featured_filter(client, admin_user, db_session):
     create_package(db_session, is_active=True, is_featured=False)
     featured_package = TourPackage(

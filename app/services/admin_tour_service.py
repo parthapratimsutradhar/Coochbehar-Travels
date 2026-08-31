@@ -269,13 +269,18 @@ class AdminTourService:
 
     @staticmethod
     def _detail_to_response(detail: TourDetail, package_id: uuid.UUID | None = None) -> AdminTourDetailPayload:
+        raw_highlights = detail.highlights if isinstance(detail.highlights, list) else []
+        highlights = [
+            item if isinstance(item, dict) else {"id": f"h{index + 1}", "text": str(item)}
+            for index, item in enumerate(raw_highlights)
+        ]
         return AdminTourDetailPayload(
             id=detail.id,
             tour_id=package_id,
             variant_id=detail.variant_id,
             banner=detail.banner if isinstance(detail.banner, dict) else {"image": detail.banner} if isinstance(detail.banner, str) else None,
             gallery=detail.gallery if isinstance(detail.gallery, list) else [],
-            highlights=detail.highlights if isinstance(detail.highlights, list) else [],
+            highlights=highlights,
             inclusions=detail.inclusions if isinstance(detail.inclusions, list) else [],
             exclusions=detail.exclusions if isinstance(detail.exclusions, list) else [],
             departure_dates=detail.departures_dates if isinstance(detail.departures_dates, list) else [],
