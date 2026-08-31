@@ -1,7 +1,11 @@
 import uuid
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from datetime import datetime
+
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from app.api.deps import get_current_admin
+
+from app.api.deps import get_current_admin, get_current_admin_only
 from app.core.enums import DocumentType
 from app.db.database import get_db
 from app.models.customer import Customer
@@ -9,13 +13,22 @@ from app.models.document import Document
 from app.models.user import User
 from app.schemas.document import DocumentResponse
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
-from app.schemas.response import ErrorResponse, SuccessResponse
+from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.cloudinary_service import upload_file_to_cloudinary
+
+
+class BulkDeleteDocumentsRequest(BaseModel):
+    document_ids: list[uuid.UUID] = Field(..., min_length=1)
+
 
 router = APIRouter(prefix="/admin/documents", tags=["Admin Documents"])
 
 
-@router.get("", response_model=PaginatedResponse[DocumentResponse], responses={401: {"model": ErrorResponse}})
+@router.get(
+    "",
+    response_model=PaginatedResponse[DocumentResponse],
+    responses={401: {"model": ErrorResponse}}
+    )
 def list_customer_documents(
 	customer_id: uuid.UUID | None = Query(None),
 	page: int = Query(1, ge=1),
@@ -57,7 +70,11 @@ def list_customer_documents(
 	)
 
 
-@router.post("", response_model=SuccessResponse[DocumentResponse], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=SuccessResponse[DocumentResponse],
+    status_code=status.HTTP_201_CREATED
+    )
 async def upload_customer_document(
 	customer_id: uuid.UUID = Form(...),
 	file: UploadFile = File(...),
@@ -97,3 +114,25 @@ async def upload_customer_document(
 		uploaded_by="ADMIN",
 		can_delete=False,
 	))
+
+@router.delete(
+    "/bulk",
+    response_model=ActionResponse,
+    summary="Bulk delete customer documents",
+)
+def bulk_delete_documents(
+    payload: BulkDeleteDocumentsRequest,
+    current_user: User = Depends(get_current_admin_only),
+    db: Session = Depends(get_db),
+):
+    documents = db.query(Document).filter(Document.id.in_(payload.document_ids), Document.is_active.is_(True)).all()
+    if not documents:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active documents found to delete.")
+
+    for document in documents:
+        document.is_active = False
+        document.deleted_at = datetime.utcnow()
+        document.deleted_by_user_id = current_user.id
+
+    db.commit()
+    return ActionResponse(message=f"{len(documents)} document(s) deleted successfully")

@@ -107,6 +107,11 @@ def verify_google_id_token(id_token: str) -> dict | None:
         if not email:
             return None
 
+        aud = payload.get("aud")
+        allowed_audiences = set(settings.GOOGLE_CLIENT_IDS_ALLOWED)
+        if aud is not None and aud not in allowed_audiences:
+            return None
+
         return {
             "sub": payload.get("sub"),
             "email": email.strip().lower(),

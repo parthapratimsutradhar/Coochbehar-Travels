@@ -24,6 +24,7 @@ from app.models.vehicle import Vehicle
 from app.models.visitor import Visitor
 from app.utils.security import (
     create_access_token,
+    verify_google_id_token,
 )
 
 # Enable JSONB support in SQLite in-memory test database
@@ -123,7 +124,7 @@ def test_customer(db_session) -> Customer:
     return customer
 
 
-def make_mock_google_id_token(email: str, name: str, picture: str | None = None) -> str:
+def make_mock_google_id_token(email: str, name: str, picture: str | None = None, aud: str = "mock-google-client-id") -> str:
     """Helper to generate mock Google ID token JWT."""
     payload = {
         "sub": "google-user-987654",
@@ -131,10 +132,24 @@ def make_mock_google_id_token(email: str, name: str, picture: str | None = None)
         "name": name,
         "picture": picture or "https://lh3.googleusercontent.com/a/mock-pic.jpg",
         "email_verified": True,
-        "aud": "mock-google-client-id",
+        "aud": aud,
         "iss": "https://accounts.google.com",
     }
     return jwt.encode(payload, "google-mock-secret", algorithm="HS256")
+
+
+def test_verify_google_id_token_rejects_unapproved_android_client_id(monkeypatch):
+    """Only Android release/debug client IDs should be accepted."""
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID_WEB", "web-client-id")
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID_ANDROID", "android-release-id,android-debug-id")
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID_ANDROID_RELEASE", "android-release-id")
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID_ANDROID_DEBUG", "android-debug-id")
+
+    valid_token = make_mock_google_id_token("traveler@example.com", "Traveler", aud="android-debug-id")
+    invalid_token = make_mock_google_id_token("traveler@example.com", "Traveler", aud="unexpected-client-id")
+
+    assert verify_google_id_token(valid_token) is not None
+    assert verify_google_id_token(invalid_token) is None
 
 
 # ── TEST CASES ─────────────────────────────────────────────────────────

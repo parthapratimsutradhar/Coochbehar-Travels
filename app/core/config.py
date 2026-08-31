@@ -72,6 +72,8 @@ class Settings:
     # ── Google OAuth ─────────────────────────────────────────────────
     GOOGLE_CLIENT_ID_WEB: str | None = _env("GOOGLE_CLIENT_ID_WEB")
     GOOGLE_CLIENT_ID_ANDROID: str | None = _env("GOOGLE_CLIENT_ID_ANDROID")
+    GOOGLE_CLIENT_ID_ANDROID_RELEASE: str | None = _env("GOOGLE_CLIENT_ID_ANDROID_RELEASE")
+    GOOGLE_CLIENT_ID_ANDROID_DEBUG: str | None = _env("GOOGLE_CLIENT_ID_ANDROID_DEBUG")
     GOOGLE_CLIENT_ID_IOS: str | None = _env("GOOGLE_CLIENT_ID_IOS")
     GOOGLE_CLIENT_SECRET_WEB: str | None = _env("GOOGLE_CLIENT_SECRET_WEB")
     GOOGLE_CLIENT_SECRET_ANDROID: str | None = _env("GOOGLE_CLIENT_SECRET_ANDROID")
@@ -79,6 +81,22 @@ class Settings:
     GOOGLE_REDIRECT_URI_WEB: str | None = _env("GOOGLE_REDIRECT_URI_WEB")
     GOOGLE_REDIRECT_URI_ANDROID: str | None = _env("GOOGLE_REDIRECT_URI_ANDROID")
     GOOGLE_REDIRECT_URI_IOS: str | None = _env("GOOGLE_REDIRECT_URI_IOS")
+    GOOGLE_CLIENT_IDS_ANDROID: tuple[str, ...] = tuple(
+        client_id.strip()
+        for client_id in (
+            GOOGLE_CLIENT_ID_ANDROID,
+            GOOGLE_CLIENT_ID_ANDROID_RELEASE,
+            GOOGLE_CLIENT_ID_ANDROID_DEBUG,
+        )
+        if client_id and client_id.strip()
+    )
+    GOOGLE_CLIENT_IDS_ALLOWED: tuple[str, ...] = tuple(
+        {client_id: None for client_id in (
+            GOOGLE_CLIENT_ID_WEB,
+            *GOOGLE_CLIENT_IDS_ANDROID,
+            GOOGLE_CLIENT_ID_IOS,
+        ) if client_id and client_id.strip()}
+    )
     GMAIL_CREDENTIALS_FILE: str = _env("GMAIL_CREDENTIALS_FILE") or "credentials.json"
     GMAIL_TOKEN_FILE: str = _env("GMAIL_TOKEN_FILE") or "token.json"
     GMAIL_TOKEN_JSON: str | None = _env("GMAIL_TOKEN_JSON")
