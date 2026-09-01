@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_admin_or_staff
 from app.core.enums import EnquiryStatus, EnquiryType
 from app.db.database import get_db
 from app.models.enquiry import Enquiry
+from app.models.user import User
 from app.schemas.enquiry import EnquiryResponse, EnquiryUpdate
 from app.schemas.response import SuccessResponse
 
@@ -28,6 +30,7 @@ def list_enquiries(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_or_staff),
 ):
     stmt = select(Enquiry).order_by(Enquiry.created_at.desc())
 
@@ -52,6 +55,7 @@ def list_enquiries(
 def get_enquiry(
     enquiry_id: uuid.UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_or_staff),
 ):
     stmt = select(Enquiry).where(Enquiry.id == enquiry_id)
     enquiry = db.execute(stmt).scalar_one_or_none()
@@ -75,6 +79,7 @@ def update_enquiry(
     enquiry_id: uuid.UUID,
     payload: EnquiryUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_or_staff),
 ):
     stmt = select(Enquiry).where(Enquiry.id == enquiry_id)
     enquiry = db.execute(stmt).scalar_one_or_none()

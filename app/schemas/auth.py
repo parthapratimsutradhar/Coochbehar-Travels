@@ -5,6 +5,22 @@ from app.core.enums import AdminOtpPurpose, CustomerOtpPurpose, UserRole
 from app.core.config import settings
 
 
+def normalize_referral_code(value):
+    if value is None:
+        return None
+
+    if isinstance(value, (list, tuple, set)):
+        if not value:
+            return None
+        value = value[0]
+
+    if isinstance(value, str):
+        normalized = value.strip()
+        return None if normalized == "" else normalized
+
+    return value
+
+
 # ── Admin Schemas ──────────────────────────────────────────────────────
 
 class AdminOtpRequestSchema(BaseModel):
@@ -90,6 +106,11 @@ class CustomerOtpVerifySchema(BaseModel):
         description="Referral code provided by the referring customer",
     )
 
+    @field_validator("referral_code", mode="before")
+    @classmethod
+    def normalize_referral_code(cls, value):
+        return normalize_referral_code(value)
+
 
 class CustomerGoogleAuthSchema(BaseModel):
     """Customer Google OAuth — includes visitor_id for telemetry linking."""
@@ -102,13 +123,11 @@ class CustomerGoogleAuthSchema(BaseModel):
         max_length=30,
         description="Referral code provided by the referring customer",
     )
-    
+
     @field_validator("referral_code", mode="before")
     @classmethod
     def normalize_referral_code(cls, value):
-        if value == "":
-            return None
-        return value
+        return normalize_referral_code(value)
 
 
 # ── Shared Response Schemas ────────────────────────────────────────────
