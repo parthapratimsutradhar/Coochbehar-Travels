@@ -169,6 +169,39 @@ def test_auth_session_default_actor_type_uses_supported_enum_values(db_session):
     assert session.actor_type in {"ADMIN", "STAFF", "CUSTOMER"}
 
 
+def test_access_tokens_include_session_id_and_role_only_for_admin_and_customer():
+    """JWT access tokens should carry the current session and core role claim without extra identity fields."""
+    admin_session_id = uuid.uuid4()
+    customer_session_id = uuid.uuid4()
+
+    admin_token = create_access_token(
+        subject=uuid.uuid4(),
+        role="ADMIN",
+        session_id=admin_session_id,
+    )
+    customer_token = create_access_token(
+        subject=uuid.uuid4(),
+        role="CUSTOMER",
+        session_id=customer_session_id,
+    )
+
+    for token, expected_role, expected_session_id in (
+        (admin_token, "ADMIN", str(admin_session_id)),
+        (customer_token, "CUSTOMER", str(customer_session_id)),
+    ):
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+        assert payload["role"] == expected_role
+        assert payload["type"] == "access"
+        assert payload["session_id"] == expected_session_id
+        assert "actor_type" not in payload
+        assert "email" not in payload
+        assert "mobile" not in payload
+
+
 def test_1_admin_pure_otp_login(client: TestClient, test_user: User):
     """1. Test Admin pure OTP request and verification login flow."""
     req_res = client.post(

@@ -16,6 +16,7 @@ class CustomerBase(BaseModel):
     profile_pic: str | None = Field(default=None, max_length=500, description="Customer avatar image URL")
     source: LeadSource = LeadSource.WEBSITE
     is_imported: bool = False
+    is_active: bool = True
 
 
 class CustomerCreate(CustomerBase):
@@ -32,6 +33,7 @@ class CustomerUpdate(BaseModel):
     profile_pic: str | None = Field(default=None, max_length=500)
     source: LeadSource | None = None
     is_imported: bool | None = None
+    is_active: bool | None = None
 
 
 class CustomerResponse(CustomerBase):

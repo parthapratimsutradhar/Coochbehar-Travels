@@ -35,6 +35,15 @@ def _get_token_payload(credentials: HTTPAuthorizationCredentials | None) -> dict
             detail=TokenError.INVALID_OR_EXPIRED,
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    role = str(payload.get("role", "CUSTOMER")).upper()
+    if role not in {"ADMIN", "STAFF", "CUSTOMER"}:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=TokenError.INVALID_ACTOR_TYPE,
+        )
+
+    payload["role"] = role
     return payload
 
 
@@ -44,7 +53,7 @@ def get_current_admin_or_staff(
 ) -> User:
     """Extract and validate JWT access token for an Admin / Staff user."""
     payload = _get_token_payload(credentials)
-    actor_type = payload.get("actor_type")
+    actor_type = payload.get("role", "CUSTOMER").upper()
 
     if actor_type not in ["ADMIN", "STAFF"]:
         raise HTTPException(
@@ -111,7 +120,7 @@ def get_current_customer(
 ) -> Customer:
     """Extract and validate JWT access token for an Enduser / Customer."""
     payload = _get_token_payload(credentials)
-    actor_type = payload.get("actor_type", "CUSTOMER")
+    actor_type = payload.get("role", "CUSTOMER").upper()
 
     if actor_type != "CUSTOMER":
         raise HTTPException(
@@ -141,6 +150,11 @@ def get_current_customer(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=TokenError.CUSTOMER_NOT_FOUND,
         )
+    if not customer.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=TokenError.CUSTOMER_NOT_FOUND,
+        )
 
     return customer
 
@@ -161,7 +175,7 @@ def get_current_actor(
 ) -> tuple[User | Customer, str]:
     """Universal actor resolver: returns (User or Customer, actor_type)."""
     payload = _get_token_payload(credentials)
-    actor_type = payload.get("actor_type")
+    actor_type = payload.get("role", "CUSTOMER").upper()
     sub = payload.get("sub")
     if not actor_type or not sub:
         raise HTTPException(status_code=401, detail=TokenError.INVALID_CLAIMS)
@@ -181,7 +195,7 @@ def get_current_actor(
     if actor_type == "CUSTOMER":
         customer_repo = CustomerRepository(db)
         customer = customer_repo.get_by_id(sub_id)
-        if not customer:
+        if not customer or not customer.is_active:
             raise HTTPException(status_code=401, detail=TokenError.CUSTOMER_NOT_FOUND)
         return customer, "CUSTOMER"
 
@@ -196,19 +210,31 @@ def get_current_access_token_payload(
 
 
 def extract_refresh_token(request: Request) -> str | None:
-    """Extract refresh token from HttpOnly cookie, custom header, or request state with fallback support."""
-    token = request.cookies.get(settings.REFRESH_COOKIE_NAME)
-    if token:
-        return token
-    token = (
-        request.cookies.get("refresh_token")
-        or request.cookies.get("__Host-refresh_token")
-    )
-    if token:
-        return token
-    token = request.headers.get("x-refresh-token") or request.headers.get("refresh-token")
-    if token:
-        return token.strip()
+    """Extract the refresh token from configured cookie names, cookie headers, or explicit token headers."""
+    candidate_names = {
+        settings.REFRESH_COOKIE_NAME,
+        "refresh_token",
+        "__Host-refresh_token",
+    }
+
+    for cookie_name in candidate_names:
+        token = request.cookies.get(cookie_name)
+        if token:
+            return token.strip()
+
+    cookie_header = request.headers.get("cookie") or ""
+    for raw_cookie in cookie_header.split(";"):
+        name, sep, value = raw_cookie.strip().partition("=")
+        if not sep:
+            continue
+        if name in candidate_names:
+            return value.strip()
+
+    for header_name in ("x-refresh-token", "refresh-token"):
+        token = request.headers.get(header_name)
+        if token:
+            return token.strip()
+
     return None
 
 
@@ -234,7 +260,7 @@ def set_refresh_cookie(
         "secure": settings.REFRESH_COOKIE_SECURE,
         "samesite": settings.REFRESH_COOKIE_SAMESITE,
     }
-    if settings.REFRESH_COOKIE_SAMESITE.lower() == "none" and settings.REFRESH_COOKIE_SECURE:
+    if getattr(settings, "REFRESH_COOKIE_PARTITIONED", False):
         cookie_kwargs["partitioned"] = True
 
     response.set_cookie(**cookie_kwargs)

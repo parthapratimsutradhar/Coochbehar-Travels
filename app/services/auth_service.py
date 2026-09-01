@@ -175,7 +175,7 @@ class AuthService:
         session = self.session_repo.create_session(
             user_id=user.id,
             customer_id=None,
-            actor_type="ADMIN",
+            actor_type=user.role.value if hasattr(user.role, "value") else str(user.role),
             refresh_token_hash=refresh_token_hash,
             expires_at=expires_at,
             user_agent=user_agent,
@@ -187,10 +187,7 @@ class AuthService:
         access_token = create_access_token(
             subject=user.id,
             role=user.role.value if hasattr(user.role, "value") else str(user.role),
-            actor_type="ADMIN",
-            email=user.email,
-            mobile=user.mobile,
-            extra_claims={"session_id": str(session.id)},
+            session_id=session.id,
         )
 
         return access_token, raw_refresh_token
@@ -330,10 +327,7 @@ class AuthService:
         access_token = create_access_token(
             subject=user.id,
             role=user.role.value if hasattr(user.role, "value") else str(user.role),
-            actor_type=user.role.value,
-            email=user.email,
-            mobile=user.mobile,
-            extra_claims={"session_id": str(session.id)},
+            session_id=session.id,
         )
 
         return access_token, raw_refresh_token
@@ -479,10 +473,7 @@ class AuthService:
         access_token = create_access_token(
             subject=customer.id,
             role="CUSTOMER",
-            actor_type="CUSTOMER",
-            email=customer.email,
-            mobile=customer.mobile,
-            extra_claims={"session_id": str(session.id)},
+            session_id=session.id,
         )
 
         return access_token, raw_refresh_token
@@ -550,10 +541,7 @@ class AuthService:
         access_token = create_access_token(
             subject=customer.id,
             role="CUSTOMER",
-            actor_type="CUSTOMER",
-            email=customer.email,
-            mobile=customer.mobile,
-            extra_claims={"session_id": str(session.id)},
+            session_id=session.id,
         )
 
         return access_token, raw_refresh_token
@@ -688,10 +676,7 @@ class AuthService:
         access_token = create_access_token(
             subject=access_token_subject,
             role=access_token_role,
-            actor_type=access_token_actor_type,
-            email=access_token_email,
-            mobile=access_token_mobile,
-            extra_claims={"session_id": str(new_session.id)},
+            session_id=new_session.id,
         )
 
         return access_token, new_raw_refresh_token, expires_at

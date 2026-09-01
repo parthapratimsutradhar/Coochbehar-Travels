@@ -46,7 +46,7 @@ async def notifications_socket(websocket: WebSocket, token: str | None = Query(d
         await websocket.close(code=1008, reason="Access token is required")
         return
     payload = decode_access_token(access_token)
-    actor_type = payload.get("actor_type") if payload else None
+    actor_type = payload.get("role").upper() if payload and payload.get("role") else None
     subject = payload.get("sub") if payload else None
     if actor_type not in {"CUSTOMER", "ADMIN", "STAFF"} or not subject:
         await websocket.close(code=1008, reason="Invalid access token")

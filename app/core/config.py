@@ -51,17 +51,10 @@ class Settings:
 
     # ── Cookie Configuration ─────────────────────────────────────────
     REFRESH_COOKIE_NAME: str = os.getenv("REFRESH_COOKIE_NAME", "refresh_token")
-    REFRESH_COOKIE_SECURE: bool = os.getenv(
-        "REFRESH_COOKIE_SECURE", "false" if IS_DEVELOPMENT else "true"
-    ).lower() in (
-        "true",
-        "1",
-        "yes",
-    )
-    REFRESH_COOKIE_SAMESITE: str = os.getenv(
-        "REFRESH_COOKIE_SAMESITE", "lax" if IS_DEVELOPMENT else "none"
-    ).lower()
+    REFRESH_COOKIE_SECURE: bool = _env_bool("REFRESH_COOKIE_SECURE", False)
+    REFRESH_COOKIE_SAMESITE: str = (os.getenv("REFRESH_COOKIE_SAMESITE") or ("none" if REFRESH_COOKIE_SECURE else "lax")).lower()
     REFRESH_COOKIE_PATH: str = os.getenv("REFRESH_COOKIE_PATH", "/")
+    REFRESH_COOKIE_PARTITIONED: bool = _env_bool("REFRESH_COOKIE_PARTITIONED", False)
 
     # ── OTP ──────────────────────────────────────────────────────────
     OTP_EXPIRY_SECONDS: int = int(os.getenv("OTP_EXPIRY_SECONDS", "300"))
