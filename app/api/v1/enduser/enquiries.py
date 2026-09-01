@@ -14,7 +14,7 @@ from app.schemas.enquiry import EnquiryCreate, EnquiryResponse
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.lead_scoring_service import LeadScoringService
 from app.services.notification_service import NotificationService
-from app.services.socket_service import emit_lead_created
+from app.services.socket_service import emit_enquiry_created, emit_lead_created
 
 router = APIRouter(
     prefix="/enquiries",
@@ -96,9 +96,11 @@ async def create_enquiry(
     )
     db.add(lead)
     db.commit()
+    db.refresh(enquiry)
     db.refresh(lead)
 
-    # Emit real-time Socket.IO event to admin dashboard
+    # Emit real-time Socket.IO events to admin dashboard
+    emit_enquiry_created(enquiry)
     emit_lead_created(lead)
 
     package = db.get(TourPackage, payload.package_id) if payload.package_id else None
@@ -181,9 +183,11 @@ async def create_custom_tour_request(
     )
     db.add(lead)
     db.commit()
+    db.refresh(enquiry)
     db.refresh(lead)
 
-    # Emit real-time Socket.IO event to admin dashboard
+    # Emit real-time Socket.IO events to admin dashboard
+    emit_enquiry_created(enquiry)
     emit_lead_created(lead)
 
     enquiry_date = enquiry.created_at.isoformat() if enquiry.created_at else None

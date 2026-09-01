@@ -11,6 +11,10 @@ from app.models.enquiry import Enquiry
 from app.models.user import User
 from app.schemas.enquiry import EnquiryResponse, EnquiryUpdate
 from app.schemas.response import SuccessResponse
+from app.services.socket_service import (
+    emit_enquiry_status_updated,
+    emit_enquiry_updated,
+)
 
 router = APIRouter(
     prefix="/admin/enquiries",
@@ -89,14 +93,25 @@ def update_enquiry(
             detail=f"Enquiry with ID {enquiry_id} not found",
         )
 
+    prev_status = enquiry.status
+
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(enquiry, field, value)
 
     db.commit()
     db.refresh(enquiry)
+
+    # Emit real-time Socket.IO events for enquiry changes
+    emit_enquiry_updated(enquiry)
+    if "status" in update_data and enquiry.status != prev_status:
+        emit_enquiry_status_updated(
+            enquiry,
+            previous_status=prev_status.value if hasattr(prev_status, "value") else str(prev_status),
+            new_status=enquiry.status.value if hasattr(enquiry.status, "value") else str(enquiry.status),
+        )
+
     return SuccessResponse(
         message="Enquiry updated successfully",
         data=EnquiryResponse.model_validate(enquiry),
     )
-
