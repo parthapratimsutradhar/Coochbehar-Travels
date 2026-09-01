@@ -6,10 +6,12 @@ from fastapi import WebSocket
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.core.enums import UserRole
 from app.models.customer import Customer
 from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.notification import NotificationCreate, NotificationResponse
+from app.services.socket_service import publish_notification
 
 
 class NotificationConnectionManager:
@@ -106,3 +108,57 @@ class NotificationService:
             recipient_type = getattr(recipient_type, "value", str(recipient_type))
             recipient_id = item.user_id
         await manager.publish(actor_key(recipient_type, recipient_id), item)
+        await publish_notification(item)
+
+    async def notify_admins(
+        self,
+        *,
+        notification_type: str,
+        title: str,
+        message: str,
+        data: dict | None = None,
+        action_url: str | None = None,
+    ) -> list[Notification]:
+        """Persist and broadcast an event to every active admin/staff member."""
+        admin_ids = list(
+            self.db.scalars(
+                select(User.id).where(
+                    User.is_active.is_(True),
+                    User.role.in_((UserRole.ADMIN, UserRole.STAFF)),
+                )
+            )
+        )
+        created = []
+        payload = NotificationCreate(
+            notification_type=notification_type,
+            title=title,
+            message=message,
+            data=data,
+            action_url=action_url,
+        )
+        for user_id in admin_ids:
+            item = self.create(payload, user_id=user_id)
+            created.append(item)
+            await self.publish(item)
+        return created
+
+    async def notify_customer(
+        self,
+        customer_id: uuid.UUID,
+        *,
+        notification_type: str,
+        title: str,
+        message: str,
+        data: dict | None = None,
+        action_url: str | None = None,
+    ) -> Notification:
+        payload = NotificationCreate(
+            notification_type=notification_type,
+            title=title,
+            message=message,
+            data=data,
+            action_url=action_url,
+        )
+        item = self.create(payload, customer_id=customer_id)
+        await self.publish(item)
+        return item

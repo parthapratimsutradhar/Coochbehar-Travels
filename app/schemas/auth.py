@@ -1,11 +1,8 @@
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.core.enums import AdminOtpPurpose, CustomerOtpPurpose, UserRole
-from app.schemas.customer import CustomerResponse
 from app.core.config import settings
-
-from pydantic import BaseModel, Field, field_validator
 
 
 # ── Admin Schemas ──────────────────────────────────────────────────────
@@ -120,7 +117,7 @@ class OtpRequestResponse(BaseModel):
     identifier: str
     identifier_type: str
     expires_in_sec: int = Field(default=300, description="OTP validity in seconds")
-    if settings.IS_DEVELOPMENT or settings.OTP_STATIC_FALLBACK:
+    if settings.IS_DEVELOPMENT:
         dev_otp: str | None = Field(
             default=None,
             description="OTP value returned only in development/test environment for convenience",

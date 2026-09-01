@@ -11,6 +11,8 @@ from app.api.v1.admin.urls import router as admin_router
 from app.api.v1.enduser.urls import router as enduser_router
 from app.api.v1.public.urls import router as public_router
 from app.api.v1.shared.urls import router as shared_router
+from app.services.socket_service import sio
+import socketio
 
 
 app = FastAPI(
@@ -37,6 +39,7 @@ app.include_router(shared_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
 app.include_router(enduser_router, prefix="/api/v1")
 app.include_router(public_router, prefix="/api/v1")
+app.mount("/socket.io", socketio.ASGIApp(sio, other_asgi_app=app))
 
 
 # ── Filtered OpenAPI helpers ──────────────────────────────────────────

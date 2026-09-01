@@ -141,7 +141,6 @@ def make_mock_google_id_token(email: str, name: str, picture: str | None = None,
 def test_verify_google_id_token_rejects_unapproved_android_client_id(monkeypatch):
     """Only Android release/debug client IDs should be accepted."""
     monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID_WEB", "web-client-id")
-    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID_ANDROID", "android-release-id,android-debug-id")
     monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID_ANDROID_RELEASE", "android-release-id")
     monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID_ANDROID_DEBUG", "android-debug-id")
 

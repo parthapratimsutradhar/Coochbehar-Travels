@@ -8,9 +8,11 @@ from app.db.database import get_db
 from app.models.customer import Customer
 from app.models.enquiry import Enquiry
 from app.models.lead import Lead
+from app.models.tour_package import TourPackage
 from app.schemas.custom_tour_request import CustomTourRequestCreate
 from app.schemas.enquiry import EnquiryCreate, EnquiryResponse
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
+from app.services.notification_service import NotificationService
 
 router = APIRouter(
     prefix="/enquiries",
@@ -53,7 +55,7 @@ def list_my_enquiries(
     summary="Submit a new enquiry",
     description="Submit an enquiry (Fixed Tour, Custom Tour, or General query). Automatically creates a sales Lead record.",
 )
-def create_enquiry(
+async def create_enquiry(
     payload: EnquiryCreate,
     db: Session = Depends(get_db),
 ):
@@ -90,6 +92,30 @@ def create_enquiry(
     )
     db.add(lead)
     db.commit()
+    package = db.get(TourPackage, payload.package_id) if payload.package_id else None
+    tour_name = package.title if package else (payload.subject or "custom tour enquiry")
+    enquiry_date = enquiry.created_at.isoformat() if enquiry.created_at else None
+    service = NotificationService(db)
+    await service.notify_admins(
+        notification_type="ENQUIRY_CREATED",
+        title="New customer enquiry",
+        message=f"{payload.name or 'A customer'} enquired about {tour_name} on {enquiry_date}.",
+        data={
+            "customer_id": str(payload.customer_id) if payload.customer_id else None,
+            "customer_name": payload.name,
+            "tour_name": tour_name,
+            "enquiry_id": str(enquiry.id),
+            "enquiry_date": enquiry_date,
+        },
+    )
+    if payload.customer_id:
+        await service.notify_customer(
+            payload.customer_id,
+            notification_type="ENQUIRY_CONFIRMED",
+            title="Enquiry received",
+            message=f"Your enquiry about {tour_name} was received. Our team will follow up with the next steps.",
+            data={"tour_name": tour_name, "enquiry_id": str(enquiry.id)},
+        )
     return ActionResponse(message="Enquiry submitted successfully")
 
 
@@ -101,7 +127,7 @@ def create_enquiry(
     summary="Submit a custom tour request",
     description="Submit a custom tour request with group size, vehicle, and hotel requirements.",
 )
-def create_custom_tour_request(
+async def create_custom_tour_request(
     payload: CustomTourRequestCreate,
     db: Session = Depends(get_db),
 ):
@@ -144,4 +170,27 @@ def create_custom_tour_request(
     )
     db.add(lead)
     db.commit()
+    enquiry_date = enquiry.created_at.isoformat() if enquiry.created_at else None
+    service = NotificationService(db)
+    tour_name = f"custom tour to {payload.destination}"
+    await service.notify_admins(
+        notification_type="ENQUIRY_CREATED",
+        title="New custom tour enquiry",
+        message=f"{payload.name or 'A customer'} enquired about {tour_name} on {enquiry_date}.",
+        data={
+            "customer_id": str(payload.customer_id) if payload.customer_id else None,
+            "customer_name": payload.name,
+            "tour_name": tour_name,
+            "enquiry_id": str(enquiry.id),
+            "enquiry_date": enquiry_date,
+        },
+    )
+    if payload.customer_id:
+        await service.notify_customer(
+            payload.customer_id,
+            notification_type="ENQUIRY_CONFIRMED",
+            title="Enquiry received",
+            message=f"Your enquiry about {tour_name} was received. Our team will follow up with the next steps.",
+            data={"tour_name": tour_name, "enquiry_id": str(enquiry.id)},
+        )
     return ActionResponse(message="Custom tour request submitted successfully")

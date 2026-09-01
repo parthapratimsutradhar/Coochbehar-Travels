@@ -25,6 +25,7 @@ from app.schemas.review import (
 	ReviewUpdate,
 )
 from app.schemas.tour_package import ReviewItemResponse
+from app.services.notification_service import NotificationService
 
 router = APIRouter(
 	prefix="/reviews",
@@ -165,7 +166,7 @@ def get_review_eligibility(
 	summary="Add a review for a previous tour",
 	description="Authenticated customers can review a tour linked to a converted or past enquiry.",
 )
-def create_review(
+async def create_review(
 	payload: ReviewCreate,
 	current_customer: Customer = Depends(get_current_customer),
 	db: Session = Depends(get_db),
@@ -215,6 +216,29 @@ def create_review(
 	)
 	db.add(review)
 	db.commit()
+	review_date = review.created_at.isoformat() if review.created_at else None
+	service = NotificationService(db)
+	await service.notify_admins(
+		notification_type="REVIEW_SUBMITTED",
+		title="New tour review",
+		message=f"{current_customer.name} reviewed {package.title} with a rating of {payload.rating}/5 on {review_date}.",
+		data={
+			"customer_id": str(current_customer.id),
+			"customer_name": current_customer.name,
+			"tour_name": package.title,
+			"rating": payload.rating,
+			"review_id": str(review.id),
+			"review_date": review_date,
+		},
+	)
+	if review.is_published:
+		await service.notify_customer(
+			current_customer.id,
+			notification_type="REVIEW_PUBLISHED",
+			title="Thank you for your review",
+			message=f"Thank you for reviewing {package.title}. You gave it a rating of {payload.rating}/5.",
+			data={"tour_name": package.title, "rating": payload.rating, "review_id": str(review.id)},
+		)
 
 	return ActionResponse(message="Review added successfully")
 

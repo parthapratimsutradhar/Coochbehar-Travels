@@ -89,22 +89,12 @@ def decode_access_token(token: str) -> dict | None:
 
 
 def _iter_google_client_ids() -> list[str]:
-    """Return all configured Google OAuth client IDs, including comma-separated values."""
+    """Return the allowed Google OAuth client IDs in a single canonical list."""
     values: list[str] = []
-    for attr in (
-        "GOOGLE_CLIENT_ID_WEB",
-        "GOOGLE_CLIENT_ID_ANDROID",
-        "GOOGLE_CLIENT_ID_ANDROID_RELEASE",
-        "GOOGLE_CLIENT_ID_ANDROID_DEBUG",
-        "GOOGLE_CLIENT_ID_IOS",
-    ):
-        raw_value = getattr(settings, attr, None)
-        if not raw_value:
-            continue
-        for item in str(raw_value).split(","):
-            cleaned = item.strip()
-            if cleaned:
-                values.append(cleaned)
+    for raw_value in getattr(settings, "GOOGLE_CLIENT_IDS_ALLOWED", ()) or ():
+        cleaned = str(raw_value).strip()
+        if cleaned:
+            values.append(cleaned)
     return values
 
 
