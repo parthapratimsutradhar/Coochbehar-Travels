@@ -661,9 +661,6 @@ class AuthService:
                 )
             access_token_subject = user.id
             access_token_role = user.role.value if hasattr(user.role, "value") else str(user.role)
-            access_token_actor_type = session.actor_type
-            access_token_email = user.email
-            access_token_mobile = user.mobile
         else:
             customer = self.customer_repo.get_by_id(session.customer_id)
             if not customer:

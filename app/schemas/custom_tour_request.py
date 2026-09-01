@@ -2,10 +2,11 @@ from datetime import date, datetime
 from uuid import UUID
 from typing import Literal
 from app.core.enums import EnquiryChannel, EnquiryType, VehicleType, MealPlan
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field, ConfigDict
+from app.schemas.base import SchemaBase
 
 
-class CustomTourRequestBase(BaseModel):
+class CustomTourRequestBase(SchemaBase):
     name: str = Field(..., max_length=100)
     mobile: str = Field(..., max_length=20)
     destination: str = Field(..., max_length=150)
@@ -20,7 +21,7 @@ class CustomTourRequestBase(BaseModel):
 
 
 
-class CustomTourRequestCreate(BaseModel):
+class CustomTourRequestCreate(SchemaBase):
     name: str = Field(..., max_length=100)
     mobile: str = Field(..., max_length=20)
     destination: str = Field(..., max_length=150)

@@ -1,6 +1,7 @@
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import Field, ConfigDict, field_validator
+from app.schemas.base import SchemaBase
 from app.core.enums import AdminOtpPurpose, CustomerOtpPurpose, UserRole
 from app.core.config import settings
 
@@ -23,7 +24,7 @@ def normalize_referral_code(value):
 
 # ── Admin Schemas ──────────────────────────────────────────────────────
 
-class AdminOtpRequestSchema(BaseModel):
+class AdminOtpRequestSchema(SchemaBase):
     """Admin OTP request — identifier and purpose are required."""  
 
     identifier: str = Field(
@@ -38,7 +39,7 @@ class AdminOtpRequestSchema(BaseModel):
     )
 
 
-class AdminOtpVerifySchema(BaseModel):
+class AdminOtpVerifySchema(SchemaBase):
     """Admin OTP verification — for LOGIN, VERIFY_MOBILE, VERIFY_EMAIL, DELETE_ACCOUNT."""
 
     identifier: str = Field(
@@ -54,7 +55,7 @@ class AdminOtpVerifySchema(BaseModel):
     )
 
 
-class AdminGoogleAuthSchema(BaseModel):
+class AdminGoogleAuthSchema(SchemaBase):
     """Admin Google OAuth — no visitor tracking."""
 
     id_token: str = Field(..., description="Google ID Token issued by Google Identity Services")
@@ -62,7 +63,7 @@ class AdminGoogleAuthSchema(BaseModel):
 
 # ── Customer / Enduser Schemas ─────────────────────────────────────────
 
-class CustomerOtpRequestSchema(BaseModel):
+class CustomerOtpRequestSchema(SchemaBase):
     """Customer OTP request — includes visitor_id for telemetry linking."""
 
     identifier: str = Field(
@@ -81,7 +82,7 @@ class CustomerOtpRequestSchema(BaseModel):
     )
 
 
-class CustomerOtpVerifySchema(BaseModel):
+class CustomerOtpVerifySchema(SchemaBase):
     """Customer OTP verification — supports auto-registration and visitor linking."""
 
     identifier: str = Field(..., description="Mobile number or Email address")
@@ -112,7 +113,7 @@ class CustomerOtpVerifySchema(BaseModel):
         return normalize_referral_code(value)
 
 
-class CustomerGoogleAuthSchema(BaseModel):
+class CustomerGoogleAuthSchema(SchemaBase):
     """Customer Google OAuth — includes visitor_id for telemetry linking."""
 
     id_token: str = Field(..., description="Google ID Token issued by Google Identity Services")
@@ -132,7 +133,7 @@ class CustomerGoogleAuthSchema(BaseModel):
 
 # ── Shared Response Schemas ────────────────────────────────────────────
 
-class OtpRequestResponse(BaseModel):
+class OtpRequestResponse(SchemaBase):
     identifier: str
     identifier_type: str
     expires_in_sec: int = Field(default=300, description="OTP validity in seconds")
@@ -143,7 +144,7 @@ class OtpRequestResponse(BaseModel):
         )
 
 
-class UserResponse(BaseModel):
+class UserResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -158,14 +159,14 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
-class RefreshSessionRequest(BaseModel):
+class RefreshSessionRequest(SchemaBase):
     refresh_token: str | None = Field(
         default=None,
         description="Optional refresh token in body as fallback for cross-origin environments",
     )
 
 
-class AdminTokenResponse(BaseModel):
+class AdminTokenResponse(SchemaBase):
     access_token: str
     token_type: str = "bearer"
     expires_in: int = Field(default=900, description="Access token expiration in seconds (15 minutes)")
@@ -176,7 +177,7 @@ class AdminTokenResponse(BaseModel):
 
 
 
-class CustomerTokenResponse(BaseModel):
+class CustomerTokenResponse(SchemaBase):
     access_token: str
     token_type: str = "bearer"
     expires_in: int = Field(default=900, description="Access token expiration in seconds (15 minutes)")
@@ -186,7 +187,7 @@ class CustomerTokenResponse(BaseModel):
     )
 
 
-class RefreshResponse(BaseModel):
+class RefreshResponse(SchemaBase):
     access_token: str
     token_type: str = "bearer"
     expires_in: int = Field(default=900, description="Access token expiration in seconds (15 minutes)")
@@ -196,7 +197,7 @@ class RefreshResponse(BaseModel):
     )
 
 
-class AuthSessionResponse(BaseModel):
+class AuthSessionResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -209,5 +210,5 @@ class AuthSessionResponse(BaseModel):
     is_current: bool = False
 
 
-class MessageResponse(BaseModel):
+class MessageResponse(SchemaBase):
     message: str

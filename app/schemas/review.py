@@ -1,12 +1,13 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+from app.schemas.base import SchemaBase
 
 from app.schemas.tour_package import GalleryItemResponse
 
 
-class ReviewCreate(BaseModel):
+class ReviewCreate(SchemaBase):
     """Review submitted by an authenticated customer for an eligible tour."""
 
     package_id: uuid.UUID
@@ -15,7 +16,7 @@ class ReviewCreate(BaseModel):
     review_gallery: list[GalleryItemResponse] = Field(default_factory=list)
 
 
-class ReviewUpdate(BaseModel):
+class ReviewUpdate(SchemaBase):
     """Fields an authenticated customer may edit on their review."""
 
     rating: int | None = Field(None, ge=1, le=5)
@@ -23,7 +24,7 @@ class ReviewUpdate(BaseModel):
     review_gallery: list[GalleryItemResponse] | None = None
 
 
-class ReviewResponse(BaseModel):
+class ReviewResponse(SchemaBase):
     id: uuid.UUID
     package_id: uuid.UUID
     customer_id: uuid.UUID | None
@@ -38,7 +39,7 @@ class ReviewResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ReviewEligibilityResponse(BaseModel):
+class ReviewEligibilityResponse(SchemaBase):
     """Review actions available to the authenticated customer for a package."""
 
     package_id: uuid.UUID

@@ -2,12 +2,13 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
+from app.schemas.base import SchemaBase
 
 from app.core.enums import CustomerTourStatus
 
 
-class CustomerTourResponse(BaseModel):
+class CustomerTourResponse(SchemaBase):
     id: UUID
     tour_name: str
     destination: str | None = None

@@ -1,12 +1,13 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import Field, ConfigDict, EmailStr
+from app.schemas.base import SchemaBase
 
 from app.core.enums import EnquiryChannel, LeadSource, LeadStatus
 
 
-class LeadActivityBase(BaseModel):
+class LeadActivityBase(SchemaBase):
     channel: EnquiryChannel
     activity_type: str = Field(..., max_length=50)
     notes: str | None = None
@@ -27,7 +28,7 @@ class LeadActivityResponse(LeadActivityBase):
     created_at: datetime
 
 
-class LeadBase(BaseModel):
+class LeadBase(SchemaBase):
     full_name: str = Field(..., max_length=100)
     mobile: str | None = Field(default=None, max_length=20)
     email: EmailStr | str | None = Field(default=None, max_length=255)
@@ -44,7 +45,7 @@ class LeadCreate(LeadBase):
     visitor_id: UUID | None = None
 
 
-class LeadUpdate(BaseModel):
+class LeadUpdate(SchemaBase):
     full_name: str | None = Field(default=None, max_length=100)
     mobile: str | None = Field(default=None, max_length=20)
     email: EmailStr | str | None = Field(default=None, max_length=255)

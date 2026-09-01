@@ -2,12 +2,13 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field, ConfigDict
+from app.schemas.base import SchemaBase
 
 from app.core.enums import TourType
 
 
-class AdminTourPackageItem(BaseModel):
+class AdminTourPackageItem(SchemaBase):
     id: uuid.UUID
     tour_code: str
     slug: str
@@ -21,7 +22,7 @@ class AdminTourPackageItem(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class AdminTourVariantItem(BaseModel):
+class AdminTourVariantItem(SchemaBase):
     id: uuid.UUID
     tour_id: uuid.UUID
     slug: str
@@ -41,14 +42,14 @@ class AdminTourVariantItem(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class BannerPayload(BaseModel):
+class BannerPayload(SchemaBase):
     image: str | None = None
     video: str | None = None
 
     model_config = ConfigDict(extra="allow")
 
 
-class GalleryItem(BaseModel):
+class GalleryItem(SchemaBase):
     id: str
     alt: str | None = None
     url: str
@@ -58,21 +59,21 @@ class GalleryItem(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-class HighlightItem(BaseModel):
+class HighlightItem(SchemaBase):
     id: str
     text: str
 
     model_config = ConfigDict(extra="allow")
 
 
-class DepartureDateItem(BaseModel):
+class DepartureDateItem(SchemaBase):
     id: str
     date: str
 
     model_config = ConfigDict(extra="allow")
 
 
-class ItineraryItem(BaseModel):
+class ItineraryItem(SchemaBase):
     id: str
     day: int
     title: str
@@ -81,7 +82,7 @@ class ItineraryItem(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-class RouteItem(BaseModel):
+class RouteItem(SchemaBase):
     id: str
     city: str
     nights: int
@@ -89,7 +90,7 @@ class RouteItem(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-class AdminTourDetailPayload(BaseModel):
+class AdminTourDetailPayload(SchemaBase):
     id: uuid.UUID | None = None
     tour_id: uuid.UUID | None = None
     variant_id: uuid.UUID
@@ -105,7 +106,7 @@ class AdminTourDetailPayload(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class TourPackageCreateRequest(BaseModel):
+class TourPackageCreateRequest(SchemaBase):
     tour_code: str = Field(..., min_length=1, max_length=20)
     slug: str = Field(..., min_length=1, max_length=200)
     title: str = Field(..., min_length=1, max_length=200)
@@ -116,7 +117,7 @@ class TourPackageCreateRequest(BaseModel):
     is_active: bool = True
 
 
-class TourPackageUpdateRequest(BaseModel):
+class TourPackageUpdateRequest(SchemaBase):
     tour_code: str | None = Field(default=None, min_length=1, max_length=20)
     slug: str | None = Field(default=None, min_length=1, max_length=200)
     title: str | None = Field(default=None, min_length=1, max_length=200)
@@ -127,7 +128,7 @@ class TourPackageUpdateRequest(BaseModel):
     is_active: bool | None = None
 
 
-class TourVariantCreateRequest(BaseModel):
+class TourVariantCreateRequest(SchemaBase):
     tour_id: uuid.UUID
     slug: str = Field(..., min_length=1, max_length=30)
     name: str = Field(..., min_length=1, max_length=100)
@@ -144,7 +145,7 @@ class TourVariantCreateRequest(BaseModel):
     is_active: bool = True
 
 
-class TourVariantUpdateRequest(BaseModel):
+class TourVariantUpdateRequest(SchemaBase):
     slug: str | None = Field(default=None, min_length=1, max_length=30)
     name: str | None = Field(default=None, min_length=1, max_length=100)
     season_name: str | None = None
@@ -160,7 +161,7 @@ class TourVariantUpdateRequest(BaseModel):
     is_active: bool | None = None
 
 
-class TourDetailCreateRequest(BaseModel):
+class TourDetailCreateRequest(SchemaBase):
     variant_id: uuid.UUID
     banner: BannerPayload | None = None
     gallery: list[GalleryItem] | None = Field(default=None)
@@ -211,7 +212,7 @@ class TourDetailCreateRequest(BaseModel):
     )
 
 
-class TourDetailUpdateRequest(BaseModel):
+class TourDetailUpdateRequest(SchemaBase):
     banner: BannerPayload | None = None
     gallery: list[GalleryItem] | None = None
     highlights: list[HighlightItem] | None = None

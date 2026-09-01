@@ -1,12 +1,13 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
+from app.schemas.base import SchemaBase
 
 from app.core.enums import DocumentType
 
 
-class DocumentResponse(BaseModel):
+class DocumentResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -30,7 +31,7 @@ class DocumentResponse(BaseModel):
     type: str = None # "incoming" for customer uploads, "outgoing" for admin uploads
 
 
-class DocumentDownloadResponse(BaseModel):
+class DocumentDownloadResponse(SchemaBase):
     document_id: uuid.UUID
     file_name: str
     download_url: str

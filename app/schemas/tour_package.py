@@ -4,21 +4,22 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+from app.schemas.base import SchemaBase
 
 from app.core.enums import TourType
 
 
 # ── Media sub-schemas ───────────────────────────────────────────────
 
-class BannerResponse(BaseModel):
+class BannerResponse(SchemaBase):
     """Banner media returned for a package or variant."""
 
     image: str | None = None
     video: str | None = None
 
 
-class TourPackageSelectionVariant(BaseModel):
+class TourPackageSelectionVariant(SchemaBase):
     """Lightweight active variant used by package selectors."""
 
     id: uuid.UUID
@@ -26,7 +27,7 @@ class TourPackageSelectionVariant(BaseModel):
     season_name: str | None = None
 
 
-class TourPackageSelectionItem(BaseModel):
+class TourPackageSelectionItem(SchemaBase):
     """Compact active package payload used when selecting a package."""
 
     id: uuid.UUID
@@ -37,7 +38,7 @@ class TourPackageSelectionItem(BaseModel):
 
 # ── Gallery sub-schema ───────────────────────────────────────────────
 
-class GalleryItemResponse(BaseModel):
+class GalleryItemResponse(SchemaBase):
     id: str | None = None
     alt: str | None = None
     url: str
@@ -49,7 +50,7 @@ class GalleryItemResponse(BaseModel):
 
 # ── Review sub-schema ────────────────────────────────────────────────
 
-class ReviewItemResponse(BaseModel):
+class ReviewItemResponse(SchemaBase):
     """Review item attached at the package level."""
 
     id: uuid.UUID
@@ -64,7 +65,7 @@ class ReviewItemResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class VariantSummaryResponse(BaseModel):
+class VariantSummaryResponse(SchemaBase):
     """Lightweight variant info used in package and variant responses."""
 
     slug: str
@@ -76,7 +77,7 @@ class VariantSummaryResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class RouteStopResponse(BaseModel):
+class RouteStopResponse(SchemaBase):
     id: str | None = None
     city: str | None = None
     nights: int | None = None
@@ -84,21 +85,21 @@ class RouteStopResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-class HighlightResponse(BaseModel):
+class HighlightResponse(SchemaBase):
     id: str | None = None
     text: str
 
     model_config = {"extra": "allow"}
 
 
-class DepartureDateResponse(BaseModel):
+class DepartureDateResponse(SchemaBase):
     id: str | None = None
     date: date
 
     model_config = {"extra": "allow"}
 
 
-class ItineraryItemResponse(BaseModel):
+class ItineraryItemResponse(SchemaBase):
     id: str | None = None
     day: int | str
     title: str | None = None
@@ -109,7 +110,7 @@ class ItineraryItemResponse(BaseModel):
 
 # ── Season / Variant Sub-Schema ─────────────────────────────────────
 
-class TourSeasonResponse(BaseModel):
+class TourSeasonResponse(SchemaBase):
     """A seasonal variant of a tour package with its own route, itinerary, dates, and media."""
 
     id: uuid.UUID
@@ -146,7 +147,7 @@ class TourSeasonResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class TourPackageVariantDetailResponse(BaseModel):
+class TourPackageVariantDetailResponse(SchemaBase):
     """Detailed variant payload for a package variant route."""
 
     id: uuid.UUID
@@ -175,7 +176,7 @@ class TourPackageVariantDetailResponse(BaseModel):
 
 # ── Tour Package Schemas ─────────────────────────────────────────────
 
-class TourPackageListItem(BaseModel):
+class TourPackageListItem(SchemaBase):
     """Representation used in paginated public list responses."""
 
     id: uuid.UUID
@@ -194,7 +195,7 @@ class TourPackageListItem(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class TourPackageDetailResponse(BaseModel):
+class TourPackageDetailResponse(SchemaBase):
     """Full tour package response with selected/default variant payloads."""
 
     id: uuid.UUID
@@ -211,7 +212,7 @@ class TourPackageDetailResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class TourPackageVariantDetailPayload(BaseModel):
+class TourPackageVariantDetailPayload(SchemaBase):
     """Payload returned by the /{package_slug}/variants/{variant_slug} route."""
 
     variant: TourPackageVariantDetailResponse
@@ -222,7 +223,7 @@ class TourPackageVariantDetailPayload(BaseModel):
 
 # ── Filter schema ────────────────────────────────────────────────────
 
-class TourPackageFilterParams(BaseModel):
+class TourPackageFilterParams(SchemaBase):
     """Query-string filters for the list tour packages endpoint."""
 
     destination: str | None = Field(

@@ -2,12 +2,13 @@
 
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+from app.schemas.base import SchemaBase
 
 T = TypeVar("T")
 
 
-class PaginationMeta(BaseModel):
+class PaginationMeta(SchemaBase):
     """Metadata about the current page of results."""
 
     current_page: int = Field(..., description="Current page number (1-indexed)")

@@ -1,6 +1,7 @@
 from typing import Any, Generic, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+from app.schemas.base import SchemaBase
 
 T = TypeVar("T")
 
@@ -13,24 +14,24 @@ class SuccessResponse(BaseModel, Generic[T]):
     data: T
 
 
-class ActionResponse(BaseModel):
+class ActionResponse(SchemaBase):
     """Success response for DELETE, PUT, PATCH or actions with no data body content."""
 
     success: bool = Field(default=True)
     message: str
 
 
-class ValidationErrorDetail(BaseModel):
+class ValidationErrorDetail(SchemaBase):
     field: str
     message: str
 
 
-class ErrorPayload(BaseModel):
+class ErrorPayload(SchemaBase):
     code: str
     details: Any | None = None
 
 
-class ErrorResponse(BaseModel):
+class ErrorResponse(SchemaBase):
     """Standard error response structure."""
 
     success: bool = Field(default=False)

@@ -2,21 +2,22 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
+from app.schemas.base import SchemaBase
 
 from app.core.enums import ReferralStatus
 
 
-class ReferralCodeResponse(BaseModel):
+class ReferralCodeResponse(SchemaBase):
     referral_code: str
 
 
-class ReferralInviteResponse(BaseModel):
+class ReferralInviteResponse(SchemaBase):
     referral_code: str
     referrer_name: str
 
 
-class ReferredCustomerResponse(BaseModel):
+class ReferredCustomerResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -26,7 +27,7 @@ class ReferredCustomerResponse(BaseModel):
     mobile: str | None = None
 
 
-class ReferralHistoryItemResponse(BaseModel):
+class ReferralHistoryItemResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID

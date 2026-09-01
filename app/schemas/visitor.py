@@ -2,12 +2,13 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field, ConfigDict
+from app.schemas.base import SchemaBase
 
 
 # ── Base & Legacy Schemas (Preserved for backwards compatibility) ──────
 
-class VisitorBase(BaseModel):
+class VisitorBase(SchemaBase):
     fingerprint: str | None = Field(default=None, max_length=255)
     ip_address: str | None = Field(default=None, max_length=45)
     country: str | None = Field(default=None, max_length=100)
@@ -33,7 +34,7 @@ class VisitorResponse(VisitorBase):
     last_seen: datetime
 
 
-class VisitorSessionBase(BaseModel):
+class VisitorSessionBase(SchemaBase):
     visitor_id: UUID
     landing_page: str | None = None
     exit_page: str | None = None
@@ -58,7 +59,7 @@ class VisitorSessionResponse(VisitorSessionBase):
     ended_at: datetime | None
 
 
-class VisitorEventBase(BaseModel):
+class VisitorEventBase(SchemaBase):
     visitor_id: UUID
     session_id: UUID
     event_name: str = Field(..., max_length=100)
@@ -79,7 +80,7 @@ class VisitorEventResponse(VisitorEventBase):
 
 # ── Enhanced Enduser Tracking Schemas ─────────────────────────────────
 
-class VisitorIdentifyRequest(BaseModel):
+class VisitorIdentifyRequest(SchemaBase):
     fingerprint: str | None = Field(default=None, max_length=255, description="Client browser fingerprint")
     ip_address: str | None = Field(default=None, max_length=45)
     country: str | None = Field(default=None, max_length=100)
@@ -91,12 +92,12 @@ class VisitorIdentifyRequest(BaseModel):
     customer_id: UUID | None = None
 
 
-class VisitorIdentifyResponse(BaseModel):
+class VisitorIdentifyResponse(SchemaBase):
     visitor: VisitorResponse
     is_new: bool = Field(description="True if visitor record was newly created")
 
 
-class SessionStartRequest(BaseModel):
+class SessionStartRequest(SchemaBase):
     visitor_id: UUID
     landing_page: str | None = Field(default=None, description="URL of entry page")
     referrer: str | None = Field(default=None, description="HTTP Referrer URL")
@@ -106,16 +107,16 @@ class SessionStartRequest(BaseModel):
     utm_term: str | None = Field(default=None, max_length=100)
 
 
-class SessionHeartbeatRequest(BaseModel):
+class SessionHeartbeatRequest(SchemaBase):
     current_page: str | None = Field(default=None, description="Current page URL")
     page_views_delta: int = Field(default=0, ge=0, description="Additional page views since last heartbeat")
 
 
-class SessionEndRequest(BaseModel):
+class SessionEndRequest(SchemaBase):
     exit_page: str | None = Field(default=None, description="URL of exit page")
 
 
-class EventTrackRequest(BaseModel):
+class EventTrackRequest(SchemaBase):
     visitor_id: UUID
     session_id: UUID
     event_name: str = Field(..., max_length=100, description="e.g. tour_package_view, enquiry_submit, scroll_depth_50")
@@ -123,16 +124,16 @@ class EventTrackRequest(BaseModel):
     event_metadata: dict[str, Any] | None = Field(default=None, description="Arbitrary event payload JSON")
 
 
-class EventBatchRequest(BaseModel):
+class EventBatchRequest(SchemaBase):
     events: list[EventTrackRequest] = Field(..., min_length=1, max_length=50, description="Batch of up to 50 events")
 
 
-class EventBatchResponse(BaseModel):
+class EventBatchResponse(SchemaBase):
     accepted_count: int
     events: list[VisitorEventResponse]
 
 
-class VisitorProfileResponse(BaseModel):
+class VisitorProfileResponse(SchemaBase):
     visitor: VisitorResponse
     sessions: list[VisitorSessionResponse]
     recent_events: list[VisitorEventResponse]
@@ -142,7 +143,7 @@ class VisitorProfileResponse(BaseModel):
 
 # ── Admin Analytics Response Schemas ─────────────────────────────────
 
-class AnalyticsOverviewResponse(BaseModel):
+class AnalyticsOverviewResponse(SchemaBase):
     total_visitors: int
     visitors_today: int
     active_sessions: int
@@ -151,19 +152,19 @@ class AnalyticsOverviewResponse(BaseModel):
     high_intent_visitors_count: int
 
 
-class TopPageItem(BaseModel):
+class TopPageItem(SchemaBase):
     page: str
     views: int
     unique_visitors: int
 
 
-class TopEventItem(BaseModel):
+class TopEventItem(SchemaBase):
     event_name: str
     count: int
     category: str | None = None
 
 
-class UtmPerformanceItem(BaseModel):
+class UtmPerformanceItem(SchemaBase):
     utm_source: str | None
     utm_medium: str | None
     utm_campaign: str | None
@@ -172,12 +173,12 @@ class UtmPerformanceItem(BaseModel):
     avg_duration_seconds: float
 
 
-class FunnelStageItem(BaseModel):
+class FunnelStageItem(SchemaBase):
     stage: str
     visitor_count: int
     conversion_rate: float  # Percentage of initial stage
 
 
-class LeadScoreDistributionItem(BaseModel):
+class LeadScoreDistributionItem(SchemaBase):
     score_range: str
     count: int

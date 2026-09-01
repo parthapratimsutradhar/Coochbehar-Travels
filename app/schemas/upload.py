@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
+from app.schemas.base import SchemaBase
 
 
-class FileUploadResponse(BaseModel):
+class FileUploadResponse(SchemaBase):
     url: str = Field(..., description="Secure Cloudinary URL for the uploaded file")
     public_id: str
     folder: str

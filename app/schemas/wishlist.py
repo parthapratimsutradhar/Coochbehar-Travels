@@ -1,13 +1,13 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from app.schemas.base import SchemaBase
 
 from app.core.enums import TourType
 from app.schemas.tour_package import BannerResponse
 
 
-class WishlistItemResponse(BaseModel):
+class WishlistItemResponse(SchemaBase):
     """A wishlisted package with wishlist entry metadata."""
 
     id: uuid.UUID

@@ -1,11 +1,12 @@
 from datetime import date, datetime
 from uuid import UUID
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field, ConfigDict
+from app.schemas.base import SchemaBase
 from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType
 
 
-class EnquiryBase(BaseModel):
+class EnquiryBase(SchemaBase):
     enquiry_type: EnquiryType = EnquiryType.FIXED_TOUR
     channel: EnquiryChannel
     package_id: UUID | None = None
@@ -14,7 +15,7 @@ class EnquiryBase(BaseModel):
     message: str | None = None
 
 
-class EnquiryCreate(BaseModel):
+class EnquiryCreate(SchemaBase):
     package_id: UUID | None = None
     variant_id: UUID | None = None
     channel: Literal[EnquiryChannel.WEBSITE, EnquiryChannel.APP] = EnquiryChannel.WEBSITE
@@ -26,7 +27,7 @@ class EnquiryCreate(BaseModel):
     customer_id: UUID | None = None
 
 
-class EnquiryUpdate(BaseModel):
+class EnquiryUpdate(SchemaBase):
     status: EnquiryStatus | None = None
     subject: str | None = Field(default=None, max_length=200)
     message: str | None = None

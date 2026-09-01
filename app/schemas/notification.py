@@ -2,10 +2,11 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field, ConfigDict
+from app.schemas.base import SchemaBase
 
 
-class NotificationResponse(BaseModel):
+class NotificationResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -21,7 +22,7 @@ class NotificationResponse(BaseModel):
     created_at: datetime
 
 
-class NotificationCreate(BaseModel):
+class NotificationCreate(SchemaBase):
     notification_type: str = Field(default="GENERAL", max_length=50)
     title: str = Field(..., min_length=1, max_length=160)
     message: str = Field(..., min_length=1, max_length=5000)
@@ -38,6 +39,6 @@ class AdminNotificationCreate(NotificationCreate):
     broadcast_staff: bool = False
 
 
-class NotificationListResponse(BaseModel):
+class NotificationListResponse(SchemaBase):
     items: list[NotificationResponse]
     unread_count: int

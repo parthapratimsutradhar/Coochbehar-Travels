@@ -1,12 +1,13 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import Field, ConfigDict, EmailStr
+from app.schemas.base import SchemaBase
 
 from app.core.enums import LeadSource
 
 
-class CustomerBase(BaseModel):
+class CustomerBase(SchemaBase):
     name: str = Field(..., max_length=100)
     mobile: str | None = Field(default=None, max_length=20)
     email: EmailStr | str | None = Field(default=None, max_length=255)
@@ -23,7 +24,7 @@ class CustomerCreate(CustomerBase):
     pass
 
 
-class CustomerUpdate(BaseModel):
+class CustomerUpdate(SchemaBase):
     name: str | None = Field(default=None, max_length=100)
     mobile: str | None = Field(default=None, max_length=20)
     email: EmailStr | str | None = Field(default=None, max_length=255)
