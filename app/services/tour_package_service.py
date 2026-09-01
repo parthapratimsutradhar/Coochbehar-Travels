@@ -62,9 +62,9 @@ class TourPackageService:
             else:
                 item["duration"] = None
 
-                item["is_wishlist"] = bool(
-                    customer_id and self.repo.is_wishlisted(item["id"], customer_id)
-                )
+            item["is_wishlist"] = bool(
+                customer_id and self.repo.is_wishlisted(item["id"], customer_id)
+            )
 
             items.append(TourPackageListItem(**item))
 
