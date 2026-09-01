@@ -1,6 +1,6 @@
 from typing import Any, Generic, TypeVar
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from app.schemas.base import SchemaBase
 
 T = TypeVar("T")

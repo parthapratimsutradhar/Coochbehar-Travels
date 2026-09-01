@@ -4,6 +4,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models.auth_session import AuthSession
+from app.utils.security import normalize_role_value
 
 
 class AuthSessionRepository:
@@ -24,10 +25,11 @@ class AuthSessionRepository:
     ) -> AuthSession:
         """Create a new server-side authentication session."""
         now = datetime.now(timezone.utc)
+        normalized_actor_type = normalize_role_value(actor_type, default="ADMIN")
         session = AuthSession(
             user_id=user_id,
             customer_id=customer_id,
-            actor_type=actor_type,
+            actor_type=normalized_actor_type,
             refresh_token_hash=refresh_token_hash,
             created_at=now,
             last_used_at=now,

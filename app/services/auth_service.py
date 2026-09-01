@@ -25,6 +25,7 @@ from app.utils.security import (
     generate_secure_token,
     hash_otp,
     hash_token,
+    normalize_role_value,
     verify_google_id_token,
     verify_otp,
 )
@@ -651,7 +652,8 @@ class AuthService:
                 detail=AuthError.REFRESH_INACTIVE,
             )
 
-        if session.actor_type in ("ADMIN", "STAFF") and session.user_id is not None:
+        session_actor_type = normalize_role_value(session.actor_type, default="CUSTOMER")
+        if session_actor_type in {"ADMIN", "STAFF"} and session.user_id is not None:
             user = self.user_repo.get_by_id(session.user_id)
             if not user or not user.is_active:
                 self.session_repo.revoke_session(session)
@@ -660,8 +662,14 @@ class AuthService:
                     detail=AuthError.ACCOUNT_DEACTIVATED,
                 )
             access_token_subject = user.id
-            access_token_role = user.role.value if hasattr(user.role, "value") else str(user.role)
+            access_token_role = normalize_role_value(user.role, default="ADMIN")
         else:
+            if session.customer_id is None:
+                self.session_repo.revoke_session(session)
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=AuthError.CUSTOMER_NOT_FOUND,
+                )
             customer = self.customer_repo.get_by_id(session.customer_id)
             if not customer:
                 self.session_repo.revoke_session(session)

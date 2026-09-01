@@ -201,6 +201,18 @@ def test_access_tokens_include_session_id_and_role_only_for_admin_and_customer()
         assert "mobile" not in payload
 
 
+def test_access_tokens_normalize_enum_roles():
+    """Enum-backed admin/customer roles should serialize to the canonical string values used by refresh/session checks."""
+    admin_token = create_access_token(subject=uuid.uuid4(), role=UserRole.ADMIN, session_id=uuid.uuid4())
+    customer_token = create_access_token(subject=uuid.uuid4(), role="CUSTOMER", session_id=uuid.uuid4())
+
+    admin_payload = jwt.decode(admin_token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+    customer_payload = jwt.decode(customer_token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+
+    assert admin_payload["role"] == "ADMIN"
+    assert customer_payload["role"] == "CUSTOMER"
+
+
 def test_1_admin_pure_otp_login(client: TestClient, test_user: User):
     """1. Test Admin pure OTP request and verification login flow."""
     req_res = client.post(

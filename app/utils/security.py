@@ -41,6 +41,17 @@ def compare_token_hashes(hash_a: str, hash_b: str) -> bool:
     return hmac.compare_digest(hash_a, hash_b)
 
 
+def normalize_role_value(value: object, default: str = "CUSTOMER") -> str:
+    """Coerce enum/string role values into the canonical uppercase string used in JWTs."""
+    if value is None:
+        return default.upper()
+    if isinstance(value, str):
+        return value.upper()
+    if hasattr(value, "value"):
+        return str(value.value).upper()
+    return str(value).upper()
+
+
 def create_access_token(
     subject: str | UUID,
     role: str = "CUSTOMER",
@@ -58,7 +69,7 @@ def create_access_token(
 
     payload = {
         "sub": str(subject),
-        "role": str(role).upper(),
+        "role": normalize_role_value(role, default="CUSTOMER"),
         "type": "access",
         "iat": int(now.timestamp()),
         "exp": int(expire.timestamp()),
