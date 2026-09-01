@@ -1,7 +1,7 @@
 import uuid
 import secrets
 import string
-from sqlalchemy import or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.enums import LeadSource
@@ -45,26 +45,56 @@ class CustomerRepository:
         mobile: str | None = None,
         email: str | None = None,
         source: LeadSource = LeadSource.WEBSITE,
+        **kwargs,
     ) -> Customer:
         """Create and persist a new customer with auto-generated customer_code."""
-        customer_code = f"CUS-{uuid.uuid4().hex[:8].upper()}"
-        referral_code = "".join(
-            secrets.choice(string.ascii_letters + string.digits)
-            for _ in range(8)
-        )
         customer = Customer(
-            customer_code=customer_code,
-            referral_code=referral_code,
+            customer_code=kwargs.get("customer_code") or f"CUS-{uuid.uuid4().hex[:8].upper()}",
+            referral_code=kwargs.get("referral_code") or "".join(
+                secrets.choice(string.ascii_letters + string.digits)
+                for _ in range(8)
+            ),
             name=name,
             mobile=mobile.strip() if mobile else None,
             email=email.strip().lower() if email else None,
+            address=kwargs.get("address"),
+            emergency_contact_name=kwargs.get("emergency_contact_name"),
+            emergency_contact_mobile=kwargs.get("emergency_contact_mobile"),
+            profile_pic=kwargs.get("profile_pic"),
             source=source,
-            is_imported=False,
+            is_imported=kwargs.get("is_imported", False),
+            is_active=kwargs.get("is_active", True),
         )
         self.db.add(customer)
         self.db.commit()
         self.db.refresh(customer)
         return customer
+
+    def list_customers(
+        self,
+        page: int,
+        page_size: int,
+        is_active: bool | None = None,
+        search: str | None = None,
+    ) -> tuple[list[Customer], int]:
+        """Fetch paginated customers with optional filters."""
+        stmt = select(Customer)
+        if is_active is not None:
+            stmt = stmt.where(Customer.is_active.is_(is_active))
+        if search:
+            term = f"%{search.strip()}%"
+            stmt = stmt.where(
+                Customer.name.ilike(term)
+                | Customer.email.ilike(term)
+                | Customer.mobile.ilike(term)
+                | Customer.customer_code.ilike(term)
+            )
+
+        total_items = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+        customers = self.db.execute(
+            stmt.order_by(Customer.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        ).scalars().all()
+        return customers, total_items
 
     def update_customer(
         self,

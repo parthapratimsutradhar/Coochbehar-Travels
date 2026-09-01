@@ -57,6 +57,7 @@ def list_customer_documents(
 			if document.uploaded_by_customer or document.uploaded_by_user else None,
 			uploaded_by="CUSTOMER" if document.uploaded_by_customer_id else "ADMIN",
 			can_delete=False,
+			type="outgoing" if document.uploaded_by_customer_id else "incoming",
 		)
 		for document in documents
 	]
@@ -113,6 +114,7 @@ async def upload_customer_document(
 		uploader_profile_pic=document.uploaded_by_user.profile_pic if document.uploaded_by_user else None,
 		uploaded_by="ADMIN",
 		can_delete=False,
+		type="incoming" if document.uploaded_by_customer_id else "outgoing",
 	))
 
 @router.delete(

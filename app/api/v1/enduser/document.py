@@ -36,7 +36,7 @@ def _serialize_document(document: Document, customer_id: uuid.UUID) -> DocumentR
 		uploader_profile_pic=uploader.profile_pic if uploader else None,
 		uploaded_by="CUSTOMER" if is_customer_upload else "ADMIN",
 		can_delete=is_customer_upload,
-		type= "incoming" if is_customer_upload else "outgoing"
+		type= "outgoing" if is_customer_upload else "incoming",
 	)
 
 
