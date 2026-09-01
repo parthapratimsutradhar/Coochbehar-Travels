@@ -1,10 +1,10 @@
 from sqlalchemy import Boolean, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.enums import LeadSource
-from app.models.base import BaseEntity
+from app.models.base import ActiveEntity
 
 
-class Customer(BaseEntity):
+class Customer(ActiveEntity):
     __tablename__ = "customers"
 
     customer_code: Mapped[str] = mapped_column(
