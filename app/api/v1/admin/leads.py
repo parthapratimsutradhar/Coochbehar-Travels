@@ -19,6 +19,13 @@ from app.schemas.lead import (
     LeadUpdate,
 )
 from app.schemas.response import SuccessResponse
+from app.services.lead_scoring_service import LeadScoringService
+from app.services.socket_service import (
+    emit_lead_activity_created,
+    emit_lead_created,
+    emit_lead_score_updated,
+    emit_lead_status_updated,
+)
 
 router = APIRouter(
     prefix="/admin/leads",
@@ -95,6 +102,7 @@ def create_lead(
     db: Session = Depends(get_db),
 ):
     lead_code = f"LEAD-{uuid.uuid4().hex[:8].upper()}"
+    lead_score = max(0, min(100, payload.lead_score))
     lead = Lead(
         lead_code=lead_code,
         enquiry_id=payload.enquiry_id,
@@ -104,7 +112,7 @@ def create_lead(
         mobile=payload.mobile,
         email=payload.email,
         whatsapp_opt_in=payload.whatsapp_opt_in,
-        lead_score=payload.lead_score,
+        lead_score=lead_score,
         status=payload.status,
         source=payload.source,
         notes=payload.notes,
@@ -114,6 +122,10 @@ def create_lead(
 
     stmt = select(Lead).options(selectinload(Lead.activities)).where(Lead.id == lead.id)
     created = db.execute(stmt).scalar_one()
+
+    # Emit real-time Socket.IO event to admin dashboard
+    emit_lead_created(created)
+
     return SuccessResponse(
         message=LeadSuccess.CREATED,
         data=LeadResponse.model_validate(created),
@@ -138,12 +150,36 @@ def update_lead(
             detail=LeadError.LEAD_NOT_FOUND,
         )
 
+    prev_status = lead.status
+    prev_score = lead.lead_score
+
     update_data = payload.model_dump(exclude_unset=True)
+    if "lead_score" in update_data and update_data["lead_score"] is not None:
+        update_data["lead_score"] = max(0, min(100, update_data["lead_score"]))
+
     for field, value in update_data.items():
         setattr(lead, field, value)
 
     db.commit()
     db.refresh(lead)
+
+    # Emit real-time Socket.IO events for status or score changes
+    if "status" in update_data and lead.status != prev_status:
+        emit_lead_status_updated(
+            lead,
+            previous_status=prev_status.value if hasattr(prev_status, "value") else str(prev_status),
+            new_status=lead.status.value if hasattr(lead.status, "value") else str(lead.status),
+        )
+
+    if "lead_score" in update_data and lead.lead_score != prev_score:
+        emit_lead_score_updated(
+            lead,
+            previous_score=prev_score,
+            new_score=lead.lead_score,
+            delta=lead.lead_score - prev_score,
+            reason="ADMIN_MANUAL_UPDATE",
+        )
+
     return SuccessResponse(
         message=LeadSuccess.UPDATED,
         data=LeadResponse.model_validate(lead),
@@ -183,10 +219,29 @@ def log_lead_activity(
     # Update lead last_contacted_at
     lead.last_contacted_at = datetime.now()
 
+    # Dynamic scoring for staff activity
+    scoring_service = LeadScoringService(db)
+    delta = scoring_service.calculate_activity_score(activity)
+    prev_score, new_score, actual_delta = scoring_service.apply_score_change(
+        lead, delta, reason=activity.activity_type
+    )
+
     db.commit()
     db.refresh(activity)
+    db.refresh(lead)
+
+    # Emit real-time Socket.IO events to admin dashboard
+    emit_lead_activity_created(lead, activity)
+    if actual_delta > 0:
+        emit_lead_score_updated(
+            lead,
+            previous_score=prev_score,
+            new_score=new_score,
+            delta=actual_delta,
+            reason=f"ACTIVITY_{activity.activity_type.upper()}",
+        )
+
     return SuccessResponse(
         message="Lead activity logged successfully",
         data=LeadActivityResponse.model_validate(activity),
     )
-

@@ -1,21 +1,27 @@
 """Tracking service — orchestrates visitor identification, session
-lifecycle, event tracking, and lead-score calculation.
+lifecycle, event tracking, and sales lead-score integration.
 
 Sits between the API layer and the repository layer, applying
-business rules (scoring, session auto-events) that don't belong
-in either.
+business rules (session auto-events, lead-score propagation) that
+don't belong in either.
 """
 
+from __future__ import annotations
+
+import logging
 import uuid
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.lead_scoring import calculate_score
 from app.models.visitor import Visitor
 from app.models.visitor_event import VisitorEvent
 from app.models.visitor_session import VisitorSession
 from app.repository.visitor_repo import VisitorRepository
+from app.services.lead_scoring_service import LeadScoringService
+from app.services.socket_service import emit_lead_score_updated
+
+logger = logging.getLogger(__name__)
 
 
 class TrackingService:
@@ -24,6 +30,7 @@ class TrackingService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.repo = VisitorRepository(db)
+        self.scoring_service = LeadScoringService(db)
 
     # ── Visitor identification ────────────────────────────────────────
 
@@ -92,9 +99,6 @@ class TrackingService:
                 "utm_campaign": utm_campaign,
             },
         )
-        # Score the session start
-        score_delta = calculate_score("session_start")
-        self.repo.increment_lead_score(visitor_id, score_delta)
         return session
 
     def heartbeat(
@@ -132,7 +136,7 @@ class TrackingService:
             )
         return session
 
-    # ── Event tracking ────────────────────────────────────────────────
+    # ── Event tracking & Dynamic Lead Scoring ─────────────────────────
 
     def track_event(
         self,
@@ -143,7 +147,7 @@ class TrackingService:
         page: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> VisitorEvent:
-        """Log a single interaction event and update lead score."""
+        """Log a single interaction event and dynamically update lead score if a lead exists."""
         event = self.repo.create_event(
             visitor_id,
             session_id,
@@ -151,10 +155,6 @@ class TrackingService:
             page=page,
             event_metadata=metadata,
         )
-
-        # Weighted lead scoring
-        score_delta = calculate_score(event_name, metadata)
-        self.repo.increment_lead_score(visitor_id, score_delta)
 
         # Update session pageview count for page_view events
         if event_name == "page_view":
@@ -164,29 +164,66 @@ class TrackingService:
                 page_views_delta=1,
             )
 
+        # Connect visitor event to associated Lead (if enquiry submitted)
+        lead = self.scoring_service.find_lead_for_visitor(visitor_id=visitor_id)
+        if lead:
+            if not self.scoring_service.is_event_farmed(visitor_id, event_name, metadata):
+                delta = self.scoring_service.calculate_event_score(event_name, metadata)
+                if delta > 0:
+                    prev_score, new_score, actual_delta = self.scoring_service.apply_score_change(
+                        lead, delta, reason=event_name
+                    )
+                    self.db.commit()
+                    self.db.refresh(lead)
+                    if actual_delta > 0:
+                        emit_lead_score_updated(
+                            lead,
+                            previous_score=prev_score,
+                            new_score=new_score,
+                            delta=actual_delta,
+                            reason=event_name.upper(),
+                        )
+
         return event
 
     def track_events_batch(
         self,
         events_data: list[dict],
     ) -> list[VisitorEvent]:
-        """Bulk-ingest events with aggregated lead scoring.
-
-        Each item in ``events_data`` must contain ``visitor_id``,
-        ``session_id``, ``event_name`` and optionally ``page`` and
-        ``event_metadata``.
-        """
+        """Bulk-ingest events with anti-farming lead scoring per associated lead."""
         events = self.repo.create_events_batch(events_data)
 
-        # Aggregate score deltas per visitor
-        visitor_scores: dict[uuid.UUID, int] = {}
+        # Group by visitor_id
+        visitor_events_map: dict[uuid.UUID, list[dict]] = {}
         for data in events_data:
             vid = data["visitor_id"]
-            delta = calculate_score(data["event_name"], data.get("event_metadata"))
-            visitor_scores[vid] = visitor_scores.get(vid, 0) + delta
+            visitor_events_map.setdefault(vid, []).append(data)
 
-        for vid, total_delta in visitor_scores.items():
-            self.repo.increment_lead_score(vid, total_delta)
+        for vid, ev_list in visitor_events_map.items():
+            lead = self.scoring_service.find_lead_for_visitor(visitor_id=vid)
+            if not lead:
+                continue
+
+            total_delta = 0
+            for ev in ev_list:
+                ev_name = ev.get("event_name", "")
+                ev_meta = ev.get("event_metadata")
+                if not self.scoring_service.is_event_farmed(vid, ev_name, ev_meta):
+                    total_delta += self.scoring_service.calculate_event_score(ev_name, ev_meta)
+
+            if total_delta > 0:
+                prev_score, new_score, actual_delta = self.scoring_service.apply_score_change(
+                    lead, total_delta, reason="batch"
+                )
+                self.db.commit()
+                self.db.refresh(lead)
+                if actual_delta > 0:
+                    emit_lead_score_updated(
+                        lead,
+                        previous_score=prev_score,
+                        new_score=new_score,
+                        delta=actual_delta,
+                        reason="BATCH_EVENTS",
+                    )
 
         return events
-

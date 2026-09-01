@@ -18,7 +18,6 @@ class VisitorBase(SchemaBase):
     os: str | None = Field(default=None, max_length=100)
     device: str | None = Field(default=None, max_length=100)
     customer_id: UUID | None = None
-    lead_score: int = 0
 
 
 class VisitorCreate(VisitorBase):

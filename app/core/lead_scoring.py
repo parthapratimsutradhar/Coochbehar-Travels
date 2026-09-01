@@ -32,6 +32,7 @@ CATEGORY_SCORES: dict[EventCategory, int] = {
 EVENT_CATEGORY_MAP: dict[str, EventCategory] = {
     # Page views
     "page_view": EventCategory.PAGE_VIEW,
+    "session_start": EventCategory.PAGE_VIEW,
 
     # Engagement signals
     "scroll_depth_50": EventCategory.ENGAGEMENT,
@@ -48,6 +49,12 @@ EVENT_CATEGORY_MAP: dict[str, EventCategory] = {
     "itinerary_view": EventCategory.INTEREST,
     "review_read": EventCategory.INTEREST,
     "compare_packages": EventCategory.INTEREST,
+    "wishlist_add": EventCategory.INTEREST,
+    "wishlist_remove": EventCategory.ENGAGEMENT,
+    "tour_wishlist_add": EventCategory.INTEREST,
+    "tour_wishlist_remove": EventCategory.ENGAGEMENT,
+    "add_to_wishlist": EventCategory.INTEREST,
+    "remove_from_wishlist": EventCategory.ENGAGEMENT,
 
     # Intent signals
     "enquiry_form_open": EventCategory.INTENT,
@@ -70,6 +77,33 @@ EVENT_CATEGORY_MAP: dict[str, EventCategory] = {
 
 # Default score for unrecognised event names
 DEFAULT_EVENT_SCORE: int = 1
+
+
+def _wishlist_bonus(metadata: dict | None) -> int:
+    """Boost score when a tour is saved to a customer's wishlist."""
+    if not isinstance(metadata, dict):
+        return 0
+
+    is_wishlist = metadata.get("is_wishlist")
+    if is_wishlist is True or str(metadata.get("wishlist_status", "")).lower() in {
+        "wishlisted",
+        "saved",
+        "in_wishlist",
+    }:
+        return 10
+
+    if metadata.get("package_wishlisted") is True:
+        return 10
+
+    wishlist_count = metadata.get("wishlist_count")
+    if wishlist_count is not None:
+        try:
+            count = int(wishlist_count)
+        except (TypeError, ValueError):
+            return 0
+        return min(10, max(count, 0) * 2)
+
+    return 0
 
 
 def get_event_category(event_name: str) -> EventCategory | None:
@@ -96,4 +130,8 @@ def calculate_score(event_name: str, metadata: dict | None = None) -> int:
     category = get_event_category(event_name)
     if category is None:
         return DEFAULT_EVENT_SCORE
-    return CATEGORY_SCORES[category]
+
+    score = CATEGORY_SCORES[category]
+    if category in {EventCategory.INTEREST, EventCategory.INTENT, EventCategory.CONVERSION}:
+        score += _wishlist_bonus(metadata)
+    return score

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin_or_staff
 from app.core.lead_scoring import get_event_category
 from app.db.database import get_db
+from app.models.lead import Lead
 from app.models.user import User
 from app.models.visitor import Visitor
 from app.models.visitor_event import VisitorEvent
@@ -83,13 +84,13 @@ def get_analytics_overview(
 
     # 5. Average lead score
     avg_score = (
-        db.execute(select(func.avg(Visitor.lead_score))).scalar_one() or 0.0
+        db.execute(select(func.avg(Lead.lead_score))).scalar_one() or 0.0
     )
 
-    # 6. High-intent visitors count (lead_score >= 20)
+    # 6. High-intent leads count (lead_score >= 20)
     high_intent_count = (
         db.execute(
-            select(func.count(Visitor.id)).where(Visitor.lead_score >= 20)
+            select(func.count(Lead.id)).where(Lead.lead_score >= 20)
         ).scalar_one()
         or 0
     )
@@ -111,10 +112,9 @@ def get_analytics_overview(
     "/visitors",
     response_model=PaginatedResponse[VisitorResponse],
     summary="List and filter tracked web visitors",
-    description="Retrieve paginated visitor records with lead scores, location data, search, and min-score filters.",
+    description="Retrieve paginated visitor records with location data and search filters.",
 )
 def list_visitors(
-    min_score: int | None = Query(None, ge=0, description="Filter visitors with lead score >= min_score"),
     search: str | None = Query(None, description="Search by fingerprint, ip, city, country, browser, os"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
@@ -122,9 +122,6 @@ def list_visitors(
     current_user: User = Depends(get_current_admin_or_staff),
 ):
     stmt = select(Visitor).order_by(Visitor.last_seen.desc())
-
-    if min_score is not None:
-        stmt = stmt.where(Visitor.lead_score >= min_score)
 
     if search:
         search_pattern = f"%{search}%"
@@ -383,9 +380,9 @@ def get_lead_score_distribution(
 
     items: list[LeadScoreDistributionItem] = []
     for label, min_val, max_val in ranges:
-        stmt = select(func.count(Visitor.id)).where(
-            Visitor.lead_score >= min_val,
-            Visitor.lead_score <= max_val,
+        stmt = select(func.count(Lead.id)).where(
+            Lead.lead_score >= min_val,
+            Lead.lead_score <= max_val,
         )
         cnt = db.execute(stmt).scalar_one() or 0
         items.append(LeadScoreDistributionItem(score_range=label, count=cnt))

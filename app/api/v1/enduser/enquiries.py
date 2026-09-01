@@ -12,7 +12,9 @@ from app.models.tour_package import TourPackage
 from app.schemas.custom_tour_request import CustomTourRequestCreate
 from app.schemas.enquiry import EnquiryCreate, EnquiryResponse
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
+from app.services.lead_scoring_service import LeadScoringService
 from app.services.notification_service import NotificationService
+from app.services.socket_service import emit_lead_created
 
 router = APIRouter(
     prefix="/enquiries",
@@ -77,7 +79,8 @@ async def create_enquiry(
     db.add(enquiry)
     db.flush()
 
-    # Automatically create sales Lead from enquiry
+    # Automatically create sales Lead from enquiry with initial score
+    initial_score = LeadScoringService(db).calculate_initial_score(enquiry)
     lead_code = f"LEAD-{uuid.uuid4().hex[:8].upper()}"
     lead = Lead(
         lead_code=lead_code,
@@ -86,12 +89,18 @@ async def create_enquiry(
         visitor_id=payload.visitor_id,
         full_name=payload.name or payload.subject or f"Enquiry Lead {enquiry_code}",
         mobile=payload.mobile,
+        lead_score=initial_score,
         status=LeadStatus.NEW,
         source=LeadSource.WEBSITE,
         notes=payload.message,
     )
     db.add(lead)
     db.commit()
+    db.refresh(lead)
+
+    # Emit real-time Socket.IO event to admin dashboard
+    emit_lead_created(lead)
+
     package = db.get(TourPackage, payload.package_id) if payload.package_id else None
     tour_name = package.title if package else (payload.subject or "custom tour enquiry")
     enquiry_date = enquiry.created_at.isoformat() if enquiry.created_at else None
@@ -155,7 +164,8 @@ async def create_custom_tour_request(
     db.add(enquiry)
     db.flush()
 
-    # Also generate Lead
+    # Also generate Lead with initial score
+    initial_score = LeadScoringService(db).calculate_initial_score(enquiry)
     lead_code = f"LEAD-{uuid.uuid4().hex[:8].upper()}"
     lead = Lead(
         lead_code=lead_code,
@@ -164,12 +174,18 @@ async def create_custom_tour_request(
         visitor_id=payload.visitor_id,
         full_name=enquiry.enquirer_name,
         mobile=enquiry.enquirer_phone,
+        lead_score=initial_score,
         status=LeadStatus.NEW,
         source=LeadSource.WEBSITE,
         notes=f"Custom tour request for {payload.destination} ({payload.pax_no} pax, {payload.no_room} rooms)",
     )
     db.add(lead)
     db.commit()
+    db.refresh(lead)
+
+    # Emit real-time Socket.IO event to admin dashboard
+    emit_lead_created(lead)
+
     enquiry_date = enquiry.created_at.isoformat() if enquiry.created_at else None
     service = NotificationService(db)
     tour_name = f"custom tour to {payload.destination}"

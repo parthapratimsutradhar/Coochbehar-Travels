@@ -88,7 +88,6 @@ class VisitorRepository:
             os=os,
             device=device,
             customer_id=customer_id,
-            lead_score=0,
         )
         self.db.add(visitor)
         self.db.commit()
@@ -101,19 +100,6 @@ class VisitorRepository:
             update(Visitor)
             .where(Visitor.id == visitor_id)
             .values(last_seen=datetime.now(timezone.utc))
-        )
-        self.db.execute(stmt)
-        self.db.commit()
-
-    def increment_lead_score(self, visitor_id: uuid.UUID, delta: int) -> None:
-        """Atomically increment the visitor's lead score."""
-        stmt = (
-            update(Visitor)
-            .where(Visitor.id == visitor_id)
-            .values(
-                lead_score=Visitor.lead_score + delta,
-                last_seen=datetime.now(timezone.utc),
-            )
         )
         self.db.execute(stmt)
         self.db.commit()

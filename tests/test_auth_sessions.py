@@ -284,7 +284,7 @@ def test_2_customer_pure_otp_login_and_autoregistration(client: TestClient, db_s
 
 def test_3_customer_visitor_telemetry_linking(client: TestClient, db_session):
     """3. Test linking anonymous visitor telemetry to customer upon OTP verification."""
-    visitor = Visitor(visitor_code="VIS-ANON01", fingerprint="fp-abc-123", lead_score=20)
+    visitor = Visitor(visitor_code="VIS-ANON01", fingerprint="fp-abc-123")
     db_session.add(visitor)
     db_session.commit()
     db_session.refresh(visitor)
@@ -625,7 +625,7 @@ def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClien
         "app.services.auth_service.upload_google_profile_picture",
         fake_upload_google_profile_picture,
     )
-    visitor = Visitor(visitor_code="VIS-GGL01", lead_score=15)
+    visitor = Visitor(visitor_code="VIS-GGL01")
     db_session.add(visitor)
     db_session.commit()
     db_session.refresh(visitor)
