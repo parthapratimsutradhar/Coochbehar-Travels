@@ -671,9 +671,6 @@ class AuthService:
                 )
             access_token_subject = customer.id
             access_token_role = "CUSTOMER"
-            access_token_actor_type = "CUSTOMER"
-            access_token_email = customer.email
-            access_token_mobile = customer.mobile
 
         new_raw_refresh_token = generate_secure_token(64)
         new_token_hash = hash_token(new_raw_refresh_token)
