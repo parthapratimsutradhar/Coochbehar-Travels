@@ -17,12 +17,13 @@ class SchemaBase(BaseModel):
             return normalized
 
         if isinstance(data, (list, tuple, set)):
+            if not data:
+                return data
             normalized_items = [cls.normalize_empty_strings(item) for item in data]
-            if not normalized_items:
-                return None
             if len(normalized_items) == 1 and normalized_items[0] is None:
                 return None
             return normalized_items
+
 
         if isinstance(data, str):
             stripped = data.strip()

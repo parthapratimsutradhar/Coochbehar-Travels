@@ -38,21 +38,27 @@ class EnquiryResponse(EnquiryBase):
 
     id: UUID
     enquiry_code: str
-    visitor_id: UUID | None
-    customer_id: UUID | None
+    visitor_id: UUID | None = None
+    customer_id: UUID | None = None
     status: EnquiryStatus
-    enquirer_name: str | None
-    enquirer_phone: str | None
-    room_id: UUID | None
-    vehicle_id: UUID | None
-    destination: str | None
-    travel_date: date | None
-    travel_duration_day: int | None
-    travel_duration_night: int | None
-    pax_no: int | None
-    no_room: int | None
-    vehicle_type: str | None
-    meal_plan: str | None
-    special_requirements: str | None
+    enquirer_name: str | None = None
+    enquirer_phone: str | None = None
+    room_id: UUID | None = None
+    vehicle_id: UUID | None = None
+    destination: str | None = None
+    travel_date: date | None = None
+    travel_duration_day: int | None = None
+    travel_duration_night: int | None = None
+    adult_count: int | None = None
+    child_count: int | None = None
+    senior_count: int | None = None
+    room_count: int | None = None
+    pax_no: int | None = None
+    no_room: int | None = None
+    vehicle_type: str | None = None
+    meal_plan: str | None = None
+    budget_min: float | None = None
+    budget_max: float | None = None
+    special_requirements: str | None = None
     created_at: datetime
     updated_at: datetime

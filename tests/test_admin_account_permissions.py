@@ -10,11 +10,11 @@ from sqlalchemy.pool import StaticPool
 
 compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
 
-from app.core.enums import UserRole
+from app.core.enums import AccountRole
 from app.db.database import get_db
 from app.main import app
 from app.models.base import Base
-from app.models.user import User
+from app.models.account import Account
 from app.services.auth_service import AuthService
 from app.utils.security import create_access_token
 
@@ -59,12 +59,12 @@ def client(db_session):
 
 @pytest.fixture
 def admin_user(db_session):
-    user = User(
-        user_code="ADM-001",
+    user = Account(
+        account_code="ADM-001",
         name="Admin User",
         email="admin@example.com",
         mobile="+919000000001",
-        role=UserRole.ADMIN,
+        role=AccountRole.ADMIN,
         is_active=True,
     )
     db_session.add(user)
@@ -75,12 +75,12 @@ def admin_user(db_session):
 
 @pytest.fixture
 def staff_user(db_session):
-    user = User(
-        user_code="STF-001",
+    user = Account(
+        account_code="STF-001",
         name="Staff User",
         email="staff@example.com",
         mobile="+919000000002",
-        role=UserRole.STAFF,
+        role=AccountRole.STAFF,
         is_active=True,
     )
     db_session.add(user)
@@ -91,12 +91,12 @@ def staff_user(db_session):
 
 @pytest.fixture
 def second_staff_user(db_session):
-    user = User(
-        user_code="STF-002",
+    user = Account(
+        account_code="STF-002",
         name="Other Staff",
         email="otherstaff@example.com",
         mobile="+919000000003",
-        role=UserRole.STAFF,
+        role=AccountRole.STAFF,
         is_active=True,
     )
     db_session.add(user)
@@ -107,12 +107,12 @@ def second_staff_user(db_session):
 
 @pytest.fixture
 def second_admin_user(db_session):
-    user = User(
-        user_code="ADM-002",
+    user = Account(
+        account_code="ADM-002",
         name="Second Admin",
         email="secondadmin@example.com",
         mobile="+919000000004",
-        role=UserRole.ADMIN,
+        role=AccountRole.ADMIN,
         is_active=True,
     )
     db_session.add(user)
@@ -121,7 +121,7 @@ def second_admin_user(db_session):
     return user
 
 
-def make_token(user: User) -> str:
+def make_token(user: Account) -> str:
     return create_access_token(
         subject=user.id,
         role=user.role.value,
@@ -208,7 +208,7 @@ def test_admin_can_deactivate_staff_account(client, admin_user, staff_user, db_s
 
     assert response.status_code == 200
     assert response.json()["message"] == "User deleted successfully."
-    assert db_session.get(User, staff_user.id).is_active is False
+    assert db_session.get(Account, staff_user.id).is_active is False
 
 
 def test_admin_can_deactivate_own_account(client, admin_user, db_session):
@@ -223,7 +223,40 @@ def test_admin_can_deactivate_own_account(client, admin_user, db_session):
     )
 
     assert response.status_code == 200
-    assert db_session.get(User, admin_user.id).is_active is False
+    assert db_session.get(Account, admin_user.id).is_active is False
+
+
+def test_admin_list_accounts_supports_single_search_term_role_and_is_active_filter(client, admin_user, staff_user, db_session):
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+
+    response = client.get(
+        "/api/v1/admin/account",
+        params={
+            "search": "Staff User",
+            "role": "STAFF",
+            "is_active": "true",
+        },
+        headers=auth_header,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["message"] == "Accounts retrieved successfully."
+    assert any(item["email"] == staff_user.email for item in payload["data"])
+
+
+def test_admin_list_accounts_excludes_current_admin_from_results(client, admin_user, staff_user, db_session):
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+
+    response = client.get(
+        "/api/v1/admin/account",
+        headers=auth_header,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    emails = [item["email"] for item in payload["data"]]
+    assert admin_user.email not in emails
 
 
 def test_staff_cannot_deactivate_any_account(client, staff_user, admin_user, db_session):

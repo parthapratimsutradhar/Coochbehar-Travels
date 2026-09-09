@@ -106,7 +106,19 @@ def _iter_google_client_ids() -> list[str]:
         cleaned = str(raw_value).strip()
         if cleaned:
             values.append(cleaned)
+    for attr in (
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_ID_WEB",
+        "GOOGLE_CLIENT_ID_ANDROID_RELEASE",
+        "GOOGLE_CLIENT_ID_ANDROID_DEBUG",
+    ):
+        val = getattr(settings, attr, None)
+        if val:
+            cleaned = str(val).strip()
+            if cleaned and cleaned not in values:
+                values.append(cleaned)
     return values
+
 
 
 def verify_google_id_token(id_token: str) -> dict | None:

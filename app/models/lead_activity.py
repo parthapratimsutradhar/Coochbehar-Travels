@@ -15,8 +15,8 @@ class LeadActivity(BaseEntity):
         index=True,
     )
 
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL"),
         nullable=True,
     )
 
@@ -43,4 +43,4 @@ class LeadActivity(BaseEntity):
 
 # ── Relationships ───────────────────────────────────────────────────────
     lead = relationship("Lead", back_populates="activities")
-    user = relationship("User", back_populates="lead_activities")
+    account = relationship("Account", back_populates="lead_activities")

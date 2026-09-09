@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import UUIDEntity
 
@@ -58,7 +58,7 @@ class Visitor(UUIDEntity):
     )
 
     customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("customers.id", ondelete="SET NULL"),
+        ForeignKey("accounts.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -77,7 +77,7 @@ class Visitor(UUIDEntity):
     )
 
 # ── Relationships ───────────────────────────────────────────────────────
-    customer = relationship("Customer", back_populates="visitors")
+    customer = relationship("Account", back_populates="visitors")
     sessions = relationship("VisitorSession", back_populates="visitor", cascade="all, delete-orphan")
     events = relationship("VisitorEvent", back_populates="visitor", cascade="all, delete-orphan")
     enquiries = relationship("Enquiry", back_populates="visitor")

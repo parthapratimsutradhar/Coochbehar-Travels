@@ -11,8 +11,7 @@ from app.api.deps import (
 )
 from app.core.config import settings
 from app.db.database import get_db
-from app.models.customer import Customer
-from app.models.user import User
+from app.models.account import Account
 from app.schemas.auth import (
     AuthSessionResponse,
     RefreshResponse,
@@ -198,4 +197,3 @@ def revoke_session(
             clear_refresh_cookie(response)
 
     return ActionResponse(message="Session revoked successfully.")
-

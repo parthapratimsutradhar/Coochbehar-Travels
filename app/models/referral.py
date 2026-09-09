@@ -33,7 +33,7 @@ class Referral(UUIDEntity):
 
     referrer_customer_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey(
-            "customers.id",
+            "accounts.id",
             ondelete="CASCADE",
         ),
         nullable=False,
@@ -42,7 +42,7 @@ class Referral(UUIDEntity):
 
     referred_customer_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey(
-            "customers.id",
+            "accounts.id",
             ondelete="CASCADE",
         ),
         nullable=False,
@@ -88,13 +88,13 @@ class Referral(UUIDEntity):
 # ── Relationships ──────────────────────────────────────────────
 
     referrer = relationship(
-        "Customer",
+        "Account",
         foreign_keys=[referrer_customer_id],
         back_populates="referrals_made",
     )
 
     referred_customer = relationship(
-        "Customer",
+        "Account",
         foreign_keys=[referred_customer_id],
         back_populates="referral_received",
     )

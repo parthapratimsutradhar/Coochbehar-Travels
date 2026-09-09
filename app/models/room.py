@@ -1,5 +1,5 @@
-
-from sqlalchemy import  Integer, String, Text, Numeric
+import uuid
+from sqlalchemy import ForeignKey, Integer, String, Text, Numeric
 from decimal import Decimal
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import ActiveEntity
@@ -7,6 +7,12 @@ from app.models.base import ActiveEntity
 
 class Room(ActiveEntity):
     __tablename__ = "rooms"
+    
+    hotel_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("hotels.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
 
     room_number: Mapped[str | None] = mapped_column(
         String(20),

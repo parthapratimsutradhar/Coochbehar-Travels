@@ -131,12 +131,15 @@ class LeadScoringService:
         if isinstance(enquiry, Enquiry):
             travel_date = enquiry.travel_date
             destination = enquiry.destination
-            pax_no = enquiry.pax_no
+            pax_no = getattr(enquiry, "pax_no", None)
+            if pax_no is None:
+                total_pax = (enquiry.adult_count or 0) + (enquiry.child_count or 0) + (enquiry.senior_count or 0)
+                pax_no = total_pax if total_pax > 0 else None
             package_id = enquiry.package_id
             variant_id = enquiry.variant_id
             phone = enquiry.enquirer_phone
             name = enquiry.enquirer_name
-            message = enquiry.message or enquiry.special_requirements
+            message = enquiry.message or getattr(enquiry, "special_requirements", None)
         else:
             travel_date = enquiry.get("travel_date")
             destination = enquiry.get("destination")

@@ -23,7 +23,7 @@ class Enquiry(BaseEntity):
     )
 
     customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("customers.id", ondelete="SET NULL"),
+        ForeignKey("accounts.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -107,12 +107,22 @@ class Enquiry(BaseEntity):
         nullable=True
     )
 
-    pax_no: Mapped[int | None] = mapped_column(
+    adult_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True
+    )
+    
+    child_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True
+    )
+    
+    senior_count: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True
     )
 
-    no_room: Mapped[int | None] = mapped_column(
+    room_count: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True
     )
@@ -126,6 +136,16 @@ class Enquiry(BaseEntity):
         String(50),
         nullable=True
     )
+    
+    budget_min: Mapped[float | None] = mapped_column(
+        Integer,
+        nullable=True
+    )
+    
+    budget_max: Mapped[float | None] = mapped_column(
+        Integer,
+        nullable=True
+    )
 
     special_requirements: Mapped[str | None] = mapped_column(
         Text,
@@ -133,9 +153,10 @@ class Enquiry(BaseEntity):
     )
 
 # ── Relationships ───────────────────────────────────────────────────────
-    visitor = relationship("Visitor", back_populates="enquiries")
-    customer = relationship("Customer", back_populates="enquiries")
+    visitor = relationship("Visitor", back_populates="enquiries")    
+    customer = relationship("Account", back_populates="enquiries")
     package = relationship("TourPackage", back_populates="enquiries")
     variant = relationship("TourVariant", back_populates="enquiries")
     lead = relationship("Lead", back_populates="enquiry", uselist=False)
-    customer_tour = relationship("CustomerTour", back_populates="enquiry", uselist=False)
+    booking = relationship("Booking", back_populates="enquiry", uselist=False)
+    quotations = relationship("Quotation", back_populates="enquiry")

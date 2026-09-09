@@ -18,7 +18,7 @@ class TourWishlist(UUIDEntity):
 
     customer_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey(
-            "customers.id",
+            "accounts.id",
             ondelete="CASCADE",
         ),
         nullable=False,
@@ -42,7 +42,7 @@ class TourWishlist(UUIDEntity):
 # ── Relationships ───────────────────────────────────────────────────
 
     customer = relationship(
-        "Customer",
+        "Account",
         back_populates="tour_wishlists",
     )
 

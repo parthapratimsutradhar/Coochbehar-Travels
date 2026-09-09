@@ -80,11 +80,11 @@ class OtpChallenge(UUIDEntity):
     )
 
     customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("customers.id", ondelete="SET NULL"),
+        ForeignKey("accounts.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
 
 # ── Relationships ───────────────────────────────────────────────────────
     visitor = relationship("Visitor")
-    customer = relationship("Customer")
+    customer = relationship("Account")

@@ -5,7 +5,7 @@ import os
 # Ensure project root is in sys.path when script is executed directly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.core.enums import UserRole
+from app.core.enums import AccountRole
 from app.db.database import SessionLocal
 from app.repository.user_repo import UserRepository
 
@@ -15,14 +15,14 @@ DEFAULT_ADMINS = [
         "name": "System Admin",
         "email": "ppsdev6@gmail.com",
         "mobile": "919876543210",
-        "role": UserRole.ADMIN,
+        "role": AccountRole.ADMIN,
         "user_code": "USR-ADMIN01",
     },
     {
         "name": "System Admin",
         "email": "modaksubham866@gmail.com",
         "mobile": "919876543211",
-        "role": UserRole.ADMIN,
+        "role": AccountRole.ADMIN,
         "user_code": "USR-ADMIN02",
     },
 ]
@@ -45,7 +45,7 @@ def seed_admins(
                     "name": name,
                     "email": email,
                     "mobile": mobile,
-                    "role": UserRole(role.upper()),
+                    "role": AccountRole(role.upper()),
                     "user_code": None,
                 }
             ]

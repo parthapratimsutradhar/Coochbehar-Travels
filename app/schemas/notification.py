@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import Field, ConfigDict
+from pydantic import ConfigDict, Field
 from app.schemas.base import SchemaBase
 
 
@@ -16,9 +16,26 @@ class NotificationResponse(SchemaBase):
     image_url: str | None = None
     action_url: str | None = None
     data: dict[str, Any] | None = None
-    is_read: bool
+    is_delivered: bool = False
+    delivered_at: datetime | None = None
+    is_read: bool = False
     read_at: datetime | None = None
     expires_at: datetime | None = None
+    created_at: datetime
+    recipient_id: UUID | None = None
+    recipient_ids: list[UUID] | None = None
+
+
+class NotificationCampaignResponse(SchemaBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    notification_id: UUID
+    recipient_id: UUID
+    is_delivered: bool = False
+    delivered_at: datetime | None = None
+    is_read: bool = False
+    read_at: datetime | None = None
     created_at: datetime
 
 

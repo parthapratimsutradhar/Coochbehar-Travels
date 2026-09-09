@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_customer
 from app.db.database import get_db
-from app.models.customer import Customer
+from app.models.account import Account
 from app.models.referral import Referral
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.referral import (
@@ -55,7 +55,7 @@ def validate_referral_invite(
 	summary="Get the authenticated customer's referral code",
 )
 def get_referral_code(
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 ) -> SuccessResponse[ReferralCodeResponse]:
 	return SuccessResponse(
 		message="Referral code fetched successfully",
@@ -74,7 +74,7 @@ def get_referral_code(
 def list_referral_history(
 	page: int = Query(1, ge=1),
 	page_size: int = Query(10, ge=1, le=100),
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> PaginatedResponse[ReferralHistoryItemResponse]:
 	query = (

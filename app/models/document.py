@@ -26,12 +26,11 @@ class Document(ActiveEntity):
         customer_id -> Customer the document belongs to.
 
     Upload audit:
-        uploaded_by_user_id -> Admin/staff who uploaded it.
-        uploaded_by_customer_id -> Customer who uploaded it.
+        uploaded_by_account_id -> Admin/staff, Customer who uploaded it.
+        uploaded_at -> Timestamp of upload.
 
     Delete audit:
-        deleted_by_user_id -> Admin/staff who deleted it.
-        deleted_by_customer_id -> Customer who deleted it.
+        deleted_by_account_id -> Admin/staff, Customer who deleted it.
 
     Soft deletion:
         is_active = False
@@ -59,44 +58,29 @@ class Document(ActiveEntity):
         nullable=True,
     )
 
-    # ── Owner ──────────────────────────────────────────────────────
-
     customer_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(
-            "customers.id",
+            "accounts.id",
             ondelete="SET NULL",
         ),
         nullable=True,
         index=True,
     )
 
-    # ── Upload audit ──────────────────────────────────────────────
-
-    uploaded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+    uploaded_by_account_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(
-            "users.id",
+            "accounts.id",
             ondelete="SET NULL",
         ),
         nullable=True,
         index=True,
     )
-
-    uploaded_by_customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey(
-            "customers.id",
-            ondelete="SET NULL",
-        ),
-        nullable=True,
-        index=True,
-    )
-
+    
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
     )
-
-    # ── File information ──────────────────────────────────────────
 
     file_url: Mapped[str] = mapped_column(
         String(1000),
@@ -118,59 +102,30 @@ class Document(ActiveEntity):
         nullable=True,
     )
 
-    # ── Delete audit ──────────────────────────────────────────────
-
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    deleted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+    deleted_by_account_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(
-            "users.id",
+            "accounts.id",
             ondelete="SET NULL",
         ),
         nullable=True,
         index=True,
     )
 
-    deleted_by_customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey(
-            "customers.id",
-            ondelete="SET NULL",
-        ),
-        nullable=True,
-        index=True,
-    )
+# ── Relationships ─────────────────────────────────────────────
 
-    # ── Relationships ─────────────────────────────────────────────
-
-    customer = relationship(
-        "Customer",
-        foreign_keys=[customer_id],
-        back_populates="documents",
-    )
-
-    uploaded_by_user = relationship(
-        "User",
-        foreign_keys=[uploaded_by_user_id],
+    uploaded_by_account = relationship(
+        "Account",
+        foreign_keys=[uploaded_by_account_id],
         back_populates="documents_uploaded",
     )
 
-    uploaded_by_customer = relationship(
-        "Customer",
-        foreign_keys=[uploaded_by_customer_id],
-        back_populates="documents_uploaded",
-    )
-
-    deleted_by_user = relationship(
-        "User",
-        foreign_keys=[deleted_by_user_id],
-        back_populates="documents_deleted",
-    )
-
-    deleted_by_customer = relationship(
-        "Customer",
-        foreign_keys=[deleted_by_customer_id],
+    deleted_by_account = relationship(
+        "Account",
+        foreign_keys=[deleted_by_account_id],
         back_populates="documents_deleted",
     )

@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_customer
 from app.core.messages.error import PackageError, ReviewError
-from app.core.enums import CustomerTourStatus, EnquiryStatus
+from app.core.enums import BookingStatus, CustomerTourStatus, EnquiryStatus
 from app.db.database import get_db
-from app.models.customer import Customer
-from app.models.customer_tour import CustomerTour
+from app.models.account import Account
+from app.models.booking import Booking
 from app.models.enquiry import Enquiry
 from app.models.review import Review
 from app.models.tour_package import TourPackage
@@ -49,10 +49,10 @@ def _eligible_enquiry_query(db: Session, customer_id: UUID, package_id: UUID):
 
 
 def _has_completed_customer_tour(db: Session, customer_id: UUID, package_id: UUID) -> bool:
-	return db.query(CustomerTour.id).filter(
-		CustomerTour.customer_id == customer_id,
-		CustomerTour.package_id == package_id,
-		CustomerTour.status == CustomerTourStatus.COMPLETED,
+	return db.query(Booking.id).filter(
+		Booking.customer_id == customer_id,
+		Booking.package_id == package_id,
+		Booking.status.in_([BookingStatus.COMPLETED, BookingStatus.TRAVELLED]),
 	).first() is not None
 
 
@@ -70,10 +70,18 @@ def list_package_reviews(
 	page_size: int = Query(10, ge=1, le=100),
 	db: Session = Depends(get_db),
 ) -> PaginatedResponse[ReviewItemResponse]:
-	package = db.query(TourPackage).filter(TourPackage.slug == package_slug).first()
+	package = None
+	try:
+		pkg_uuid = UUID(package_slug)
+		package = db.query(TourPackage).filter(TourPackage.id == pkg_uuid).first()
+	except (ValueError, TypeError):
+		pass
+	if package is None:
+		package = db.query(TourPackage).filter(TourPackage.slug == package_slug).first()
 	if package is None:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PackageError.PACKAGE_NOT_FOUND)
 	package_id = package.id
+
 
 	query = (
 		db.query(Review)
@@ -123,7 +131,7 @@ def list_package_reviews(
 )
 def get_review_eligibility(
 	package_slug: str,
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> SuccessResponse[ReviewEligibilityResponse]:
 	package = db.query(TourPackage).filter(TourPackage.slug == package_slug).first()
@@ -168,7 +176,7 @@ def get_review_eligibility(
 )
 async def create_review(
 	payload: ReviewCreate,
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> ActionResponse:
 	package = db.query(TourPackage).filter(TourPackage.id == payload.package_id).first()
@@ -253,7 +261,7 @@ async def create_review(
 def update_review(
 	review_id: UUID,
 	payload: ReviewUpdate,
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> SuccessResponse[ReviewResponse]:
 	review = db.query(Review).filter(
@@ -287,7 +295,7 @@ def update_review(
 )
 def delete_review(
 	review_id: UUID,
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> ActionResponse:
 	review = db.query(Review).filter(

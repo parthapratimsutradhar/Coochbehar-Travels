@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import Field, ConfigDict, EmailStr
+from pydantic import Field, ConfigDict, EmailStr, AliasChoices
 from app.schemas.base import SchemaBase
 
 from app.core.enums import LeadSource
@@ -16,7 +16,6 @@ class CustomerBase(SchemaBase):
     emergency_contact_mobile: str | None = Field(default=None, max_length=20)
     profile_pic: str | None = Field(default=None, max_length=500, description="Customer avatar image URL")
     source: LeadSource = LeadSource.WEBSITE
-    is_imported: bool = False
     is_active: bool = True
 
 
@@ -33,7 +32,6 @@ class CustomerUpdate(SchemaBase):
     emergency_contact_mobile: str | None = Field(default=None, max_length=20)
     profile_pic: str | None = Field(default=None, max_length=500)
     source: LeadSource | None = None
-    is_imported: bool | None = None
     is_active: bool | None = None
 
 
@@ -41,6 +39,6 @@ class CustomerResponse(CustomerBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    customer_code: str
+    customer_code: str = Field(validation_alias=AliasChoices("account_code", "customer_code"))
     created_at: datetime
     updated_at: datetime

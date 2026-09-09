@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, set_refresh_cookie
 from app.core.config import settings
 from app.db.database import get_db
-from app.models.user import User
+from app.models.account import Account
 from app.schemas.auth import (
     AdminGoogleAuthSchema,
     AdminOtpRequestSchema,
@@ -129,7 +129,7 @@ async def google_login_admin(
     summary="Get Authenticated Admin Profile",
 )
 def get_current_admin_profile(
-    current_user: User = Depends(get_current_user),
+    current_user: Account = Depends(get_current_user),
 ):
     return SuccessResponse(
         message="Admin profile fetched successfully.",

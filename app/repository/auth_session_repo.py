@@ -1,10 +1,9 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import or_, select, update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models.auth_session import AuthSession
-from app.utils.security import normalize_role_value
 
 
 class AuthSessionRepository:
@@ -17,6 +16,7 @@ class AuthSessionRepository:
         self,
         user_id: uuid.UUID | None = None,
         customer_id: uuid.UUID | None = None,
+        account_id: uuid.UUID | None = None,
         actor_type: str = "ADMIN",
         refresh_token_hash: str = "",
         expires_at: datetime | None = None,
@@ -25,11 +25,9 @@ class AuthSessionRepository:
     ) -> AuthSession:
         """Create a new server-side authentication session."""
         now = datetime.now(timezone.utc)
-        normalized_actor_type = normalize_role_value(actor_type, default="ADMIN")
+        resolved_account_id = account_id or user_id or customer_id
         session = AuthSession(
-            user_id=user_id,
-            customer_id=customer_id,
-            actor_type=normalized_actor_type,
+            account_id=resolved_account_id,
             refresh_token_hash=refresh_token_hash,
             created_at=now,
             last_used_at=now,
@@ -57,21 +55,23 @@ class AuthSessionRepository:
         self,
         user_id: uuid.UUID | None = None,
         customer_id: uuid.UUID | None = None,
+        account_id: uuid.UUID | None = None,
     ) -> list[AuthSession]:
         """Fetch all currently non-revoked, unexpired sessions for a user or customer."""
         now = datetime.now(timezone.utc)
-        stmt = select(AuthSession).where(
-            AuthSession.revoked_at.is_(None),
-            AuthSession.expires_at > now,
-        )
-        if user_id:
-            stmt = stmt.where(AuthSession.user_id == user_id)
-        elif customer_id:
-            stmt = stmt.where(AuthSession.customer_id == customer_id)
-        else:
+        target_id = account_id or user_id or customer_id
+        if not target_id:
             return []
 
-        stmt = stmt.order_by(AuthSession.last_used_at.desc())
+        stmt = (
+            select(AuthSession)
+            .where(
+                AuthSession.revoked_at.is_(None),
+                AuthSession.expires_at > now,
+                AuthSession.account_id == target_id,
+            )
+            .order_by(AuthSession.last_used_at.desc())
+        )
         return list(self.db.execute(stmt).scalars().all())
 
     def revoke_session(self, session: AuthSession) -> None:
@@ -85,17 +85,23 @@ class AuthSessionRepository:
         self,
         user_id: uuid.UUID | None = None,
         customer_id: uuid.UUID | None = None,
+        account_id: uuid.UUID | None = None,
         exclude_session_id: uuid.UUID | None = None,
     ) -> int:
         """Revoke active sessions, optionally preserving one session."""
         now = datetime.now(timezone.utc)
-        stmt = update(AuthSession).where(AuthSession.revoked_at.is_(None)).values(revoked_at=now)
-        if user_id:
-            stmt = stmt.where(AuthSession.user_id == user_id)
-        elif customer_id:
-            stmt = stmt.where(AuthSession.customer_id == customer_id)
-        else:
+        target_id = account_id or user_id or customer_id
+        if not target_id:
             return 0
+
+        stmt = (
+            update(AuthSession)
+            .where(
+                AuthSession.revoked_at.is_(None),
+                AuthSession.account_id == target_id,
+            )
+            .values(revoked_at=now)
+        )
         if exclude_session_id:
             stmt = stmt.where(AuthSession.id != exclude_session_id)
 
@@ -123,9 +129,7 @@ class AuthSessionRepository:
 
         # Create new rotated session keeping original absolute expiration
         new_session = AuthSession(
-            user_id=old_session.user_id,
-            customer_id=old_session.customer_id,
-            actor_type=old_session.actor_type,
+            account_id=old_session.account_id,
             refresh_token_hash=new_token_hash,
             created_at=old_session.created_at,  # preserve original login timestamp
             last_used_at=now,

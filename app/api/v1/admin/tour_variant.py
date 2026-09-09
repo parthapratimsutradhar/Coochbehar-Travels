@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin, get_current_admin_only
 from app.db.database import get_db
-from app.models.user import User
+from app.models.account import Account
 from app.schemas.admin_tour import (
     AdminTourVariantItem,
     TourVariantCreateRequest,
@@ -29,7 +29,7 @@ def list_admin_tour_variants(
     page_size: int = Query(10, ge=1, le=100),
     tour_id: uuid.UUID | None = Query(None),
     is_active: bool | None = Query(None),
-    current_user: User = Depends(get_current_admin),
+    current_user: Account = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     del current_user
@@ -56,7 +56,7 @@ def list_admin_tour_variants(
 )
 def get_admin_tour_variant(
     variant_id: uuid.UUID,
-    current_user: User = Depends(get_current_admin),
+    current_user: Account = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     del current_user
@@ -72,7 +72,7 @@ def get_admin_tour_variant(
 )
 def create_admin_tour_variant(
     payload: TourVariantCreateRequest,
-    current_user: User = Depends(get_current_admin_only),
+    current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user
@@ -88,7 +88,7 @@ def create_admin_tour_variant(
 def update_admin_tour_variant(
     variant_id: uuid.UUID,
     payload: TourVariantUpdateRequest,
-    current_user: User = Depends(get_current_admin_only),
+    current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user
@@ -103,7 +103,7 @@ def update_admin_tour_variant(
 )
 def delete_admin_tour_variant(
     variant_id: uuid.UUID,
-    current_user: User = Depends(get_current_admin_only),
+    current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user

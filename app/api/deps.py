@@ -5,12 +5,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.enums import UserRole
+from app.core.enums import AccountRole
 from app.core.messages.error import AccessError, TokenError
 from app.core.messages.validation import AuthError
 from app.db.database import get_db
-from app.models.customer import Customer
-from app.models.user import User
+from app.models.account import Account
 from app.repository.customer_repo import CustomerRepository
 from app.repository.user_repo import UserRepository
 from app.utils.security import decode_access_token
@@ -50,7 +49,7 @@ def _get_token_payload(credentials: HTTPAuthorizationCredentials | None) -> dict
 def get_current_admin_or_staff(
     credentials: HTTPAuthorizationCredentials | None = Depends(security_bearer),
     db: Session = Depends(get_db),
-) -> User:
+) -> Account:
     """Extract and validate JWT access token for an Admin / Staff user."""
     payload = _get_token_payload(credentials)
     actor_type = payload.get("role", "CUSTOMER").upper()
@@ -91,10 +90,10 @@ get_current_user = get_current_admin_or_staff
 
 
 def get_current_admin(
-    current_user: User = Depends(get_current_user),
-) -> User:
+    current_user: Account = Depends(get_current_user),
+) -> Account:
     """Ensure authenticated user has ADMIN or STAFF role."""
-    if current_user.role not in (UserRole.ADMIN, UserRole.STAFF):
+    if current_user.role not in (AccountRole.ADMIN, AccountRole.STAFF):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=AuthError.ACCESS_DENIED,
@@ -103,10 +102,10 @@ def get_current_admin(
 
 
 def get_current_admin_only(
-    current_user: User = Depends(get_current_user),
-) -> User:
+    current_user: Account = Depends(get_current_user),
+) -> Account:
     """Ensure authenticated user has the ADMIN role."""
-    if current_user.role != UserRole.ADMIN:
+    if current_user.role != AccountRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=AccessError.ADMIN_REQUIRED,
@@ -117,7 +116,7 @@ def get_current_admin_only(
 def get_current_customer(
     credentials: HTTPAuthorizationCredentials | None = Depends(security_bearer),
     db: Session = Depends(get_db),
-) -> Customer:
+) -> Account:
     """Extract and validate JWT access token for an Enduser / Customer."""
     payload = _get_token_payload(credentials)
     actor_type = payload.get("role", "CUSTOMER").upper()
@@ -162,7 +161,7 @@ def get_current_customer(
 def get_optional_customer(
     credentials: HTTPAuthorizationCredentials | None = Depends(security_bearer),
     db: Session = Depends(get_db),
-) -> Customer | None:
+) -> Account | None:
     """Return the authenticated customer when a bearer token is provided."""
     if not credentials or not credentials.credentials:
         return None
@@ -172,7 +171,7 @@ def get_optional_customer(
 def get_current_actor(
     credentials: HTTPAuthorizationCredentials | None = Depends(security_bearer),
     db: Session = Depends(get_db),
-) -> tuple[User | Customer, str]:
+) -> tuple[Account, str]:
     """Universal actor resolver: returns (User or Customer, actor_type)."""
     payload = _get_token_payload(credentials)
     actor_type = payload.get("role", "CUSTOMER").upper()

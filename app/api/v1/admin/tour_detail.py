@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin, get_current_admin_only
 from app.db.database import get_db
 from app.models.tour_variant import TourVariant
-from app.models.user import User
+from app.models.account import Account
 from app.schemas.admin_tour import (
     AdminTourDetailPayload,
     TourDetailCreateRequest,
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/admin/tour-details", tags=["Admin Tour Details"])
 )
 def get_admin_tour_details(
     detail_id: uuid.UUID,
-    current_user: User = Depends(get_current_admin),
+    current_user: Account = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     del current_user
@@ -44,7 +44,7 @@ def get_admin_tour_details(
 )
 def create_admin_tour_detail(
     payload: TourDetailCreateRequest,
-    current_user: User = Depends(get_current_admin_only),
+    current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user
@@ -60,7 +60,7 @@ def create_admin_tour_detail(
 def update_admin_tour_detail(
     detail_id: uuid.UUID,
     payload: TourDetailUpdateRequest,
-    current_user: User = Depends(get_current_admin_only),
+    current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user
@@ -75,7 +75,7 @@ def update_admin_tour_detail(
 )
 def delete_admin_tour_detail(
     detail_id: uuid.UUID,
-    current_user: User = Depends(get_current_admin_only),
+    current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.enums import TourType
 from app.api.deps import get_optional_customer
 from app.db.database import get_db
-from app.models.customer import Customer
+from app.models.account import Account
 from app.schemas.pagination import PaginatedResponse
 from app.schemas.response import SuccessResponse, ErrorResponse
 from app.schemas.tour_package import (
@@ -102,7 +102,7 @@ def list_tour_packages(
         "desc",
         description="Sort direction: asc or desc",
     ),
-    current_customer: Customer | None = Depends(get_optional_customer),
+    current_customer: Account | None = Depends(get_optional_customer),
     db: Session = Depends(get_db),
 ):
     """Return a paginated, filtered list of tour packages."""
@@ -139,7 +139,7 @@ def list_tour_packages(
 )
 def get_tour_package(
     slug: str,
-    current_customer: Customer | None = Depends(get_optional_customer),
+    current_customer: Account | None = Depends(get_optional_customer),
     db: Session = Depends(get_db),
 ):
     """Fetch a single tour package by its URL slug."""

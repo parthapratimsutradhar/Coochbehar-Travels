@@ -1,0 +1,228 @@
+from decimal import Decimal
+import uuid
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.core.enums import BookingSource, BookingStatus, LeadSource, PaymentStatus, TransactionType
+from app.models.account import Account
+from app.models.booking import Booking
+from app.repository.booking_repo import BookingRepository
+from app.repository.customer_repo import CustomerRepository
+from app.repository.payment_repo import PaymentRepository
+from app.schemas.booking import (
+    BookingCostCreate,
+    BookingDetailResponse,
+    BookingResponse,
+    BookingTravelerCreate,
+    OfflineBookingCreate,
+    OnlineBookingCreate,
+)
+
+
+class BookingService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+        self.booking_repo = BookingRepository(db)
+        self.customer_repo = CustomerRepository(db)
+        self.payment_repo = PaymentRepository(db)
+
+    def create_offline_booking(self, payload: OfflineBookingCreate, staff_user: Account) -> Booking:
+        # 1. Resolve or create customer account
+        customer = None
+        if payload.customer_id:
+            customer = self.customer_repo.get_by_id(payload.customer_id)
+        if not customer:
+            customer = self.customer_repo.get_by_mobile(payload.mobile)
+        if not customer and payload.email:
+            customer = self.customer_repo.get_by_email(payload.email)
+        if not customer:
+            customer = self.customer_repo.create_customer(
+                name=payload.customer_name,
+                mobile=payload.mobile,
+                email=payload.email,
+                source=LeadSource.OFFLINE,
+            )
+
+        booking_code = f"BK-OFF-{uuid.uuid4().hex[:6].upper()}"
+        total_amount = payload.total_selling_price
+        advance = min(payload.advance_received, total_amount)
+        due_amount = max(Decimal(0), total_amount - advance)
+
+        status_val = (
+            BookingStatus.FULLY_PAID
+            if due_amount == Decimal(0) and advance > Decimal(0)
+            else (BookingStatus.PARTIALLY_PAID if advance > Decimal(0) else BookingStatus.CONFIRMED)
+        )
+
+        booking_data = {
+            "booking_code": booking_code,
+            "customer_id": customer.id,
+            "package_id": payload.package_id,
+            "variant_id": payload.variant_id,
+            "departure_id": payload.departure_id,
+            "booking_type": "PACKAGE" if payload.package_id else "CUSTOM",
+            "source": BookingSource.OFFLINE,
+            "sales_account_id": payload.sales_account_id or staff_user.id,
+            "status": status_val,
+            "adult_count": payload.adult_count,
+            "child_count": payload.child_count,
+            "senior_count": payload.senior_count,
+            "subtotal": total_amount,
+            "discount_amount": Decimal(0),
+            "total_amount": total_amount,
+            "paid_amount": advance,
+            "due_amount": due_amount,
+            "notes": payload.special_notes,
+            "created_by": staff_user.id,
+        }
+
+        travellers_data = [t.model_dump() for t in payload.travellers]
+        booking = self.booking_repo.create(booking_data, travellers=travellers_data)
+
+        # 2. Record advance payment if present
+        if advance > Decimal(0):
+            self.payment_repo.create({
+                "booking_id": booking.id,
+                "amount": advance,
+                "currency": "INR",
+                "transaction_type": TransactionType.PAYMENT,
+                "payment_method": payload.payment_mode,
+                "status": PaymentStatus.SUCCESS,
+                "notes": f"Initial advance payment for offline booking {booking_code}",
+                "recorded_by_account_id": staff_user.id,
+            })
+
+        return booking
+
+    def create_online_booking(self, payload: OnlineBookingCreate, customer: Account) -> Booking:
+        booking_code = f"BK-{uuid.uuid4().hex[:8].upper()}"
+        booking_data = {
+            "booking_code": booking_code,
+            "customer_id": customer.id,
+            "package_id": payload.package_id,
+            "variant_id": payload.variant_id,
+            "departure_id": payload.departure_id,
+            "booking_type": "ONLINE",
+            "source": payload.source or BookingSource.WEBSITE,
+            "status": BookingStatus.TENTATIVE,
+            "adult_count": payload.adult_count,
+            "child_count": payload.child_count,
+            "senior_count": payload.senior_count,
+            "subtotal": Decimal(0),
+            "discount_amount": Decimal(0),
+            "total_amount": Decimal(0),
+            "paid_amount": Decimal(0),
+            "due_amount": Decimal(0),
+            "notes": payload.notes,
+            "created_by": customer.id,
+        }
+        travellers_data = [t.model_dump() for t in payload.travellers]
+        return self.booking_repo.create(booking_data, travellers=travellers_data)
+
+    def get_booking(self, booking_id: uuid.UUID) -> Booking:
+        booking = self.booking_repo.get_by_id(booking_id)
+        if not booking:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
+        return booking
+
+    def get_booking_detail(self, booking_id: uuid.UUID) -> BookingDetailResponse:
+        booking = self.get_booking(booking_id)
+        costs = self.booking_repo.get_costs_for_booking(booking.id)
+        total_costs = sum((c.actual_amount for c in costs), Decimal(0))
+        gross_profit = booking.total_amount - total_costs
+        margin = (
+            round(float((gross_profit / booking.total_amount) * 100), 2)
+            if booking.total_amount > Decimal(0)
+            else 0.0
+        )
+
+        customer = booking.customer
+        return BookingDetailResponse(
+            id=booking.id,
+            booking_code=booking.booking_code,
+            customer_id=booking.customer_id,
+            enquiry_id=booking.enquiry_id,
+            package_id=booking.package_id,
+            variant_id=booking.variant_id,
+            departure_id=booking.departure_id,
+            quotation_id=booking.quotation_id,
+            booking_type=booking.booking_type,
+            source=booking.source,
+            sales_account_id=booking.sales_account_id,
+            status=booking.status,
+            adult_count=booking.adult_count,
+            child_count=booking.child_count,
+            senior_count=booking.senior_count,
+            subtotal=booking.subtotal,
+            discount_amount=booking.discount_amount,
+            total_amount=booking.total_amount,
+            paid_amount=booking.paid_amount,
+            due_amount=booking.due_amount,
+            notes=booking.notes,
+            created_by=booking.created_by,
+            created_at=booking.created_at,
+            updated_at=booking.updated_at,
+            customer_name=customer.name if customer else None,
+            customer_mobile=customer.mobile if customer else None,
+            gross_profit=gross_profit,
+            profit_margin=margin,
+            travellers=[t for t in booking.travellers],
+            costs=[c for c in costs],
+            status_history=[h for h in booking.status_history],
+        )
+
+    def list_all_bookings(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        status: BookingStatus | None = None,
+        source: BookingSource | None = None,
+        search: str | None = None,
+    ) -> dict:
+        items, total = self.booking_repo.list_all(
+            page=page, page_size=page_size, status=status, source=source, search=search
+        )
+        total_pages = (total + page_size - 1) // page_size if total else 0
+        return {
+            "items": items,
+            "page": page,
+            "page_size": page_size,
+            "total_items": total,
+            "total_pages": total_pages,
+        }
+
+    def list_my_bookings(
+        self,
+        customer_id: uuid.UUID,
+        month: int | None = None,
+        year: int | None = None,
+        status: BookingStatus | None = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[Booking]:
+        return self.booking_repo.list_for_customer(
+            customer_id=customer_id, month=month, year=year, status=status, skip=skip, limit=limit
+        )
+
+    def update_booking_status(
+        self,
+        booking_id: uuid.UUID,
+        new_status: BookingStatus,
+        reason: str | None = None,
+    ) -> Booking:
+        booking = self.get_booking(booking_id)
+        return self.booking_repo.update_status(booking, new_status, reason=reason)
+
+    def add_booking_cost(self, booking_id: uuid.UUID, payload: BookingCostCreate) -> dict:
+        booking = self.get_booking(booking_id)
+        cost = self.booking_repo.add_cost(booking.id, payload.model_dump())
+        return cost
+
+    def add_traveller(self, booking_id: uuid.UUID, payload: BookingTravelerCreate) -> dict:
+        booking = self.get_booking(booking_id)
+        from app.models.booking_traveler import BookingTraveler
+        traveler = BookingTraveler(booking_id=booking.id, **payload.model_dump())
+        self.db.add(traveler)
+        self.db.commit()
+        self.db.refresh(traveler)
+        return traveler

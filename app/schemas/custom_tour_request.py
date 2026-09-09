@@ -13,12 +13,15 @@ class CustomTourRequestBase(SchemaBase):
     travel_date: date | None = None
     travel_duration_day: int | None = Field(default=None, ge=0)
     travel_duration_night: int | None = Field(default=None, ge=0)
-    pax_no: int = Field(default=4, ge=1)
-    no_room: int = Field(default=2, ge=1)
+    adult_count: int | None = Field(default=None, ge=0)
+    child_count: int | None = Field(default=None, ge=0)
+    senior_count: int | None = Field(default=None, ge=0)
+    room_count: int | None = Field(default=None, ge=0)
+    pax_no: int | None = Field(default=4, ge=1)
+    no_room: int | None = Field(default=2, ge=1)
     vehicle_type: str | None = Field(default=None, max_length=50)
     meal_plan: str | None = Field(default=None, max_length=50)
     special_requirements: str | None = None
-
 
 
 class CustomTourRequestCreate(SchemaBase):
@@ -28,12 +31,14 @@ class CustomTourRequestCreate(SchemaBase):
     travel_date: date | None = None
     travel_duration_day: int | None = Field(default=None, ge=0)
     travel_duration_night: int | None = Field(default=None, ge=0)
-
-    pax_no: int = Field(default=4, ge=1)
-    no_room: int = Field(default=2, ge=1)
-
-    vehicle_type: VehicleType | None = None
-    meal_plan: MealPlan | None = None
+    adult_count: int | None = None
+    child_count: int | None = None
+    senior_count: int | None = None
+    room_count: int | None = None
+    pax_no: int | None = 4
+    no_room: int | None = 2
+    vehicle_type: VehicleType | str | None = None
+    meal_plan: MealPlan | str | None = None
     special_requirements: str | None = None
     enquiry_type: Literal[
         EnquiryType.CUSTOM_TOUR,
@@ -50,9 +55,9 @@ class CustomTourRequestResponse(CustomTourRequestBase):
 
     id: UUID
     request_code: str
-    enquiry_id: UUID | None
-    visitor_id: UUID | None
-    customer_id: UUID | None
-    status: str
+    enquiry_id: UUID | None = None
+    visitor_id: UUID | None = None
+    customer_id: UUID | None = None
+    status: str = "NEW"
     created_at: datetime
     updated_at: datetime

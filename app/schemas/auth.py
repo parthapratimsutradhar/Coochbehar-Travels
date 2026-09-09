@@ -1,8 +1,8 @@
 from datetime import datetime
 from uuid import UUID
-from pydantic import Field, ConfigDict, field_validator
+from pydantic import Field, ConfigDict, field_validator, AliasChoices
 from app.schemas.base import SchemaBase
-from app.core.enums import AdminOtpPurpose, CustomerOtpPurpose, UserRole
+from app.core.enums import AdminOtpPurpose, CustomerOtpPurpose, AccountRole
 from app.core.config import settings
 
 
@@ -148,11 +148,11 @@ class UserResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    user_code: str
+    user_code: str = Field(validation_alias=AliasChoices("account_code", "user_code"))
     name: str
     email: str
     mobile: str
-    role: UserRole
+    role: AccountRole
     is_active: bool
     profile_pic: str | None = None
     last_login: datetime | None = None

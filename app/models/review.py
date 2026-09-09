@@ -31,7 +31,7 @@ class Review(ActiveEntity):
     )
 
     customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("customers.id", ondelete="SET NULL"),
+        ForeignKey("accounts.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -75,6 +75,6 @@ class Review(ActiveEntity):
     )
 
     customer = relationship(
-        "Customer",
+        "Account",
         back_populates="reviews",
     )

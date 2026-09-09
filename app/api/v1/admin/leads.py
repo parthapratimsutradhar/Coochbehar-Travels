@@ -208,7 +208,7 @@ def log_lead_activity(
 
     activity = LeadActivity(
         lead_id=lead_id,
-        user_id=payload.user_id,
+        account_id=payload.account_id or payload.user_id,
         channel=payload.channel,
         activity_type=payload.activity_type,
         notes=payload.notes,

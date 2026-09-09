@@ -1,9 +1,10 @@
 from enum import Enum
 
 
-class UserRole(str, Enum):
+class AccountRole(str, Enum):
     ADMIN = "ADMIN"
-    STAFF = "STAFF"
+    STAFF = "STAFF" 
+    CUSTOMER = "CUSTOMER"
 
 
 class ActorType(str, Enum):
@@ -126,3 +127,85 @@ class DocumentType(str, Enum):
     ADDRESS_PROOF = "ADDRESS_PROOF"
     TOUR_DOCUMENT = "TOUR_DOCUMENT"
     OTHER = "OTHER"    
+    
+    
+class OfferDiscountType(str, Enum):
+    PERCENTAGE = "PERCENTAGE"
+    FIXED = "FIXED"
+    
+    
+class OfferStatus(str, Enum):
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    EXPIRED = "EXPIRED"
+    DISABLED = "DISABLED"        
+    
+
+class PaymentStatus(str, Enum):
+    PENDING = "PENDING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    REFUNDED = "REFUNDED"
+
+
+class PaymentMethod(str, Enum):
+    RAZORPAY = "RAZORPAY"
+    UPI = "UPI"
+    CASH = "CASH"
+    BANK_TRANSFER = "BANK_TRANSFER"
+    CARD = "CARD"
+    OFFLINE = "OFFLINE"
+    OTHER = "OTHER"
+
+class TransactionType(str, Enum):
+    PAYMENT = "PAYMENT"
+    REFUND = "REFUND"  
+    
+class BookingStatus(str, Enum):
+    TENTATIVE = "TENTATIVE"
+    CONFIRMED = "CONFIRMED"
+    PARTIALLY_PAID = "PARTIALLY_PAID"
+    FULLY_PAID = "FULLY_PAID"
+    TRAVELLED = "TRAVELLED"
+    COMPLETED = "COMPLETED"
+    ON_HOLD = "ON_HOLD"
+    CANCELLED = "CANCELLED"
+    REFUNDED = "REFUNDED"    
+    
+class BookingSource(str, Enum):
+    APP = "APP"
+    WEBSITE = "WEBSITE"
+    WHATSAPP = "WHATSAPP"
+    FACEBOOK = "FACEBOOK"
+    INSTAGRAM = "INSTAGRAM"
+    PHONE = "PHONE"
+    WALK_IN = "WALK_IN"
+    EXISTING_CUSTOMER = "EXISTING_CUSTOMER"
+    REFERRAL = "REFERRAL"
+    B2B = "B2B"
+    OFFLINE = "OFFLINE"
+    OTHER = "OTHER"      
+    
+    
+class QuotationStatus(str, Enum):
+    DRAFT = "DRAFT"
+    SENT = "SENT"
+    VIEWED = "VIEWED"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED" 
+    
+        
+class QuotationItemType(str, Enum):
+    HOTEL = "hotel"
+    TRANSPORT = "transport"
+    FLIGHT = "flight"
+    TRAIN = "train"
+    MEAL = "meal"
+    ACTIVITY = "activity"
+    GUIDE = "guide"
+    PERMIT = "permit"
+    TRANSFER = "transfer"
+    OTHER = "other"

@@ -30,49 +30,48 @@ CATEGORY_SCORES: dict[EventCategory, int] = {
 
 # ── Event name → category mapping ────────────────────────────────────
 EVENT_CATEGORY_MAP: dict[str, EventCategory] = {
-    # Page views
+    # Passive
     "page_view": EventCategory.PAGE_VIEW,
-    "session_start": EventCategory.PAGE_VIEW,
 
-    # Engagement signals
+    # Engagement
     "scroll_depth_50": EventCategory.ENGAGEMENT,
     "scroll_depth_75": EventCategory.ENGAGEMENT,
     "scroll_depth_100": EventCategory.ENGAGEMENT,
     "time_on_page_30s": EventCategory.ENGAGEMENT,
     "time_on_page_60s": EventCategory.ENGAGEMENT,
     "video_play": EventCategory.ENGAGEMENT,
+    "gallery_view": EventCategory.ENGAGEMENT,
+    "review_read": EventCategory.ENGAGEMENT,
 
-    # Interest indicators
+    # Interest
     "tour_package_view": EventCategory.INTEREST,
     "tour_variant_view": EventCategory.INTEREST,
-    "gallery_view": EventCategory.INTEREST,
     "itinerary_view": EventCategory.INTEREST,
-    "review_read": EventCategory.INTEREST,
     "compare_packages": EventCategory.INTEREST,
     "wishlist_add": EventCategory.INTEREST,
-    "wishlist_remove": EventCategory.ENGAGEMENT,
-    "tour_wishlist_add": EventCategory.INTEREST,
-    "tour_wishlist_remove": EventCategory.ENGAGEMENT,
     "add_to_wishlist": EventCategory.INTEREST,
-    "remove_from_wishlist": EventCategory.ENGAGEMENT,
 
-    # Intent signals
+    # Intent
     "enquiry_form_open": EventCategory.INTENT,
     "enquiry_form_fill": EventCategory.INTENT,
     "price_check": EventCategory.INTENT,
     "date_check": EventCategory.INTENT,
+    "availability_check": EventCategory.INTENT,
+    "tour_variant_select": EventCategory.INTENT,
+    "traveller_count_change": EventCategory.INTENT,
     "whatsapp_click": EventCategory.INTENT,
     "phone_click": EventCategory.INTENT,
 
-    # Conversion events
+    # Conversion
     "enquiry_submit": EventCategory.CONVERSION,
     "booking_enquiry": EventCategory.CONVERSION,
     "custom_tour_request": EventCategory.CONVERSION,
 
-    # Identity events
+    # Identity
     "login": EventCategory.IDENTITY,
     "signup": EventCategory.IDENTITY,
     "google_oauth": EventCategory.IDENTITY,
+    "contact_identified": EventCategory.IDENTITY,
 }
 
 # Default score for unrecognised event names

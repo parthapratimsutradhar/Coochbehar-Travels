@@ -2,9 +2,7 @@ import uuid
 from typing import Any
 from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, reconstructor
 from app.models.base import UUIDEntity
 
 
@@ -46,11 +44,6 @@ class TourDetail(UUIDEntity):
         nullable=False,
     )
     
-    departures_dates: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB,
-        nullable=False,
-    )  
-    
     itinerary: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
@@ -66,3 +59,16 @@ class TourDetail(UUIDEntity):
         "TourVariant",
         back_populates="details",
     )
+
+    @reconstructor
+    def _normalize_json_collections(self) -> None:
+        for field in (
+            "gallery",
+            "highlights",
+            "inclusions",
+            "exclusions",
+            "itinerary",
+            "route_stops",
+        ):
+            if getattr(self, field) is None:
+                setattr(self, field, [])

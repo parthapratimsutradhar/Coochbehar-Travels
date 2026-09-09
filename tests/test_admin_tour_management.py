@@ -9,14 +9,14 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.enums import TourType, UserRole
+from app.core.enums import TourType, AccountRole
 from app.db.database import get_db
 from app.main import app
 from app.models.base import Base
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
 from app.models.tour_detail import TourDetail
-from app.models.user import User
+from app.models.account import Account
 from app.utils.security import create_access_token
 
 compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
@@ -62,12 +62,12 @@ def client(db_session):
 
 @pytest.fixture
 def admin_user(db_session):
-    user = User(
-        user_code="ADM-TOUR-001",
+    user = Account(
+        account_code="ADM-TOUR-001",
         name="Admin User",
         email="admin_tour@example.com",
         mobile="+919000000011",
-        role=UserRole.ADMIN,
+        role=AccountRole.ADMIN,
         is_active=True,
     )
     db_session.add(user)
@@ -78,12 +78,12 @@ def admin_user(db_session):
 
 @pytest.fixture
 def staff_user(db_session):
-    user = User(
-        user_code="STF-TOUR-001",
+    user = Account(
+        account_code="STF-TOUR-001",
         name="Staff User",
         email="staff_tour@example.com",
         mobile="+919000000012",
-        role=UserRole.STAFF,
+        role=AccountRole.STAFF,
         is_active=True,
     )
     db_session.add(user)
@@ -92,7 +92,7 @@ def staff_user(db_session):
     return user
 
 
-def make_token(user: User) -> str:
+def make_token(user: Account) -> str:
     return create_access_token(
         subject=user.id,
         role=user.role.value,
@@ -130,9 +130,7 @@ def create_variant(db_session, package_id, *, is_active=True):
         duration_days=5,
         duration_nights=4,
         base_price=4999,
-        seats=10,
         badge="Popular",
-        availability="AVAILABLE",
         is_default=True,
         is_active=is_active,
     )
@@ -150,7 +148,6 @@ def create_detail(db_session, variant_id):
         highlights=[{"id": "h1", "text": "Scenic route"}],
         inclusions=["Hotel stay"],
         exclusions=["Airfare"],
-        departures_dates=[{"id": "d1", "date": "2026-05-05"}],
         itinerary=[{"id": "i1", "day": 1, "title": "Arrival", "description": "Check-in"}],
         route_stops=[{"id": "r1", "city": "Darjeeling", "nights": 1}],
     )
@@ -196,7 +193,6 @@ def test_admin_detail_get_normalizes_legacy_highlight_strings(client, staff_user
         highlights=["Dal Lake shikara ride", "Gulmarg Gondola"],
         inclusions=[],
         exclusions=[],
-        departures_dates=[],
         itinerary=[],
         route_stops=[],
     )

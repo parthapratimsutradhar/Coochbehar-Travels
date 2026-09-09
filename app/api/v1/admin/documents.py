@@ -8,9 +8,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin, get_current_admin_only
 from app.core.enums import DocumentType
 from app.db.database import get_db
-from app.models.customer import Customer
+from app.models.account import Account
 from app.models.document import Document
-from app.models.user import User
 from app.schemas.document import DocumentResponse
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
@@ -33,7 +32,7 @@ def list_customer_documents(
 	customer_id: uuid.UUID | None = Query(None),
 	page: int = Query(1, ge=1),
 	page_size: int = Query(10, ge=1, le=100),
-	current_user: User = Depends(get_current_admin),
+	current_user: Account = Depends(get_current_admin),
 	db: Session = Depends(get_db),
 ) -> PaginatedResponse[DocumentResponse]:
 	query = db.query(Document).filter(Document.is_active.is_(True))
@@ -82,7 +81,7 @@ async def upload_customer_document(
 	document_type: DocumentType = Form(...),
 	title: str = Form(..., min_length=1, max_length=200),
 	description: str | None = Form(None),
-	current_user: User = Depends(get_current_admin),
+	current_user: Account = Depends(get_current_admin),
 	db: Session = Depends(get_db),
 ) -> SuccessResponse[DocumentResponse]:
 	if db.query(Customer.id).filter(Customer.id == customer_id).first() is None:
@@ -124,7 +123,7 @@ async def upload_customer_document(
 )
 def bulk_delete_documents(
     payload: BulkDeleteDocumentsRequest,
-    current_user: User = Depends(get_current_admin_only),
+    current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     documents = db.query(Document).filter(Document.id.in_(payload.document_ids), Document.is_active.is_(True)).all()

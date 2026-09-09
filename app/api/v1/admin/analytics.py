@@ -11,10 +11,11 @@ from app.api.deps import get_current_admin_or_staff
 from app.core.lead_scoring import get_event_category
 from app.db.database import get_db
 from app.models.lead import Lead
-from app.models.user import User
+from app.models.account import Account
 from app.models.visitor import Visitor
 from app.models.visitor_event import VisitorEvent
 from app.models.visitor_session import VisitorSession
+from app.schemas.analytics import SuperAdminDashboardResponse
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.response import SuccessResponse
 from app.schemas.visitor import (
@@ -29,6 +30,7 @@ from app.schemas.visitor import (
     VisitorResponse,
     VisitorSessionResponse,
 )
+from app.services.dashboard_service import DashboardService
 
 router = APIRouter(
     prefix="/admin/analytics",
@@ -44,7 +46,7 @@ router = APIRouter(
 )
 def get_analytics_overview(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_or_staff),
+    current_user: Account = Depends(get_current_admin_or_staff),
 ):
     now = datetime.now(timezone.utc)
     today_start = datetime.combine(now.date(), time.min, tzinfo=timezone.utc)
@@ -119,7 +121,7 @@ def list_visitors(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_or_staff),
+    current_user: Account = Depends(get_current_admin_or_staff),
 ):
     stmt = select(Visitor).order_by(Visitor.last_seen.desc())
 
@@ -165,7 +167,7 @@ def list_visitors(
 def get_visitor_details(
     visitor_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_or_staff),
+    current_user: Account = Depends(get_current_admin_or_staff),
 ):
     stmt_vis = select(Visitor).where(Visitor.id == visitor_id)
     visitor = db.execute(stmt_vis).scalar_one_or_none()
@@ -218,7 +220,7 @@ def get_top_pages(
     days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
     limit: int = Query(10, ge=1, le=50, description="Top N pages"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_or_staff),
+    current_user: Account = Depends(get_current_admin_or_staff),
 ):
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -262,7 +264,7 @@ def get_top_events(
     days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
     limit: int = Query(15, ge=1, le=50, description="Top N event types"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_or_staff),
+    current_user: Account = Depends(get_current_admin_or_staff),
 ):
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -301,7 +303,7 @@ def get_top_events(
 def get_utm_performance(
     days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_or_staff),
+    current_user: Account = Depends(get_current_admin_or_staff),
 ):
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -369,7 +371,7 @@ def get_utm_performance(
 )
 def get_lead_score_distribution(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_or_staff),
+    current_user: Account = Depends(get_current_admin_or_staff),
 ):
     ranges = [
         ("0-5 (Cold)", 0, 5),
@@ -402,7 +404,7 @@ def get_lead_score_distribution(
 def get_conversion_funnel(
     days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_or_staff),
+    current_user: Account = Depends(get_current_admin_or_staff),
 ):
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -448,3 +450,22 @@ def get_conversion_funnel(
         message="Conversion funnel fetched successfully",
         data=items,
     )
+
+
+@router.get(
+    "/dashboard",
+    response_model=SuccessResponse[SuperAdminDashboardResponse],
+    summary="Get Super-Admin Business Dashboard Overview",
+    description="Returns high-level business metrics: today's snapshot, future departures, active sales pipeline, and period overviews.",
+)
+def get_super_admin_dashboard(
+    current_user: Account = Depends(get_current_admin_or_staff),
+    db: Session = Depends(get_db),
+):
+    service = DashboardService(db)
+    dashboard_data = service.get_super_admin_dashboard()
+    return SuccessResponse(
+        message="Dashboard overview fetched successfully",
+        data=dashboard_data,
+    )
+

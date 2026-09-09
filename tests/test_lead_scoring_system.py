@@ -8,16 +8,16 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType, LeadSource, LeadStatus, UserRole
+from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType, LeadSource, LeadStatus, AccountRole
 from app.db.database import get_db
 from app.main import app
 from app.models.base import Base
-from app.models.customer import Customer
+from app.models.account import Account
+from app.models.customer_profile import CustomerProfile
 from app.models.enquiry import Enquiry
 from app.models.lead import Lead
 from app.models.lead_activity import LeadActivity
 from app.models.tour_package import TourPackage
-from app.models.user import User
 from app.models.visitor import Visitor
 from app.models.visitor_session import VisitorSession
 from app.services.lead_scoring_service import LeadScoringService
@@ -193,8 +193,19 @@ def test_customer_submits_custom_tour_creates_lead(client: TestClient, db_sessio
 
     monkeypatch.setattr("app.api.v1.enduser.enquiries.emit_lead_created", mock_emit_lead_created)
 
-    customer = Customer(customer_code="CUS-SCORE01", name="Alice Wonderland", referral_code="REF-ALICE01")
+    customer = Account(
+        account_code="CUS-SCORE01",
+        name="Alice Wonderland",
+        role=AccountRole.CUSTOMER,
+        is_active=True,
+    )
     db_session.add(customer)
+    db_session.flush()
+    profile = CustomerProfile(
+        account_id=customer.id,
+        referral_code="REF-ALICE01",
+    )
+    db_session.add(profile)
     db_session.commit()
     db_session.refresh(customer)
 
@@ -498,12 +509,12 @@ def test_admin_patch_lead_score_and_status(client: TestClient, db_session, monke
 def test_analytics_overview_aggregates_lead_score(client: TestClient, db_session):
     """Analytics overview calculates average_lead_score and high_intent_count from Lead."""
     # Create test admin user
-    admin_user = User(
-        user_code="USR-ADMIN01",
+    admin_user = Account(
+        account_code="USR-ADMIN01",
         name="Admin Analytics Tester",
         email="admin.analytics@test.com",
         mobile="+919876543210",
-        role=UserRole.ADMIN,
+        role=AccountRole.ADMIN,
         is_active=True,
     )
     db_session.add(admin_user)

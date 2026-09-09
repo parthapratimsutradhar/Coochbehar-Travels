@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import Field, ConfigDict, EmailStr
+from pydantic import Field, ConfigDict, EmailStr, AliasChoices
 from app.schemas.base import SchemaBase
 
 from app.core.enums import EnquiryChannel, LeadSource, LeadStatus
@@ -16,6 +16,7 @@ class LeadActivityBase(SchemaBase):
 
 class LeadActivityCreate(LeadActivityBase):
     lead_id: UUID
+    account_id: UUID | None = Field(default=None, validation_alias=AliasChoices("account_id", "user_id"))
     user_id: UUID | None = None
 
 
@@ -24,7 +25,7 @@ class LeadActivityResponse(LeadActivityBase):
 
     id: UUID
     lead_id: UUID
-    user_id: UUID | None
+    user_id: UUID | None = Field(default=None, validation_alias=AliasChoices("user_id", "account_id"))
     created_at: datetime
 
 

@@ -11,15 +11,16 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
-from app.core.enums import UserRole
+from app.core.enums import AccountRole
+from app.core.enums import AccountRole, LeadSource
 from app.db.database import get_db
 from app.main import app
 from app.models.auth_session import AuthSession
 from app.repository.auth_session_repo import AuthSessionRepository
 from app.models.base import Base
-from app.models.customer import Customer
+from app.models.account import Account
+from app.models.customer_profile import CustomerProfile
 from app.models.room import Room
-from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.models.visitor import Visitor
 from app.utils.security import (
@@ -74,15 +75,15 @@ def client(db_session):
 
 
 @pytest.fixture
-def test_user(db_session) -> User:
+def test_user(db_session) -> Account:
     """Create a verified Admin test user."""
-    user = User(
-        user_code="USR-TEST01",
+    user = Account(
+        account_code="USR-TEST01",
         name="Admin Tester",
         email="ppsdev6@gmail.com",
         mobile="+919876543210",
         profile_pic="https://images.unsplash.com/photo-admin.jpg",
-        role=UserRole.ADMIN,
+        role=AccountRole.ADMIN,
         is_active=True,
     )
     db_session.add(user)
@@ -92,14 +93,14 @@ def test_user(db_session) -> User:
 
 
 @pytest.fixture
-def second_user(db_session) -> User:
+def second_user(db_session) -> Account:
     """Create a second Admin test user."""
-    user = User(
-        user_code="USR-TEST02",
+    user = Account(
+        account_code="USR-TEST02",
         name="Staff Tester",
         email="progtesting01@gmail.com",
         mobile="+919876543211",
-        role=UserRole.STAFF,
+        role=AccountRole.STAFF,
         is_active=True,
     )
     db_session.add(user)
@@ -109,16 +110,25 @@ def second_user(db_session) -> User:
 
 
 @pytest.fixture
-def test_customer(db_session) -> Customer:
+def test_customer(db_session) -> Account:
     """Create an existing test Customer."""
-    customer = Customer(
-        customer_code="CUS-TEST01",
+    customer = Account(
+        account_code="CUS-TEST01",
         name="John Traveler",
         email="ppsdev6@gmail.com",
         mobile="+919811122233",
         profile_pic="https://images.unsplash.com/photo-john.jpg",
+        role=AccountRole.CUSTOMER,
+        is_active=True,
     )
     db_session.add(customer)
+    db_session.flush()
+    profile = CustomerProfile(
+        account_id=customer.id,
+        source=LeadSource.WEBSITE,
+        referral_code="REF-TEST01",
+    )
+    db_session.add(profile)
     db_session.commit()
     db_session.refresh(customer)
     return customer
@@ -154,18 +164,17 @@ def test_verify_google_id_token_rejects_unapproved_android_client_id(monkeypatch
 # ── TEST CASES ─────────────────────────────────────────────────────────
 
 def test_auth_session_default_actor_type_uses_supported_enum_values(db_session):
-    """Legacy USER values are incompatible with the actor_type enum and check constraint."""
+    """Auth sessions associate directly to an account."""
     repo = AuthSessionRepository(db_session)
-    user_id = uuid.uuid4()
+    account_id = uuid.uuid4()
 
     session = repo.create_session(
-        user_id=user_id,
+        account_id=account_id,
         refresh_token_hash="hash-1",
         expires_at=datetime.now(timezone.utc) + timedelta(days=1),
     )
 
-    assert session.actor_type == "ADMIN"
-    assert session.actor_type in {"ADMIN", "STAFF", "CUSTOMER"}
+    assert session.account_id == account_id
 
 
 def test_access_tokens_include_session_id_and_role_only_for_admin_and_customer():
@@ -203,7 +212,7 @@ def test_access_tokens_include_session_id_and_role_only_for_admin_and_customer()
 
 def test_access_tokens_normalize_enum_roles():
     """Enum-backed admin/customer roles should serialize to the canonical string values used by refresh/session checks."""
-    admin_token = create_access_token(subject=uuid.uuid4(), role=UserRole.ADMIN, session_id=uuid.uuid4())
+    admin_token = create_access_token(subject=uuid.uuid4(), role=AccountRole.ADMIN, session_id=uuid.uuid4())
     customer_token = create_access_token(subject=uuid.uuid4(), role="CUSTOMER", session_id=uuid.uuid4())
 
     admin_payload = jwt.decode(admin_token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
@@ -213,7 +222,7 @@ def test_access_tokens_normalize_enum_roles():
     assert customer_payload["role"] == "CUSTOMER"
 
 
-def test_1_admin_pure_otp_login(client: TestClient, test_user: User):
+def test_1_admin_pure_otp_login(client: TestClient, test_user: Account):
     """1. Test Admin pure OTP request and verification login flow."""
     req_res = client.post(
         "/api/v1/admin/auth/otp/request",
@@ -277,9 +286,9 @@ def test_2_customer_pure_otp_login_and_autoregistration(client: TestClient, db_s
     assert me_data["name"] == "Alice Explorer"
     assert me_data["mobile"] == new_mobile
 
-    customer = db_session.query(Customer).filter_by(mobile=new_mobile).first()
+    customer = db_session.query(Account).filter_by(mobile=new_mobile).first()
     assert customer is not None
-    assert customer.customer_code.startswith("CUS-")
+    assert customer.account_code.startswith("CUS-")
 
 
 def test_3_customer_visitor_telemetry_linking(client: TestClient, db_session):
@@ -319,7 +328,7 @@ def test_3_customer_visitor_telemetry_linking(client: TestClient, db_session):
     assert visitor.customer_id == cust_id
 
 
-def test_4_access_token_expiration(client: TestClient, test_user: User):
+def test_4_access_token_expiration(client: TestClient, test_user: Account):
     """4. Test that an expired 15-minute access token is rejected with 401."""
     expired_token = create_access_token(
         subject=test_user.id,
@@ -337,7 +346,7 @@ def test_4_access_token_expiration(client: TestClient, test_user: User):
     assert "Invalid or expired access token" in response.json()["message"]
 
 
-def test_5_successful_refresh(client: TestClient, test_user: User):
+def test_5_successful_refresh(client: TestClient, test_user: Account):
     """5. Test successful token refresh using HttpOnly cookie."""
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
@@ -354,7 +363,7 @@ def test_5_successful_refresh(client: TestClient, test_user: User):
     assert data["expires_in"] == 15 * 60
 
 
-def test_6_refresh_token_rotation(client: TestClient, test_user: User):
+def test_6_refresh_token_rotation(client: TestClient, test_user: Account):
     """6. Test that a new refresh token is issued upon refresh."""
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
@@ -371,7 +380,7 @@ def test_6_refresh_token_rotation(client: TestClient, test_user: User):
     assert new_cookie_val != old_cookie_val
 
 
-def test_7_old_refresh_token_rejected_after_rotation(client: TestClient, test_user: User):
+def test_7_old_refresh_token_rejected_after_rotation(client: TestClient, test_user: Account):
     """7. Test that old refresh token is invalidated after rotation."""
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
@@ -384,7 +393,7 @@ def test_7_old_refresh_token_rejected_after_rotation(client: TestClient, test_us
     assert client.post("/api/v1/sessions/refresh", cookies=old_cookies).status_code == 401
 
 
-def test_8_refresh_session_revoked(client: TestClient, test_user: User, db_session):
+def test_8_refresh_session_revoked(client: TestClient, test_user: Account, db_session):
     """8. Test that manually revoked refresh sessions are rejected."""
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
@@ -393,14 +402,14 @@ def test_8_refresh_session_revoked(client: TestClient, test_user: User, db_sessi
     )
     cookies = dict(login_res.cookies)
 
-    session = db_session.query(AuthSession).filter_by(user_id=test_user.id).first()
+    session = db_session.query(AuthSession).filter_by(account_id=test_user.id).first()
     session.revoked_at = datetime.now(timezone.utc)
     db_session.commit()
 
     assert client.post("/api/v1/sessions/refresh", cookies=cookies).status_code == 401
 
 
-def test_9_refresh_session_expired_after_30_days(client: TestClient, test_user: User, db_session):
+def test_9_refresh_session_expired_after_30_days(client: TestClient, test_user: Account, db_session):
     """9. Test that refresh sessions older than 30 days are rejected."""
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
@@ -409,7 +418,7 @@ def test_9_refresh_session_expired_after_30_days(client: TestClient, test_user: 
     )
     cookies = dict(login_res.cookies)
 
-    session = db_session.query(AuthSession).filter_by(user_id=test_user.id).first()
+    session = db_session.query(AuthSession).filter_by(account_id=test_user.id).first()
     session.expires_at = datetime.now(timezone.utc) - timedelta(seconds=10)
     db_session.commit()
 
@@ -419,7 +428,7 @@ def test_9_refresh_session_expired_after_30_days(client: TestClient, test_user: 
 
 
 def test_10_refresh_session_rejected_after_3_days_inactivity(
-    client: TestClient, test_user: User, db_session
+    client: TestClient, test_user: Account, db_session
 ):
     """10. Test that refresh session is rejected if inactive for > 3 days."""
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
@@ -429,7 +438,7 @@ def test_10_refresh_session_rejected_after_3_days_inactivity(
     )
     cookies = dict(login_res.cookies)
 
-    session = db_session.query(AuthSession).filter_by(user_id=test_user.id).first()
+    session = db_session.query(AuthSession).filter_by(account_id=test_user.id).first()
     session.last_used_at = datetime.now(timezone.utc) - timedelta(hours=73)
     db_session.commit()
 
@@ -438,7 +447,7 @@ def test_10_refresh_session_rejected_after_3_days_inactivity(
     assert "3 days of inactivity" in res.json()["message"]
 
 
-def test_11_active_user_can_continue_refreshing(client: TestClient, test_user: User):
+def test_11_active_user_can_continue_refreshing(client: TestClient, test_user: Account):
     """11. Test that an active user can refresh multiple times sequentially."""
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
@@ -454,7 +463,7 @@ def test_11_active_user_can_continue_refreshing(client: TestClient, test_user: U
 
 
 def test_12_absolute_expiration_does_not_extend_after_refresh(
-    client: TestClient, test_user: User, db_session
+    client: TestClient, test_user: Account, db_session
 ):
     """12. Test that the original 30-day absolute expiration deadline is strictly preserved across rotations."""
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
@@ -464,7 +473,7 @@ def test_12_absolute_expiration_does_not_extend_after_refresh(
     )
     initial_session = (
         db_session.query(AuthSession)
-        .filter_by(user_id=test_user.id)
+        .filter_by(account_id=test_user.id)
         .order_by(AuthSession.created_at.desc())
         .first()
     )
@@ -475,13 +484,13 @@ def test_12_absolute_expiration_does_not_extend_after_refresh(
 
     new_session = (
         db_session.query(AuthSession)
-        .filter_by(user_id=test_user.id, revoked_at=None)
+        .filter_by(account_id=test_user.id, revoked_at=None)
         .first()
     )
     assert new_session.expires_at == original_expires_at
 
 
-def test_13_logout(client: TestClient, test_user: User, db_session):
+def test_13_logout(client: TestClient, test_user: Account, db_session):
     """13. Test that logout revokes the current session and clears the cookie."""
     req_res = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     login_res = client.post(
@@ -493,12 +502,12 @@ def test_13_logout(client: TestClient, test_user: User, db_session):
     logout_res = client.post("/api/v1/sessions/logout", cookies=cookies)
     assert logout_res.status_code == 200
 
-    session = db_session.query(AuthSession).filter_by(user_id=test_user.id).first()
+    session = db_session.query(AuthSession).filter_by(account_id=test_user.id).first()
     assert session.revoked_at is not None
     assert client.post("/api/v1/sessions/refresh", cookies=cookies).status_code == 401
 
 
-def test_14_logout_all(client: TestClient, test_user: User, db_session):
+def test_14_logout_all(client: TestClient, test_user: Account, db_session):
     """14. Test that logout-all preserves the calling session only."""
     req1 = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     log1 = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req1.json()["data"]["dev_otp"]})
@@ -517,12 +526,12 @@ def test_14_logout_all(client: TestClient, test_user: User, db_session):
 
 
 def test_15_user_cannot_revoke_another_users_session(
-    client: TestClient, test_user: User, second_user: User, db_session
+    client: TestClient, test_user: Account, second_user: Account, db_session
 ):
     """15. Test that a user cannot revoke another user's session (returns 404)."""
     req_sec = client.post("/api/v1/admin/auth/otp/request", json={"identifier": second_user.email})
     client.post("/api/v1/admin/auth/otp/verify", json={"identifier": second_user.email, "otp": req_sec.json()["data"]["dev_otp"]})
-    second_session = db_session.query(AuthSession).filter_by(user_id=second_user.id).first()
+    second_session = db_session.query(AuthSession).filter_by(account_id=second_user.id).first()
 
     req_first = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     log_first = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req_first.json()["data"]["dev_otp"]})
@@ -538,7 +547,7 @@ def test_15_user_cannot_revoke_another_users_session(
     assert second_session.revoked_at is None
 
 
-def test_16_refresh_token_reuse_replay_handling(client: TestClient, test_user: User):
+def test_16_refresh_token_reuse_replay_handling(client: TestClient, test_user: Account):
     """16. Test that replaying an already-rotated refresh token revokes all user sessions (theft defense)."""
     req = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     log = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req.json()["data"]["dev_otp"]})
@@ -566,7 +575,7 @@ def test_18_invalid_refresh_token(client: TestClient):
     assert res.status_code == 401
 
 
-def test_active_session_marks_current_without_refresh_cookie(client: TestClient, test_user: User):
+def test_active_session_marks_current_without_refresh_cookie(client: TestClient, test_user: Account):
     """The access token identifies the current session when the cookie is unavailable."""
     req_res = client.post(
         "/api/v1/admin/auth/otp/request",
@@ -588,7 +597,7 @@ def test_active_session_marks_current_without_refresh_cookie(client: TestClient,
     assert sessions[0]["is_current"] is True
 
 
-def test_19_admin_google_login(client: TestClient, test_user: User, db_session, monkeypatch):
+def test_19_admin_google_login(client: TestClient, test_user: Account, db_session, monkeypatch):
     """19. Test Admin Continue with Google."""
     async def fake_upload_google_profile_picture(picture_url: str) -> str:
         assert picture_url.startswith("https://lh3.googleusercontent.com/")

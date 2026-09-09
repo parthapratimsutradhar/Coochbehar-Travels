@@ -1,34 +1,40 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.enums import UserRole
-from app.models.user import User
+from app.core.enums import AccountRole
+from app.models.account import Account
 
 
 class UserRepository:
-    """Repository for User data access operations."""
+    """Repository for User/Account data access operations."""
 
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def get_by_id(self, user_id: uuid.UUID) -> User | None:
+    def get_by_id(self, user_id: uuid.UUID) -> Account | None:
         """Fetch user by primary key ID."""
-        stmt = select(User).where(User.id == user_id)
+        stmt = select(Account).where(Account.id == user_id)
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def get_by_email(self, email: str) -> User | None:
-        """Fetch user by lowercase email."""
-        stmt = select(User).where(User.email.ilike(email.strip()))
+    def get_by_email(self, email: str) -> Account | None:
+        """Fetch an admin or staff user by lowercase email."""
+        stmt = select(Account).where(
+            Account.email.ilike(email.strip()),
+            Account.role.in_([AccountRole.ADMIN, AccountRole.STAFF]),
+        )
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def get_by_mobile(self, mobile: str) -> User | None:
-        """Fetch user by mobile number."""
-        stmt = select(User).where(User.mobile == mobile.strip())
+    def get_by_mobile(self, mobile: str) -> Account | None:
+        """Fetch an admin or staff user by mobile number."""
+        stmt = select(Account).where(
+            Account.mobile == mobile.strip(),
+            Account.role.in_([AccountRole.ADMIN, AccountRole.STAFF]),
+        )
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def update_last_login(self, user: User) -> None:
+    def update_last_login(self, user: Account) -> None:
         """Update last_login timestamp."""
         user.last_login = datetime.now(timezone.utc)
         self.db.commit()
@@ -39,15 +45,14 @@ class UserRepository:
         name: str,
         email: str,
         mobile: str,
-        role: UserRole = UserRole.ADMIN,
+        role: AccountRole = AccountRole.ADMIN,
         user_code: str | None = None,
-    ) -> User:
+    ) -> Account:
         """Create and persist a new user."""
-        if not user_code:
-            user_code = f"USR-{uuid.uuid4().hex[:8].upper()}"
+        code = user_code or f"USR-{uuid.uuid4().hex[:8].upper()}"
 
-        user = User(
-            user_code=user_code,
+        user = Account(
+            account_code=code,
             name=name,
             email=email.strip().lower(),
             mobile=mobile.strip(),
@@ -58,3 +63,27 @@ class UserRepository:
         self.db.commit()
         self.db.refresh(user)
         return user
+
+    def list_staff_users(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        is_active: bool | None = None,
+        search: str | None = None,
+    ) -> tuple[list[Account], int]:
+        stmt = select(Account).where(Account.role.in_([AccountRole.ADMIN, AccountRole.STAFF]))
+        if is_active is not None:
+            stmt = stmt.where(Account.is_active == is_active)
+        if search:
+            term = f"%{search.strip()}%"
+            stmt = stmt.where(
+                Account.name.ilike(term)
+                | Account.email.ilike(term)
+                | Account.mobile.ilike(term)
+                | Account.account_code.ilike(term)
+            )
+        total = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+        users = self.db.execute(
+            stmt.order_by(Account.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        ).scalars().all()
+        return list(users), total

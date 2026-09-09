@@ -63,8 +63,6 @@ def create_package_and_variants():
         duration_days=5,
         duration_nights=4,
         base_price=2499,
-        seats=10,
-        availability="AVAILABLE",
         is_default=True,
         is_active=True,
     )
@@ -82,8 +80,6 @@ def create_package_and_variants():
         duration_days=6,
         duration_nights=5,
         base_price=3299,
-        seats=8,
-        availability="AVAILABLE",
         is_default=False,
         is_active=True,
     )
@@ -98,7 +94,6 @@ def create_package_and_variants():
             highlights=[{"text": "Snow views"}],
             inclusions=["Stay", "Meals"],
             exclusions=["Flights"],
-            departures_dates=[{"date": "2026-05-12"}],
             itinerary=[{"day": 1, "description": "Arrival"}],
             route_stops=[{"name": "Shimla"}],
         )
@@ -111,7 +106,6 @@ def create_package_and_variants():
             highlights=[{"text": "Private cab"}],
             inclusions=["Stay", "Meals"],
             exclusions=["Flights"],
-            departures_dates=[{"date": "2026-05-20"}],
             itinerary=[{"day": 1, "description": "Arrival"}],
             route_stops=[{"name": "Manali"}],
         )

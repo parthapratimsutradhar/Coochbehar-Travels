@@ -8,10 +8,9 @@ import socketio
 from sqlalchemy import select
 
 from app.db.database import SessionLocal
-from app.models.customer import Customer
+from app.models.account import Account
 from app.models.lead import Lead
 from app.models.lead_activity import LeadActivity
-from app.models.user import User
 from app.models.visitor import Visitor
 from app.utils.security import decode_access_token
 
@@ -613,8 +612,7 @@ async def connect(sid: str, environ: dict, auth: dict | None = None) -> bool:
 
     db = SessionLocal()
     try:
-        model = Customer if actor_type == "CUSTOMER" else User
-        if not db.scalar(select(model.id).where(model.id == actor_id, model.is_active.is_(True))):
+        if not db.scalar(select(Account.id).where(Account.id == actor_id, Account.is_active.is_(True))):
             return False
     finally:
         db.close()
@@ -780,22 +778,51 @@ async def track_page(sid: str, data: dict | None = None) -> None:
     )
 
 
-async def publish_notification(item) -> None:
-    recipient_id = item.customer_id or item.user_id
-    if not recipient_id:
+async def publish_notification(item, db: Any | None = None) -> None:
+    recipients = getattr(item, "recipient_ids", None) or []
+    if not recipients:
+        single = getattr(item, "customer_id", None) or getattr(item, "user_id", None) or getattr(item, "recipient_id", None)
+        if single:
+            recipients = [single]
+    if not recipients:
         return
-    actor_type = "CUSTOMER" if item.customer_id else "ADMIN"
-    await sio.emit(
-        "notification.created",
-        {
-            "id": str(item.id),
-            "notification_type": item.notification_type,
-            "title": item.title,
-            "message": item.message,
-            "data": item.data,
-            "is_read": item.is_read,
-            "read_at": item.read_at.isoformat() if item.read_at else None,
-            "created_at": item.created_at.isoformat() if item.created_at else None,
-        },
-        room=_actor_key(actor_type, recipient_id),
-    )
+
+    session = db
+    close_session = False
+    if session is None:
+        try:
+            session = SessionLocal()
+            close_session = True
+        except Exception:
+            session = None
+
+    try:
+        for rec_id in recipients:
+            actor_type = "CUSTOMER"
+            if session is not None:
+                try:
+                    role = session.scalar(select(Account.role).where(Account.id == rec_id))
+                    role_val = getattr(role, "value", str(role)).upper() if role else "CUSTOMER"
+                    actor_type = "CUSTOMER" if role_val == "CUSTOMER" else "ADMIN"
+                except Exception:
+                    pass
+
+            await sio.emit(
+                "notification.created",
+                {
+                    "id": str(item.id),
+                    "notification_type": item.notification_type,
+                    "title": item.title,
+                    "message": item.message,
+                    "data": item.data,
+                    "is_read": getattr(item, "is_read", False),
+                    "read_at": item.read_at.isoformat() if getattr(item, "read_at", None) else None,
+                    "created_at": item.created_at.isoformat() if getattr(item, "created_at", None) else None,
+                },
+                room=_actor_key(actor_type, rec_id),
+            )
+    finally:
+        if close_session and session is not None:
+            session.close()
+
+

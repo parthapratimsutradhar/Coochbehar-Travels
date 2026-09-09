@@ -58,19 +58,10 @@ class TourVariant(ActiveEntity):
         Numeric(10, 2),
         nullable=False,
     )
-
-    seats: Mapped[int | None] = mapped_column(
-        Integer,
-    )
-
+    
     badge: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
-    )
-
-    availability: Mapped[str | None] = mapped_column(
-        String(20),
-        default="AVAILABLE",
     )
 
     is_default: Mapped[bool] = mapped_column(
@@ -94,4 +85,21 @@ class TourVariant(ActiveEntity):
     enquiries = relationship(
         "Enquiry",
         back_populates="variant",
+    )
+
+    quotations = relationship(
+        "Quotation", 
+        back_populates="variant"
+    )
+    
+    departures = relationship(
+        "TourDeparture",
+        back_populates="variant",
+        cascade="all, delete-orphan",
+    )
+
+    offer_links = relationship(
+        "TourOfferPackage",
+        back_populates="variant",
+        cascade="all, delete-orphan",
     )

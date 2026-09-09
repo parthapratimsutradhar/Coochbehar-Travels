@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 from app.api.deps import clear_refresh_cookie, get_current_customer
 from app.db.database import get_db
-from app.models.customer import Customer
+from app.models.account import Account
 from app.schemas.auth import CustomerOtpVerifySchema
 from app.schemas.customer import CustomerResponse, CustomerUpdate
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
@@ -20,7 +20,7 @@ router = APIRouter(
     summary="Get Authenticated Customer Profile",
 )
 def get_current_customer_profile(
-    current_customer: Customer = Depends(get_current_customer),
+    current_customer: Account = Depends(get_current_customer),
 ):
     return SuccessResponse(
         message="Customer profile fetched successfully.",
@@ -36,7 +36,7 @@ def get_current_customer_profile(
 )
 def update_customer_profile(
     payload: CustomerUpdate,
-    current_customer: Customer = Depends(get_current_customer),
+    current_customer: Account = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ):
     auth_service = AuthService(db)
@@ -60,7 +60,7 @@ def update_customer_profile(
 def delete_customer_account(
     payload: CustomerOtpVerifySchema,
     response: Response,
-    current_customer: Customer = Depends(get_current_customer),
+    current_customer: Account = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ):
     auth_service = AuthService(db)

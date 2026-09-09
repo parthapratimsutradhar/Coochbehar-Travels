@@ -8,7 +8,7 @@ from app.api.deps import get_current_customer
 from app.core.enums import TourType
 from app.core.messages.error import PackageError
 from app.db.database import get_db
-from app.models.customer import Customer
+from app.models.account import Account
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
 from app.models.tour_wishlist import TourWishlist
@@ -39,7 +39,7 @@ def list_wishlist(
 	is_featured: bool | None = Query(None),
 	search: str | None = Query(None),
 	sort_order: str = Query("desc", pattern="^(asc|desc)$"),
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> PaginatedResponse[WishlistItemResponse]:
 	"""Return the customer's active wishlisted packages with filters."""
@@ -133,7 +133,7 @@ def list_wishlist(
 )
 def add_to_wishlist(
 	package_slug: str,
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> ActionResponse:
 	package = db.query(TourPackage).filter(
@@ -161,7 +161,7 @@ def add_to_wishlist(
 )
 def remove_from_wishlist(
 	package_slug: str,
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> ActionResponse:
 	wishlist = (

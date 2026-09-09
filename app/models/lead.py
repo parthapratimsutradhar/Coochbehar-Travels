@@ -17,7 +17,7 @@ class Lead(BaseEntity):
     )
 
     customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("customers.id", ondelete="SET NULL"),
+        ForeignKey("accounts.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -90,7 +90,7 @@ class Lead(BaseEntity):
 
 # ── Relationships ───────────────────────────────────────────────────────
     enquiry = relationship("Enquiry", back_populates="lead")
-    customer = relationship("Customer", back_populates="leads")
+    customer = relationship("Account", back_populates="leads")
     visitor = relationship("Visitor", back_populates="leads")
     activities = relationship("LeadActivity", back_populates="lead", cascade="all, delete-orphan")
     

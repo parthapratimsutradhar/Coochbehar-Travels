@@ -244,7 +244,7 @@ class TourPackageService:
             "name": variant.name,
             "season_name": variant.season_name,
             "badge": variant.badge,
-            "availability": variant.availability or "AVAILABLE",
+            "availability": getattr(variant, "availability", None) or "AVAILABLE",
         }
 
     @classmethod
@@ -312,9 +312,14 @@ class TourPackageService:
             for i, item in enumerate(raw_highlights):
                 highlights.append(item if isinstance(item, dict) else {"id": f"h{i+1}", "text": str(item)})
 
-            raw_dates = details.departures_dates if isinstance(details.departures_dates, list) else []
-            for i, item in enumerate(raw_dates):
-                departure_dates.append(item if isinstance(item, dict) else {"id": f"d{i+1}", "date": str(item)})
+            if variant and getattr(variant, "departures", None):
+                for dep in variant.departures:
+                    dep_date = dep.departure_date.isoformat() if hasattr(dep.departure_date, "isoformat") else str(dep.departure_date)
+                    departure_dates.append({"id": str(dep.id), "date": dep_date})
+            else:
+                raw_dates = getattr(details, "departures_dates", None) if isinstance(getattr(details, "departures_dates", None), list) else []
+                for i, item in enumerate(raw_dates):
+                    departure_dates.append(item if isinstance(item, dict) else {"id": f"d{i+1}", "date": str(item)})
 
             raw_gallery = details.gallery if isinstance(details.gallery, list) else []
             for i, item in enumerate(raw_gallery):
@@ -346,8 +351,8 @@ class TourPackageService:
             "duration_days": duration_days,
             "duration_nights": duration_nights,
             "price": price_val,
-            "seats": variant.seats,
-            "availability": variant.availability or "AVAILABLE",
+            "seats": getattr(variant, "seats", None),
+            "availability": getattr(variant, "availability", None) or "AVAILABLE",
             "route": route,
             "highlights": highlights,
             "departure_dates": departure_dates,
@@ -410,12 +415,17 @@ class TourPackageService:
                 else:
                     highlights.append({"id": f"h{i+1}", "text": str(h)})
 
-            raw_dates = details.departures_dates if isinstance(details.departures_dates, list) else []
-            for i, d in enumerate(raw_dates):
-                if isinstance(d, dict):
-                    dates.append(d)
-                else:
-                    dates.append({"id": f"d{i+1}", "date": str(d)})
+            if variant and getattr(variant, "departures", None):
+                for dep in variant.departures:
+                    dep_date = dep.departure_date.isoformat() if hasattr(dep.departure_date, "isoformat") else str(dep.departure_date)
+                    dates.append({"id": str(dep.id), "date": dep_date})
+            else:
+                raw_dates = getattr(details, "departures_dates", None) if isinstance(getattr(details, "departures_dates", None), list) else []
+                for i, d in enumerate(raw_dates):
+                    if isinstance(d, dict):
+                        dates.append(d)
+                    else:
+                        dates.append({"id": f"d{i+1}", "date": str(d)})
 
             raw_gal = details.gallery if isinstance(details.gallery, list) else []
             for i, g in enumerate(raw_gal):
@@ -456,7 +466,7 @@ class TourPackageService:
             price=price_val,
             currency=currency,
             starting_price=starting_price,
-            seats=variant.seats,
+            seats=getattr(variant, "seats", None),
             availability=availability,
             is_active=variant.is_active,
             is_default=variant.is_default,

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_customer
 from app.core.enums import DocumentType
 from app.db.database import get_db
-from app.models.customer import Customer
+from app.models.account import Account
 from app.models.document import Document
 from app.schemas.document import DocumentDownloadResponse, DocumentResponse
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
@@ -52,7 +52,7 @@ def list_documents(
 	page_size: int = Query(10, ge=1, le=100),
 	document_type: DocumentType | None = Query(None),
 	uploaded_by: str | None = Query(None, pattern="^(CUSTOMER|ADMIN)$"),
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> PaginatedResponse[DocumentResponse]:
 	query = db.query(Document).filter(
@@ -93,7 +93,7 @@ def list_documents(
 )
 def download_document(
 	document_id: uuid.UUID,
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> SuccessResponse[DocumentDownloadResponse]:
 	document = db.query(Document).filter(
@@ -125,7 +125,7 @@ async def upload_document(
 	document_type: DocumentType = Form(...),
 	title: str = Form(..., min_length=1, max_length=200),
 	description: str | None = Form(None),
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> ActionResponse:
 	result = await upload_file_to_cloudinary(file=file, sub_folder="customer-documents")
@@ -154,7 +154,7 @@ async def upload_document(
 )
 def delete_document(
 	document_id: uuid.UUID,
-	current_customer: Customer = Depends(get_current_customer),
+	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> ActionResponse:
 	document = db.query(Document).filter(

@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin_only
+from app.core.enums import LeadSource
 from app.db.database import get_db
-from app.models.user import User
+from app.models.account import Account
 from app.schemas.customer import CustomerCreate, CustomerResponse, CustomerUpdate
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
@@ -27,12 +28,19 @@ def list_customers(
     page_size: int = Query(10, ge=1, le=100),
     is_active: bool | None = Query(None),
     search: str | None = Query(None),
-    current_user: User = Depends(get_current_admin_only),
+    source: LeadSource | None = Query(None, description="Filter by customer source"),
+    current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user
     service = CustomerService(db)
-    result = service.list_customers(page=page, page_size=page_size, is_active=is_active, search=search)
+    result = service.list_customers(
+        page=page,
+        page_size=page_size,
+        is_active=is_active,
+        search=search,
+        source=source,
+    )
     return PaginatedResponse(
         message="Customers fetched successfully",
         data=[CustomerResponse.model_validate(customer) for customer in result["items"]],
@@ -61,7 +69,7 @@ def get_customer(
     ),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
-    current_user: User = Depends(get_current_admin_only),
+    current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user
@@ -91,7 +99,7 @@ def get_customer(
 )
 def create_customer(
     payload: CustomerCreate,
-    current_user: User = Depends(get_current_admin_only),
+    current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user
@@ -108,7 +116,7 @@ def create_customer(
 def update_customer(
     customer_id: uuid.UUID,
     payload: CustomerUpdate,
-    current_user: User = Depends(get_current_admin_only),
+    current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user
@@ -124,7 +132,7 @@ def update_customer(
 )
 def delete_customer(
     customer_id: uuid.UUID,
-    current_user: User = Depends(get_current_admin_only),
+    current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user

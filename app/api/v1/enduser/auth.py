@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_customer, set_refresh_cookie
 from app.core.config import settings
 from app.db.database import get_db
-from app.models.customer import Customer
+from app.models.account import Account
 from app.schemas.auth import (
     CustomerGoogleAuthSchema,
     CustomerOtpRequestSchema,
@@ -126,3 +126,18 @@ async def google_login_customer(
             refresh_token=raw_refresh_token,
         ),
     )
+
+
+@router.get(
+    "/me",
+    response_model=SuccessResponse[CustomerResponse],
+    summary="Get Authenticated Customer Profile",
+)
+def get_current_customer_profile(
+    current_customer: Account = Depends(get_current_customer),
+):
+    return SuccessResponse(
+        message="Customer profile fetched successfully.",
+        data=CustomerResponse.model_validate(current_customer),
+    )
+

@@ -130,9 +130,7 @@ class AdminTourService:
             duration_days=payload["duration_days"],
             duration_nights=payload["duration_nights"],
             base_price=Decimal(str(payload["price"])),
-            seats=payload.get("seats"),
             badge=payload.get("badge"),
-            availability=payload.get("availability") or "AVAILABLE",
             is_default=payload.get("is_default", False),
             is_active=payload.get("is_active", True),
         )
@@ -153,7 +151,8 @@ class AdminTourService:
             update_data["valid_to"] = date.fromisoformat(update_data["valid_to"])
 
         for field, value in update_data.items():
-            setattr(variant, field, value)
+            if hasattr(variant, field):
+                setattr(variant, field, value)
 
         self.db.commit()
         self.db.refresh(variant)
@@ -186,7 +185,6 @@ class AdminTourService:
             highlights=normalize_json_payload(payload.get("highlights")) or [],
             inclusions=normalize_json_payload(payload.get("inclusions")) or [],
             exclusions=normalize_json_payload(payload.get("exclusions")) or [],
-            departures_dates=normalize_json_payload(payload.get("departure_dates")) or [],
             itinerary=normalize_json_payload(payload.get("itinerary")) or [],
             route_stops=normalize_json_payload(payload.get("route")) or [],
         )
@@ -209,7 +207,8 @@ class AdminTourService:
             elif key == "exclusions":
                 detail.exclusions = normalize_json_payload(value) or []
             elif key == "departure_dates":
-                detail.departures_dates = normalize_json_payload(value) or []
+                if hasattr(detail, "departures_dates"):
+                    detail.departures_dates = normalize_json_payload(value) or []
             elif key == "itinerary":
                 detail.itinerary = normalize_json_payload(value) or []
             elif key == "route":
@@ -260,9 +259,9 @@ class AdminTourService:
             duration_days=item.duration_days,
             duration_nights=item.duration_nights,
             price=float(item.base_price),
-            seats=item.seats,
+            seats=getattr(item, "seats", None),
             badge=item.badge,
-            availability=item.availability or "AVAILABLE",
+            availability=getattr(item, "availability", None) or "AVAILABLE",
             is_default=item.is_default,
             is_active=item.is_active,
         )
@@ -274,6 +273,12 @@ class AdminTourService:
             item if isinstance(item, dict) else {"id": f"h{index + 1}", "text": str(item)}
             for index, item in enumerate(raw_highlights)
         ]
+        raw_dates = getattr(detail, "departures_dates", None) if isinstance(getattr(detail, "departures_dates", None), list) else []
+        departure_dates = [
+            item if isinstance(item, dict) and "id" in item else {"id": f"d{index + 1}", "date": str(item.get("date") if isinstance(item, dict) else item)}
+            for index, item in enumerate(raw_dates)
+        ]
+
         return AdminTourDetailPayload(
             id=detail.id,
             tour_id=package_id,
@@ -283,7 +288,8 @@ class AdminTourService:
             highlights=highlights,
             inclusions=detail.inclusions if isinstance(detail.inclusions, list) else [],
             exclusions=detail.exclusions if isinstance(detail.exclusions, list) else [],
-            departure_dates=detail.departures_dates if isinstance(detail.departures_dates, list) else [],
+            departure_dates=departure_dates,
             itinerary=detail.itinerary if isinstance(detail.itinerary, list) else [],
             route=detail.route_stops if isinstance(detail.route_stops, list) else [],
         )
+
