@@ -142,7 +142,8 @@ class AdminTourService:
         if self.repo.get_variant_by_slug(payload["slug"]):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A tour variant with this slug already exists.")
 
-        price = Decimal(str(payload["price"]))
+        list_price = Decimal(str(payload.get("list_price", payload.get("selling_price", 0))))
+        selling_price = Decimal(str(payload.get("selling_price", list_price)))
         variant = TourVariant(
             package_id=package.id,
             slug=payload["slug"],
@@ -152,8 +153,8 @@ class AdminTourService:
             valid_to=date.fromisoformat(payload["valid_to"]),
             duration_days=payload["duration_days"],
             duration_nights=payload["duration_nights"],
-            list_price=price,
-            selling_price=price,
+            list_price=list_price,
+            selling_price=selling_price,
             badge=payload.get("badge"),
             is_default=payload.get("is_default", False),
             is_active=payload.get("is_active", True),
@@ -167,10 +168,10 @@ class AdminTourService:
         variant = self.get_variant(variant_id)
         update_data = payload.copy()
 
-        if "price" in update_data:
-            price = Decimal(str(update_data.pop("price")))
-            update_data["list_price"] = price
-            update_data["selling_price"] = price
+        if "list_price" in update_data:
+            update_data["list_price"] = Decimal(str(update_data["list_price"]))
+        if "selling_price" in update_data:
+            update_data["selling_price"] = Decimal(str(update_data["selling_price"]))
         if "valid_from" in update_data and isinstance(update_data["valid_from"], str):
             update_data["valid_from"] = date.fromisoformat(update_data["valid_from"])
         if "valid_to" in update_data and isinstance(update_data["valid_to"], str):

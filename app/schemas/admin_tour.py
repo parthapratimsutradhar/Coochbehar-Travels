@@ -139,10 +139,9 @@ class TourVariantCreateRequest(SchemaBase):
     valid_to: str = Field(..., description="YYYY-MM-DD")
     duration_days: int = Field(..., ge=0)
     duration_nights: int = Field(..., ge=0)
-    price: float = Field(..., ge=0)
-    seats: int | None = Field(default=None, ge=0)
+    list_price: float = Field(..., ge=0)
+    selling_price: float = Field(..., ge=0)
     badge: str | None = None
-    availability: str | None = Field(default="AVAILABLE", max_length=20)
     is_default: bool = False
     is_active: bool = True
 
@@ -155,10 +154,9 @@ class TourVariantUpdateRequest(SchemaBase):
     valid_to: str | None = None
     duration_days: int | None = Field(default=None, ge=0)
     duration_nights: int | None = Field(default=None, ge=0)
-    price: float | None = Field(default=None, ge=0)
-    seats: int | None = Field(default=None, ge=0)
+    list_price: float | None = Field(default=None, ge=0)
+    selling_price: float | None = Field(default=None, ge=0)
     badge: str | None = None
-    availability: str | None = Field(default=None, max_length=20)
     is_default: bool | None = None
     is_active: bool | None = None
 
