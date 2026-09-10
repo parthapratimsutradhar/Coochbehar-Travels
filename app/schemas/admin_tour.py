@@ -110,7 +110,7 @@ class TourPackageCreateRequest(SchemaBase):
     tour_code: str = Field(..., min_length=1, max_length=20)
     slug: str = Field(..., min_length=1, max_length=200)
     title: str = Field(..., min_length=1, max_length=200)
-    destination: str = Field(..., min_length=1, max_length=150)
+    destination_id: uuid.UUID = Field(..., description="Destination FK reference")
     type: TourType = TourType.DOMESTIC
     description: str | None = None
     is_featured: bool = False
@@ -121,7 +121,7 @@ class TourPackageUpdateRequest(SchemaBase):
     tour_code: str | None = Field(default=None, min_length=1, max_length=20)
     slug: str | None = Field(default=None, min_length=1, max_length=200)
     title: str | None = Field(default=None, min_length=1, max_length=200)
-    destination: str | None = Field(default=None, min_length=1, max_length=150)
+    destination_id: uuid.UUID | None = Field(default=None, description="Destination FK reference")
     type: TourType | None = None
     description: str | None = None
     is_featured: bool | None = None

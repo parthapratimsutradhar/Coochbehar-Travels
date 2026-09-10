@@ -9,6 +9,7 @@ import math
 from sqlalchemy import func, or_, case
 from sqlalchemy.orm import Session, joinedload, contains_eager
 
+from app.models.destination import Destination
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
 from app.models.tour_wishlist import TourWishlist
@@ -27,8 +28,8 @@ class TourPackageRepository:
         """Apply WHERE clauses based on the filter params."""
 
         if filters.destination is not None:
-            query = query.filter(
-                TourPackage.destination.ilike(f"%{filters.destination}%")
+            query = query.join(TourPackage.destination, isouter=True).filter(
+                Destination.name.ilike(f"%{filters.destination}%")
             )
 
         if filters.type is not None:
@@ -53,10 +54,10 @@ class TourPackageRepository:
 
         if filters.search is not None:
             term = f"%{filters.search}%"
-            query = query.filter(
+            query = query.join(TourPackage.destination, isouter=True).filter(
                 or_(
                     TourPackage.title.ilike(term),
-                    TourPackage.destination.ilike(term),
+                    Destination.name.ilike(term),
                 )
             )
 
@@ -69,11 +70,14 @@ class TourPackageRepository:
         allowed_sort_fields = {
             "created_at": TourPackage.created_at,
             "title": TourPackage.title,
-            "destination": TourPackage.destination,
+            "destination": Destination.name,
             "updated_at": TourPackage.updated_at,
         }
 
         sort_col = allowed_sort_fields.get(filters.sort_by, TourPackage.created_at)
+
+        if sort_col == Destination.name:
+            query = query.join(TourPackage.destination, isouter=True)
 
         if filters.sort_order.lower() == "asc":
             query = query.order_by(sort_col.asc())
@@ -142,6 +146,7 @@ class TourPackageRepository:
                 default_variant,
                 TourPackage.id == default_variant.c.package_id,
             )
+            .outerjoin(TourPackage.destination)
         )
 
         # ── Apply filters ────────────────────────────────────────────
@@ -178,13 +183,14 @@ class TourPackageRepository:
         results: list[dict] = []
         for row in rows:
             package: TourPackage = row[0]
+            destination_name = package.destination.name if package.destination else None
             results.append(
                 {
                     "id": package.id,
                     "tour_code": package.tour_code,
                     "slug": package.slug,
                     "title": package.title,
-                    "destination": package.destination,
+                    "destination": destination_name,
                     "type": package.type,
                     "description": package.description,
                     "is_featured": package.is_featured,
@@ -215,10 +221,10 @@ class TourPackageRepository:
         )
         if search:
             term = f"%{search}%"
-            query = query.filter(
+            query = query.outerjoin(TourPackage.destination).filter(
                 or_(
                     TourPackage.title.ilike(term),
-                    TourPackage.destination.ilike(term),
+                    Destination.name.ilike(term),
                 )
             )
         return query.order_by(TourPackage.title.asc()).limit(limit).all()

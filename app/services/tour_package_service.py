@@ -260,12 +260,13 @@ class TourPackageService:
         default_payload = cls._format_variant_detail(default_variant) if default_variant else None
         other_variants = [cls._summarize_variant(v) for v in active_variants if default_variant is None or v.id != default_variant.id]
 
+        destination_name = package.destination.name if package.destination else None
         return TourPackageDetailResponse(
             id=package.id,
             tour_code=package.tour_code,
             slug=package.slug,
             title=package.title,
-            destination=package.destination,
+            destination=destination_name or "",
             type=package.type,
             description=package.description,
             is_wishlist=is_wishlist,

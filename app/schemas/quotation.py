@@ -33,6 +33,7 @@ class QuotationBase(SchemaBase):
     enquiry_id: UUID | None = None
     package_id: UUID | None = None
     variant_id: UUID | None = None
+    destination_id: UUID | None = None
     tour_name: str = Field(..., min_length=1, max_length=255)
     destination: str | None = Field(default=None, max_length=255)
     travel_date: datetime | None = None
@@ -57,6 +58,7 @@ class QuotationCreate(QuotationBase):
 
 
 class QuotationUpdate(SchemaBase):
+    destination_id: UUID | None = None
     tour_name: str | None = Field(default=None, min_length=1, max_length=255)
     destination: str | None = Field(default=None, max_length=255)
     travel_date: datetime | None = None

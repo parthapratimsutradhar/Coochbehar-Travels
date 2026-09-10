@@ -50,6 +50,7 @@ class QuotationService:
             "enquiry_id": payload.enquiry_id,
             "package_id": payload.package_id,
             "variant_id": payload.variant_id,
+            "destination_id": payload.destination_id,
             "tour_name": payload.tour_name,
             "destination": payload.destination,
             "travel_date": payload.travel_date,

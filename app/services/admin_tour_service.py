@@ -6,6 +6,8 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.enums import TourType
+from app.models.destination import Destination
 from app.models.tour_detail import TourDetail
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
@@ -29,20 +31,23 @@ class AdminTourService:
         page_size: int,
         is_active: bool | None = None,
         is_featured: bool | None = None,
+        type: TourType | None = None,
         search: str | None = None,
     ):
-        query = self.db.query(TourPackage)
+        query = self.db.query(TourPackage).outerjoin(TourPackage.destination)
         if is_active is not None:
             query = query.filter(TourPackage.is_active.is_(is_active))
         if is_featured is not None:
             query = query.filter(TourPackage.is_featured.is_(is_featured))
+        if type is not None:
+            query = query.filter(TourPackage.type == type)
         if search:
             term = f"%{search}%"
             query = query.filter(
                 (
                     TourPackage.title.ilike(term)
                     | TourPackage.slug.ilike(term)
-                    | TourPackage.destination.ilike(term)
+                    | Destination.name.ilike(term)
                     | TourPackage.tour_code.ilike(term)
                 )
             )
@@ -234,12 +239,13 @@ class AdminTourService:
 
     @staticmethod
     def _package_to_response(item: TourPackage) -> AdminTourPackageItem:
+        destination_name = item.destination.name if item.destination else None
         return AdminTourPackageItem(
             id=item.id,
             tour_code=item.tour_code,
             slug=item.slug,
             title=item.title,
-            destination=item.destination,
+            destination=destination_name or "",
             type=item.type,
             description=item.description,
             is_featured=item.is_featured,

@@ -18,6 +18,7 @@ class EnquiryBase(SchemaBase):
 class EnquiryCreate(SchemaBase):
     package_id: UUID | None = None
     variant_id: UUID | None = None
+    destination_id: UUID | None = None
     channel: Literal[EnquiryChannel.WEBSITE, EnquiryChannel.APP] = EnquiryChannel.WEBSITE
     subject: str | None = Field(default=None, max_length=200)
     message: str | None = None
@@ -40,6 +41,7 @@ class EnquiryResponse(EnquiryBase):
     enquiry_code: str
     visitor_id: UUID | None = None
     customer_id: UUID | None = None
+    destination_id: UUID | None = None
     status: EnquiryStatus
     enquirer_name: str | None = None
     enquirer_phone: str | None = None

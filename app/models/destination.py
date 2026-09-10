@@ -1,6 +1,6 @@
 
 from sqlalchemy import Boolean, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import ActiveEntity
 
@@ -49,5 +49,27 @@ class Destination(ActiveEntity):
         Boolean, 
         nullable=False, 
         default=False
+    )
+    
+# ── Relationships ───────────────────────────────────────────────────────
+
+    tour_packages = relationship(
+        "TourPackage",
+        back_populates="destination"
+    )
+    
+    enquiries = relationship(
+        "Enquiry",
+        back_populates="destination_ref"
+    )
+    
+    quotations = relationship(
+        "Quotation",
+        back_populates="destination_ref"
+    )
+    
+    hotels = relationship(
+        "Hotel",
+        back_populates="destination_ref"
     )
     

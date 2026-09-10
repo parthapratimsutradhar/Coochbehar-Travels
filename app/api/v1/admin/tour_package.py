@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin, get_current_admin_only
+from app.core.enums import TourType
 from app.db.database import get_db
 from app.models.account import Account
 from app.schemas.admin_tour import (
@@ -31,13 +32,21 @@ def list_admin_tour_packages(
     page_size: int = Query(10, ge=1, le=100),
     is_active: bool | None = Query(None),
     is_featured: bool | None = Query(None),
+    type: TourType | None = Query(None, description="Filter by tour type: DOMESTIC or INTERNATIONAL"),
     search: str | None = Query(None),
     current_user: Account = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     del current_user
     service = AdminTourService(db)
-    result = service.list_packages(page=page, page_size=page_size, is_active=is_active, is_featured=is_featured, search=search)
+    result = service.list_packages(
+        page=page,
+        page_size=page_size,
+        is_active=is_active,
+        is_featured=is_featured,
+        type=type,
+        search=search,
+    )
     return PaginatedResponse(
         message="Items fetched successfully",
         data=result["items"],
@@ -64,7 +73,9 @@ def create_admin_tour_package(
     db: Session = Depends(get_db),
 ):
     del current_user
-    AdminTourService(db).create_package(payload.model_dump())
+    payload_data = payload.model_dump()
+    payload_data.pop("destination", None)
+    AdminTourService(db).create_package(payload_data)
     return ActionResponse(message="Tour package created successfully")
 
 

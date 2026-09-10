@@ -92,6 +92,12 @@ class Enquiry(BaseEntity):
         nullable=True
     )
 
+    destination_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("destinations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     travel_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True
@@ -153,10 +159,45 @@ class Enquiry(BaseEntity):
     )
 
 # ── Relationships ───────────────────────────────────────────────────────
-    visitor = relationship("Visitor", back_populates="enquiries")    
-    customer = relationship("Account", back_populates="enquiries")
-    package = relationship("TourPackage", back_populates="enquiries")
-    variant = relationship("TourVariant", back_populates="enquiries")
-    lead = relationship("Lead", back_populates="enquiry", uselist=False)
-    booking = relationship("Booking", back_populates="enquiry", uselist=False)
-    quotations = relationship("Quotation", back_populates="enquiry")
+    visitor = relationship(
+        "Visitor",
+        back_populates="enquiries"
+    )
+
+    customer = relationship(
+        "Account",
+        back_populates="enquiries"
+    )
+
+    package = relationship(
+        "TourPackage",
+        back_populates="enquiries"
+    )
+
+    variant = relationship(
+        "TourVariant",
+        back_populates="enquiries"
+    )
+
+    destination_ref = relationship(
+        "Destination",
+        foreign_keys=[destination_id],
+        back_populates="enquiries",
+    )
+    
+    lead = relationship(
+        "Lead",
+        back_populates="enquiry",
+        uselist=False
+    )
+
+    booking = relationship(
+        "Booking",
+        back_populates="enquiry",
+        uselist=False
+    )
+
+    quotations = relationship(
+        "Quotation",
+        back_populates="enquiry"
+    )

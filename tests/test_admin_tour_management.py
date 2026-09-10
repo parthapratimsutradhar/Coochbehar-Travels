@@ -13,6 +13,7 @@ from app.core.enums import TourType, AccountRole
 from app.db.database import get_db
 from app.main import app
 from app.models.base import Base
+from app.models.destination import Destination
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
 from app.models.tour_detail import TourDetail
@@ -103,11 +104,21 @@ def make_token(user: Account) -> str:
 
 
 def create_package(db_session, *, is_active=True, is_featured=False):
+    destination = Destination(
+        name="Darjeeling",
+        slug="darjeeling",
+        country="India",
+        is_domestic=True,
+    )
+    db_session.add(destination)
+    db_session.commit()
+    db_session.refresh(destination)
+
     package = TourPackage(
         tour_code="T-1001",
         slug="test-tour-package",
         title="Test Tour Package",
-        destination="Darjeeling",
+        destination_id=destination.id,
         type=TourType.DOMESTIC,
         description="Sample package",
         is_featured=is_featured,
@@ -211,13 +222,59 @@ def test_admin_detail_get_normalizes_legacy_highlight_strings(client, staff_user
     ]
 
 
+def test_admin_tour_package_list_supports_type_filter(client, admin_user, db_session):
+    create_package(db_session, is_active=True, is_featured=False)
+    destination = Destination(
+        name="Ladakh",
+        slug="ladakh",
+        country="India",
+        is_domestic=False,
+    )
+    db_session.add(destination)
+    db_session.commit()
+    db_session.refresh(destination)
+
+    international_package = TourPackage(
+        tour_code="T-1002",
+        slug="international-tour-package",
+        title="International Tour Package",
+        destination_id=destination.id,
+        type=TourType.INTERNATIONAL,
+        description="International package",
+        is_featured=False,
+        is_active=True,
+    )
+    db_session.add(international_package)
+    db_session.commit()
+    db_session.refresh(international_package)
+
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+    response = client.get("/api/v1/admin/tour-packages?type=INTERNATIONAL", headers=auth_header)
+
+    assert response.status_code == 200
+    items = response.json()["data"]
+    assert len(items) == 1
+    assert items[0]["id"] == str(international_package.id)
+    assert items[0]["type"] == "INTERNATIONAL"
+
+
 def test_admin_tour_package_list_supports_is_featured_filter(client, admin_user, db_session):
     create_package(db_session, is_active=True, is_featured=False)
+    destination = Destination(
+        name="Manali",
+        slug="manali",
+        country="India",
+        is_domestic=True,
+    )
+    db_session.add(destination)
+    db_session.commit()
+    db_session.refresh(destination)
+
     featured_package = TourPackage(
-        tour_code="T-1002",
+        tour_code="T-1003",
         slug="featured-tour-package",
         title="Featured Tour Package",
-        destination="Manali",
+        destination_id=destination.id,
         type=TourType.DOMESTIC,
         description="Featured package",
         is_featured=True,
@@ -241,6 +298,16 @@ def test_staff_cannot_create_update_or_delete_tour_content(client, staff_user, d
     package = create_package(db_session)
     variant = create_variant(db_session, package.id)
 
+    destination = Destination(
+        name="Kashmir",
+        slug="kashmir",
+        country="India",
+        is_domestic=True,
+    )
+    db_session.add(destination)
+    db_session.commit()
+    db_session.refresh(destination)
+
     auth_header = {"Authorization": f"Bearer {make_token(staff_user)}"}
 
     create_package_response = client.post(
@@ -249,7 +316,7 @@ def test_staff_cannot_create_update_or_delete_tour_content(client, staff_user, d
             "tour_code": "T-9999",
             "slug": "forbidden-package",
             "title": "Forbidden Package",
-            "destination": "Kashmir",
+            "destination_id": str(destination.id),
             "type": "DOMESTIC",
             "description": "Nope",
             "is_featured": False,
@@ -305,13 +372,23 @@ def test_staff_cannot_create_update_or_delete_tour_content(client, staff_user, d
 def test_admin_can_create_update_and_delete_tour_package_variant_and_detail(client, admin_user, db_session):
     auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
 
+    destination = Destination(
+        name="Sikkim",
+        slug="sikkim",
+        country="India",
+        is_domestic=True,
+    )
+    db_session.add(destination)
+    db_session.commit()
+    db_session.refresh(destination)
+
     create_package_response = client.post(
         "/api/v1/admin/tour-packages",
         json={
             "tour_code": "T-2001",
             "slug": "admin-created-tour",
             "title": "Admin Created Tour",
-            "destination": "Sikkim",
+            "destination_id": str(destination.id),
             "type": "DOMESTIC",
             "description": "Created by admin",
             "is_featured": True,

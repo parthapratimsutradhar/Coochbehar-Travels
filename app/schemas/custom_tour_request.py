@@ -9,6 +9,7 @@ from app.schemas.base import SchemaBase
 class CustomTourRequestBase(SchemaBase):
     name: str = Field(..., max_length=100)
     mobile: str = Field(..., max_length=20)
+    destination_id: UUID | None = None
     destination: str = Field(..., max_length=150)
     travel_date: date | None = None
     travel_duration_day: int | None = Field(default=None, ge=0)
@@ -27,6 +28,7 @@ class CustomTourRequestBase(SchemaBase):
 class CustomTourRequestCreate(SchemaBase):
     name: str = Field(..., max_length=100)
     mobile: str = Field(..., max_length=20)
+    destination_id: UUID | None = None
     destination: str = Field(..., max_length=150)
     travel_date: date | None = None
     travel_duration_day: int | None = Field(default=None, ge=0)
@@ -55,6 +57,7 @@ class CustomTourRequestResponse(CustomTourRequestBase):
 
     id: UUID
     request_code: str
+    destination_id: UUID | None = None
     enquiry_id: UUID | None = None
     visitor_id: UUID | None = None
     customer_id: UUID | None = None

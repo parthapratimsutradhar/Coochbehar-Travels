@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.db.database import get_db
 from app.main import app
 from app.models.base import Base
+from app.models.destination import Destination
 from app.models.review import Review
 from app.models.tour_detail import TourDetail
 from app.models.tour_package import TourPackage
@@ -40,11 +41,20 @@ def override_db():
 
 def create_package_and_variants():
     session = TestingSessionLocal()
+    destination = Destination(
+        name="Himachal Pradesh",
+        slug="himachal-pradesh",
+        country="India",
+        is_domestic=True,
+    )
+    session.add(destination)
+    session.flush()
+
     package = TourPackage(
         tour_code="TP-1001",
         slug="himachal-summer",
         title="Himachal Summer Escape",
-        destination="Himachal Pradesh",
+        destination_id=destination.id,
         type="DOMESTIC",
         description="A relaxed summer getaway.",
         is_featured=True,
@@ -123,12 +133,21 @@ def create_package_and_variants():
             is_published=True,
         )
     )
+    goa_destination = Destination(
+        name="Goa",
+        slug="goa",
+        country="India",
+        is_domestic=True,
+    )
+    session.add(goa_destination)
+    session.flush()
+
     session.add(
         TourPackage(
             tour_code="TP-1002",
             slug="inactive-tour",
             title="Inactive Tour",
-            destination="Goa",
+            destination_id=goa_destination.id,
             type="DOMESTIC",
             is_active=False,
         )
@@ -145,12 +164,21 @@ def test_tour_package_endpoints_return_default_variant_data():
     create_package_and_variants()
 
     session = TestingSessionLocal()
+    selector_destination = Destination(
+        name="Selector Destination",
+        slug="selector-destination",
+        country="India",
+        is_domestic=True,
+    )
+    session.add(selector_destination)
+    session.flush()
+
     for index in range(6):
         package = TourPackage(
             tour_code=f"TP-20{index:02d}",
             slug=f"selector-tour-{index}",
             title=f"Selector Tour {index}",
-            destination="Selector Destination",
+            destination_id=selector_destination.id,
             type="DOMESTIC",
             is_active=True,
         )

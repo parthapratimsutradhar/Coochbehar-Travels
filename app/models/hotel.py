@@ -1,8 +1,10 @@
 
-from sqlalchemy import String, Text
-from app.models.base import ActiveEntity
+import uuid
 
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.models.base import ActiveEntity
 
 
 class Hotel(ActiveEntity):
@@ -16,6 +18,12 @@ class Hotel(ActiveEntity):
     destination: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
+    )
+
+    destination_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("destinations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     category: Mapped[str | None] = mapped_column(
@@ -36,4 +44,10 @@ class Hotel(ActiveEntity):
     description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
+    )
+
+    destination_ref = relationship(
+        "Destination",
+        foreign_keys=[destination_id],
+        back_populates="hotels",
     )

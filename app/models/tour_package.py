@@ -1,5 +1,8 @@
-from sqlalchemy import Boolean, Enum, String, Text
+import uuid
+
+from sqlalchemy import Boolean, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.core.enums import TourType
 from app.models.base import ActiveEntity
 
@@ -26,10 +29,10 @@ class TourPackage(ActiveEntity):
         nullable=False,
     )
 
-    destination: Mapped[str] = mapped_column(
-        String(150),
+    destination_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("destinations.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
-        nullable=False,
     )
 
     type: Mapped[TourType] = mapped_column(
@@ -79,4 +82,10 @@ class TourPackage(ActiveEntity):
     quotations = relationship(
         "Quotation", 
         back_populates="package"
+    )
+    
+    destination = relationship(
+        "Destination",
+        foreign_keys=[destination_id],
+        back_populates="tour_packages",
     )
