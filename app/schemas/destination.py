@@ -12,7 +12,6 @@ class DestinationBase(SchemaBase):
     image_url: str | None = Field(default=None, max_length=1000)
     is_domestic: bool = True
     is_featured: bool = False
-    is_popular: bool = False
 
 
 class DestinationCreate(DestinationBase):
@@ -27,7 +26,6 @@ class DestinationUpdate(SchemaBase):
     image_url: str | None = Field(default=None, max_length=1000)
     is_domestic: bool | None = None
     is_featured: bool | None = None
-    is_popular: bool | None = None
     is_active: bool | None = None
 
 

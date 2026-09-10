@@ -23,7 +23,6 @@ class DestinationService:
         page_size: int = 20,
         is_domestic: bool | None = None,
         is_featured: bool | None = None,
-        is_popular: bool | None = None,
         is_active: bool | None = True,
         search: str | None = None,
     ) -> dict:
@@ -32,7 +31,6 @@ class DestinationService:
             page_size=page_size,
             is_domestic=is_domestic,
             is_featured=is_featured,
-            is_popular=is_popular,
             is_active=is_active,
             search=search,
         )

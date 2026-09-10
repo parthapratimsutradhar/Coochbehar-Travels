@@ -245,7 +245,7 @@ class AdminTourService:
             tour_code=item.tour_code,
             slug=item.slug,
             title=item.title,
-            destination=destination_name or "",
+            destination=destination_name,
             type=item.type,
             description=item.description,
             is_featured=item.is_featured,

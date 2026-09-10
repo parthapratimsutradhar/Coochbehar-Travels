@@ -266,7 +266,7 @@ class TourPackageService:
             tour_code=package.tour_code,
             slug=package.slug,
             title=package.title,
-            destination=destination_name or "",
+            destination=destination_name,
             type=package.type,
             description=package.description,
             is_wishlist=is_wishlist,

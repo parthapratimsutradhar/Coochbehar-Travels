@@ -294,6 +294,30 @@ def test_admin_tour_package_list_supports_is_featured_filter(client, admin_user,
     assert items[0]["is_featured"] is True
 
 
+def test_admin_tour_package_list_handles_package_without_destination_relation(client, admin_user, db_session):
+    package = TourPackage(
+        tour_code="T-1004",
+        slug="no-destination-package",
+        title="No Destination Package",
+        destination_id=None,
+        type=TourType.DOMESTIC,
+        description="Package without linked destination",
+        is_featured=False,
+        is_active=True,
+    )
+    db_session.add(package)
+    db_session.commit()
+    db_session.refresh(package)
+
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+    response = client.get("/api/v1/admin/tour-packages", headers=auth_header)
+
+    assert response.status_code == 200
+    items = response.json()["data"]
+    assert len(items) >= 1
+    assert any(item["id"] == str(package.id) for item in items)
+
+
 def test_staff_cannot_create_update_or_delete_tour_content(client, staff_user, db_session):
     package = create_package(db_session)
     variant = create_variant(db_session, package.id)

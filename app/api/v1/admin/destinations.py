@@ -47,7 +47,6 @@ def list_destinations(
     page_size: int = Query(20, ge=1, le=100),
     is_domestic: bool | None = Query(None),
     is_featured: bool | None = Query(None),
-    is_popular: bool | None = Query(None),
     is_active: bool | None = Query(None, description="Filter by active status. Admin can see inactive destinations."),
     search: str | None = Query(None),
     db: Session = Depends(get_db),
@@ -57,7 +56,7 @@ def list_destinations(
     result = service.list_destinations(
         page=page, page_size=page_size,
         is_domestic=is_domestic, is_featured=is_featured,
-        is_popular=is_popular, is_active=is_active, search=search,
+        is_active=is_active, search=search,
     )
     return PaginatedResponse(
         message="Destinations fetched successfully",
@@ -70,25 +69,6 @@ def list_destinations(
             has_next=result["page"] < result["total_pages"],
             has_previous=result["page"] > 1,
         ),
-    )
-
-
-@router.get(
-    "/{destination_id}",
-    response_model=SuccessResponse[DestinationResponse],
-    responses={404: {"model": ErrorResponse}},
-    summary="Get destination detail",
-)
-def get_destination(
-    destination_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: Account = Depends(get_current_admin_or_staff),
-):
-    service = DestinationService(db)
-    destination = service.get_destination(destination_id)
-    return SuccessResponse(
-        message="Destination fetched successfully",
-        data=DestinationResponse.model_validate(destination),
     )
 
 

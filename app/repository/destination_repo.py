@@ -29,7 +29,6 @@ class DestinationRepository:
         page_size: int = 20,
         is_domestic: bool | None = None,
         is_featured: bool | None = None,
-        is_popular: bool | None = None,
         is_active: bool | None = True,
         search: str | None = None,
     ) -> tuple[list[Destination], int]:
@@ -40,8 +39,6 @@ class DestinationRepository:
             stmt = stmt.where(Destination.is_domestic == is_domestic)
         if is_featured is not None:
             stmt = stmt.where(Destination.is_featured == is_featured)
-        if is_popular is not None:
-            stmt = stmt.where(Destination.is_popular == is_popular)
         if search:
             term = f"%{search.strip()}%"
             stmt = stmt.where(

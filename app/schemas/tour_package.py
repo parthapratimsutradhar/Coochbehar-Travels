@@ -183,7 +183,7 @@ class TourPackageListItem(SchemaBase):
     tour_code: str
     slug: str
     title: str
-    destination: str
+    destination: str | None = None
     type: TourType
     description: str | None = None
     season_name: str | None = None
@@ -202,7 +202,7 @@ class TourPackageDetailResponse(SchemaBase):
     tour_code: str
     slug: str
     title: str
-    destination: str
+    destination: str | None = None
     type: TourType
     description: str | None = None
     is_wishlist: bool = False

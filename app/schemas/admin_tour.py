@@ -13,7 +13,7 @@ class AdminTourPackageItem(SchemaBase):
     tour_code: str
     slug: str
     title: str
-    destination: str
+    destination: str | None = None
     type: TourType
     description: str | None = None
     is_featured: bool = False

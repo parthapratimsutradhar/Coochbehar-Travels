@@ -25,7 +25,6 @@ def list_destinations(
     page_size: int = Query(20, ge=1, le=100),
     is_domestic: bool | None = Query(None),
     is_featured: bool | None = Query(None),
-    is_popular: bool | None = Query(None),
     search: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
@@ -33,7 +32,7 @@ def list_destinations(
     result = service.list_destinations(
         page=page, page_size=page_size,
         is_domestic=is_domestic, is_featured=is_featured,
-        is_popular=is_popular, is_active=True, search=search,
+        is_active=True, search=search,
     )
     return PaginatedResponse(
         message="Destinations fetched successfully",

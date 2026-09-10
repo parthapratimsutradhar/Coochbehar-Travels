@@ -44,12 +44,6 @@ class Destination(ActiveEntity):
         nullable=False, 
         default=False
     )
-
-    is_popular: Mapped[bool] = mapped_column(
-        Boolean, 
-        nullable=False, 
-        default=False
-    )
     
 # ── Relationships ───────────────────────────────────────────────────────
 
