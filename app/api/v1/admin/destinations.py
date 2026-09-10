@@ -19,7 +19,7 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=SuccessResponse[DestinationResponse],
+    response_model=ActionResponse,
     status_code=status.HTTP_201_CREATED,
     responses={409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
     summary="Create a new destination",
@@ -30,11 +30,8 @@ def create_destination(
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
     service = DestinationService(db)
-    destination = service.create_destination(payload)
-    return SuccessResponse(
-        message="Destination created successfully",
-        data=DestinationResponse.model_validate(destination),
-    )
+    service.create_destination(payload)
+    return ActionResponse(message="Destination created successfully")
 
 
 @router.get(
@@ -74,7 +71,7 @@ def list_destinations(
 
 @router.patch(
     "/{destination_id}",
-    response_model=SuccessResponse[DestinationResponse],
+    response_model=ActionResponse,
     responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
     summary="Update a destination",
 )
@@ -85,11 +82,8 @@ def update_destination(
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
     service = DestinationService(db)
-    destination = service.update_destination(destination_id, payload)
-    return SuccessResponse(
-        message="Destination updated successfully",
-        data=DestinationResponse.model_validate(destination),
-    )
+    service.update_destination(destination_id, payload)
+    return ActionResponse(message="Destination updated successfully")
 
 
 @router.delete(

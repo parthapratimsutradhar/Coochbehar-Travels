@@ -117,14 +117,20 @@ def test_destination_crud(client, superadmin_auth_header):
         },
     )
     assert resp.status_code == 201, resp.text
-    dest = resp.json()["data"]
-    dest_id = dest["id"]
-    assert dest["name"] == "Darjeeling Hills"
+    assert resp.json()["success"] is True
+    assert resp.json()["message"] == "Destination created successfully"
+    assert "data" not in resp.json()
 
-    # List destinations
-    list_resp = client.get("/api/v1/admin/destinations/", headers=superadmin_auth_header)
+    # Find the created destination id from list/search response.
+    list_resp = client.get(
+        "/api/v1/admin/destinations/",
+        headers=superadmin_auth_header,
+        params={"search": "darjeeling-hills"},
+    )
     assert list_resp.status_code == 200
-    assert len(list_resp.json()["data"]) >= 1
+    items = list_resp.json()["data"]
+    assert len(items) >= 1
+    dest_id = next(item["id"] for item in items if item["slug"] == "darjeeling-hills")
 
     # Public list
     pub_resp = client.get("/api/v1/public/destinations/")
@@ -138,11 +144,15 @@ def test_destination_crud(client, superadmin_auth_header):
         json={"name": "Darjeeling & Kalimpong"},
     )
     assert up_resp.status_code == 200
-    assert up_resp.json()["data"]["name"] == "Darjeeling & Kalimpong"
+    assert up_resp.json()["success"] is True
+    assert up_resp.json()["message"] == "Destination updated successfully"
+    assert "data" not in up_resp.json()
 
     # Soft delete
     del_resp = client.delete(f"/api/v1/admin/destinations/{dest_id}", headers=superadmin_auth_header)
     assert del_resp.status_code == 200
+    assert del_resp.json()["success"] is True
+    assert del_resp.json()["message"] == "Destination deleted successfully"
 
 
 def test_vendor_and_expenses(client, superadmin_auth_header):
