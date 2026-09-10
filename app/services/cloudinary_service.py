@@ -20,6 +20,7 @@ ALLOWED_CONTENT_TYPES = {
     "image/jpeg",
     "image/png",
     "image/webp",
+    "image/avif",
     "image/gif",
     "video/mp4",
     "video/mov",
@@ -33,7 +34,8 @@ UPLOAD_ALLOWED_FOLDERS = {
     "temporary-uploads",
     "customer-documents",
     "admin-documents",
-    "review-gallery"
+    "review-gallery",
+    "destination-images"
 }
 
 UPLOAD_IMAGE_MAX_SIZE = 10 * 1024 * 1024  # 10 MB
