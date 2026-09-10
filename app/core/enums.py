@@ -137,9 +137,9 @@ class OfferDiscountType(str, Enum):
 class OfferStatus(str, Enum):
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
+    PAUSED = "PAUSED"
     EXPIRED = "EXPIRED"
-    DISABLED = "DISABLED"        
-    
+
 
 class PaymentStatus(str, Enum):
     PENDING = "PENDING"

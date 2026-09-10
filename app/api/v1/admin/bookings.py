@@ -20,8 +20,10 @@ from app.schemas.booking import (
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.payment import BookingPaymentCreate, BookingPaymentResponse
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
+from app.schemas.tour_offer import TourOfferApplyRequest, TourOfferCalculationResult
 from app.services.booking_service import BookingService
 from app.services.payment_service import PaymentService
+from app.services.tour_offer_service import TourOfferService
 
 router = APIRouter(
     prefix="/admin/bookings",
@@ -136,6 +138,32 @@ def add_booking_cost(
         message="Booking cost added successfully",
         data=BookingCostResponse.model_validate(cost),
     )
+
+
+@router.post(
+    "/{booking_id}/offer",
+    response_model=SuccessResponse[TourOfferCalculationResult],
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Apply a tour offer to a booking",
+)
+def apply_offer_to_booking(
+    booking_id: uuid.UUID,
+    payload: TourOfferApplyRequest,
+    db: Session = Depends(get_db),
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    del current_user
+    service = BookingService(db)
+    booking = service.get_booking(booking_id)
+    offer_service = TourOfferService(db)
+    result = offer_service.apply_offer(
+        offer_id=payload.offer_id,
+        variant_id=booking.variant_id,
+        booking_amount=booking.subtotal,
+        customer_id=booking.customer_id,
+    )
+    offer_service.apply_offer_to_booking(booking=booking, offer_id=payload.offer_id)
+    return SuccessResponse(message="Offer applied successfully", data=result)
 
 
 @router.post(

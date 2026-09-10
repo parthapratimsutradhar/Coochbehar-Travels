@@ -63,6 +63,12 @@ class Booking(BaseEntity):
         nullable=True,
         index=True,
     )
+
+    offer_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tour_offers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     
     source: Mapped[BookingSource] = mapped_column(
         Enum(BookingSource, name="booking_source"),
@@ -177,9 +183,28 @@ class Booking(BaseEntity):
     )
 
     package = relationship("TourPackage")
+    
     variant = relationship("TourVariant")
-    enquiry = relationship("Enquiry", back_populates="booking")
+    
+    enquiry = relationship(
+        "Enquiry",
+        back_populates="booking"
+    )
+    
     quotation = relationship("Quotation")
+    
+    offer = relationship(
+        "TourOffer",
+        foreign_keys=[offer_id],
+        back_populates="bookings",
+    )
+    
+    offer_usages = relationship(
+        "TourOfferUsage",
+        back_populates="booking",
+        cascade="all, delete-orphan",
+    )
+    
     status_history = relationship(
         "BookingStatusHistory",
         back_populates="booking",

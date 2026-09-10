@@ -143,6 +143,16 @@ class Quotation(BaseEntity):
         index=True,
     )
 
+    offer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "tour_offers.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
     tour_name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
@@ -280,6 +290,7 @@ class Quotation(BaseEntity):
         nullable=True,
     )
 
+# ── Relationships ───────────────────────────────────────────────────────
 
     customer: Mapped["Account | None"] = relationship(
         "Account",
@@ -300,6 +311,18 @@ class Quotation(BaseEntity):
     variant: Mapped["TourVariant | None"] = relationship(
         "TourVariant",
         back_populates="quotations",
+    )
+
+    offer = relationship(
+        "TourOffer",
+        foreign_keys=[offer_id],
+        back_populates="quotations",
+    )
+
+    offer_usages = relationship(
+        "TourOfferUsage",
+        back_populates="quotation",
+        cascade="all, delete-orphan",
     )
 
     destination_ref = relationship(

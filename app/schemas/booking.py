@@ -107,6 +107,7 @@ class BookingUpdate(SchemaBase):
     subtotal: Decimal | None = Field(default=None, ge=0)
     discount_amount: Decimal | None = Field(default=None, ge=0)
     total_amount: Decimal | None = Field(default=None, ge=0)
+    offer_id: UUID | None = None
     notes: str | None = None
 
 
@@ -126,6 +127,7 @@ class BookingResponse(SchemaBase):
     variant_id: UUID | None
     departure_id: UUID | None
     quotation_id: UUID | None
+    offer_id: UUID | None = None
     booking_type: str
     source: BookingSource
     sales_account_id: UUID | None

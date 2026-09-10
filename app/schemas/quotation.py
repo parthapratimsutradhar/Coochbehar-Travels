@@ -33,6 +33,7 @@ class QuotationBase(SchemaBase):
     enquiry_id: UUID | None = None
     package_id: UUID | None = None
     variant_id: UUID | None = None
+    offer_id: UUID | None = None
     destination_id: UUID | None = None
     tour_name: str = Field(..., min_length=1, max_length=255)
     destination: str | None = Field(default=None, max_length=255)
@@ -73,6 +74,7 @@ class QuotationUpdate(SchemaBase):
     discount_amount: Decimal | None = Field(default=None, ge=0)
     tax_amount: Decimal | None = Field(default=None, ge=0)
     total_amount: Decimal | None = Field(default=None, ge=0)
+    offer_id: UUID | None = None
     valid_until: datetime | None = None
     notes: str | None = None
     terms_and_conditions: str | None = None

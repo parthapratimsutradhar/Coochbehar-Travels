@@ -145,7 +145,13 @@ class Account(ActiveEntity):
         "Document",
         foreign_keys="Document.deleted_by_account_id",
         back_populates="deleted_by_account",
-    )    
+    )
+
+    offer_usages = relationship(
+        "TourOfferUsage",
+        foreign_keys="TourOfferUsage.customer_id",
+        back_populates="customer",
+    )
 
     sales_bookings = relationship(
         "Booking",

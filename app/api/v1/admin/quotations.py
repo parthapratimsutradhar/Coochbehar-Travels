@@ -14,9 +14,11 @@ from app.schemas.quotation import (
     QuotationResponse,
     QuotationUpdate,
 )
+from app.schemas.tour_offer import TourOfferApplyRequest, TourOfferCalculationResult
 from app.schemas.booking import BookingResponse
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.quotation_service import QuotationService
+from app.services.tour_offer_service import TourOfferService
 
 router = APIRouter(
     prefix="/admin/quotations",
@@ -110,6 +112,32 @@ def update_quotation(
         message="Quotation updated successfully",
         data=QuotationResponse.model_validate(quotation),
     )
+
+
+@router.post(
+    "/{quotation_id}/offer",
+    response_model=SuccessResponse[TourOfferCalculationResult],
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Apply a tour offer to a quotation",
+)
+def apply_offer_to_quotation(
+    quotation_id: uuid.UUID,
+    payload: TourOfferApplyRequest,
+    db: Session = Depends(get_db),
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    del current_user
+    service = QuotationService(db)
+    quotation = service.get_quotation(quotation_id)
+    offer_service = TourOfferService(db)
+    result = offer_service.apply_offer(
+        offer_id=payload.offer_id,
+        variant_id=quotation.variant_id,
+        booking_amount=quotation.subtotal,
+        customer_id=quotation.customer_id,
+    )
+    offer_service.apply_offer_to_quotation(quotation=quotation, offer_id=payload.offer_id)
+    return SuccessResponse(message="Offer applied successfully", data=result)
 
 
 @router.post(

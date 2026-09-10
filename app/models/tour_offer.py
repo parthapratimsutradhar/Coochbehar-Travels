@@ -44,13 +44,6 @@ class TourOffer(ActiveUUIDEntity):
         String(255),
         nullable=False,
     )
-
-    code: Mapped[str | None] = mapped_column(
-        String(100),
-        unique=True,
-        nullable=True,
-        index=True,
-    )
     
     status: Mapped[OfferStatus] = mapped_column(
         Enum(
@@ -118,16 +111,26 @@ class TourOffer(ActiveUUIDEntity):
         nullable=False,
     )
 
-    is_stackable: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        nullable=False,
-    )
-
 # ── Relationships ───────────────────────────────────────────────────────
 
     package_links = relationship(
         "TourOfferPackage",
         back_populates="offer",
         cascade="all, delete-orphan",
+    )
+
+    usages = relationship(
+        "TourOfferUsage",
+        back_populates="offer",
+        cascade="all, delete-orphan",
+    )
+
+    bookings = relationship(
+        "Booking",
+        back_populates="offer",
+    )
+
+    quotations = relationship(
+        "Quotation",
+        back_populates="offer",
     )

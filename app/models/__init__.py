@@ -29,6 +29,7 @@ from app.models.tour_departure import TourDeparture
 from app.models.tour_detail import TourDetail
 from app.models.tour_offer import TourOffer
 from app.models.tour_offer_package import TourOfferPackage
+from app.models.tour_offer_usage import TourOfferUsage
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
 from app.models.tour_wishlist import TourWishlist
@@ -77,6 +78,7 @@ __all__ = [
     "TourDetail",
     "TourOffer",
     "TourOfferPackage",
+    "TourOfferUsage",
     "TourPackage",
     "TourVariant",
     "TourWishlist",
