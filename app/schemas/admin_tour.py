@@ -66,11 +66,11 @@ class HighlightItem(SchemaBase):
 
 
 class DepartureDateItem(SchemaBase):
-    id: str
-    departure_date: str | None = None
-    return_date: str | None = None
-    total_seats: int | None = None
-    available_seats: int | None = None
+    id: uuid.UUID | None = None
+    departure_date: date
+    return_date: date | None = None
+    total_seats: int = Field(..., ge=0)
+    available_seats: int = Field(..., ge=0)
 
     model_config = ConfigDict(extra="allow")
 
@@ -168,7 +168,7 @@ class TourDetailCreateRequest(SchemaBase):
     highlights: list[HighlightItem] | None = Field(default=None)
     inclusions: list[str] | None = Field(default=None)
     exclusions: list[str] | None = Field(default=None)
-    departure_dates: list[DepartureDateItem] | None = Field(default=None)
+    departure_dates: list[DepartureDateItem] = Field(default_factory=list)
     itinerary: list[ItineraryItem] | None = Field(default=None)
     route: list[RouteItem] | None = Field(default=None)
 

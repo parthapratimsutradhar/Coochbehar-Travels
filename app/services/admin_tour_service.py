@@ -205,6 +205,39 @@ class AdminTourService:
             .all()
         )
 
+    def _sync_departures(self, variant_id: uuid.UUID, departure_payloads: list[dict[str, Any]]) -> None:
+        existing = {
+            departure.id: departure
+            for departure in self.get_variant_departures(variant_id)
+        }
+        retained_ids: set[uuid.UUID] = set()
+
+        for payload in departure_payloads:
+            departure_id = payload.pop("id", None)
+            if departure_id is not None:
+                departure = existing.get(departure_id)
+                if departure is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Tour departure not found for this variant.",
+                    )
+                retained_ids.add(departure_id)
+                for field, value in payload.items():
+                    setattr(departure, field, value)
+            else:
+                departure = TourDeparture(variant_id=variant_id, **payload)
+                self.db.add(departure)
+
+            if payload["available_seats"] > payload["total_seats"]:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Available seats cannot exceed total seats.",
+                )
+
+        for departure_id, departure in existing.items():
+            if departure_id not in retained_ids:
+                self.db.delete(departure)
+
     def create_detail(self, payload: dict[str, Any]) -> TourDetail:
         variant = self.db.get(TourVariant, payload["variant_id"])
         if variant is None:
@@ -213,6 +246,7 @@ class AdminTourService:
         if self.repo.get_detail_by_variant_id(payload["variant_id"]):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This variant already has details.")
 
+        departure_payloads = payload.pop("departure_dates", [])
         detail = TourDetail(
             variant_id=payload["variant_id"],
             banner=normalize_json_payload(payload.get("banner")) or {"image": None, "video": None},
@@ -224,12 +258,17 @@ class AdminTourService:
             route_stops=normalize_json_payload(payload.get("route")) or [],
         )
         self.db.add(detail)
+        self._sync_departures(
+            payload["variant_id"],
+            [normalize_json_payload(item) for item in departure_payloads],
+        )
         self.db.commit()
         self.db.refresh(detail)
         return detail
 
     def update_detail(self, detail_id: uuid.UUID, payload: dict[str, Any]) -> TourDetail:
         detail = self.get_detail_by_id(detail_id)
+        departure_payloads = payload.pop("departure_dates", None)
         for key, value in payload.items():
             if key == "banner":
                 detail.banner = normalize_json_payload(value) or {"image": None, "video": None}
@@ -241,13 +280,15 @@ class AdminTourService:
                 detail.inclusions = normalize_json_payload(value) or []
             elif key == "exclusions":
                 detail.exclusions = normalize_json_payload(value) or []
-            elif key == "departure_dates":
-                if hasattr(detail, "departures_dates"):
-                    detail.departures_dates = normalize_json_payload(value) or []
             elif key == "itinerary":
                 detail.itinerary = normalize_json_payload(value) or []
             elif key == "route":
                 detail.route_stops = normalize_json_payload(value) or []
+        if departure_payloads is not None:
+            self._sync_departures(
+                detail.variant_id,
+                [normalize_json_payload(item) for item in departure_payloads],
+            )
         self.db.commit()
         self.db.refresh(detail)
         return detail
