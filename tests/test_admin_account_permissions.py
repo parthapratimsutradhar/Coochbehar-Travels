@@ -211,6 +211,32 @@ def test_admin_can_deactivate_staff_account(client, admin_user, staff_user, db_s
     assert db_session.get(Account, staff_user.id).is_active is False
 
 
+def test_admin_can_fetch_customer_detail_even_when_customer_is_inactive(client, admin_user, db_session):
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+
+    inactive_customer = Account(
+        account_code="CUS-TEST-INACTIVE",
+        name="Inactive Customer",
+        email="inactive.customer@example.com",
+        mobile="+919000000099",
+        role=AccountRole.CUSTOMER,
+        is_active=False,
+    )
+    db_session.add(inactive_customer)
+    db_session.commit()
+    db_session.refresh(inactive_customer)
+
+    response = client.get(
+        f"/api/v1/admin/customers/{inactive_customer.id}",
+        headers=auth_header,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Customer fetched successfully"
+    assert response.json()["data"]["id"] == str(inactive_customer.id)
+    assert response.json()["data"]["is_active"] is False
+
+
 def test_admin_can_deactivate_own_account(client, admin_user, db_session):
     auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
     raw_otp = request_otp_for_delete(db_session, admin_user.email)

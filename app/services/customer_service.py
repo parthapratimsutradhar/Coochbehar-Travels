@@ -80,9 +80,11 @@ class CustomerService:
             updated_at=customer.updated_at,
         )
 
-    def get_customer(self, customer_id: uuid.UUID) -> Account:
+    def get_customer(self, customer_id: uuid.UUID, include_inactive: bool = False) -> Account:
         customer = self.repo.get_by_id(customer_id)
-        if not customer or not customer.is_active:
+        if not customer:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found.")
+        if not include_inactive and not customer.is_active:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found.")
         return customer
 

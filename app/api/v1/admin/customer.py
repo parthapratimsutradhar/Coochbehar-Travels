@@ -74,7 +74,7 @@ def get_customer(
 ):
     del current_user
     service = CustomerService(db)
-    customer = service.get_customer(customer_id)
+    customer = service.get_customer(customer_id, include_inactive=True)
     if tab:
         payload = service.get_customer_tab_data(
             customer_id=customer_id,
