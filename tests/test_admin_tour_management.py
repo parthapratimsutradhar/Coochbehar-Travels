@@ -17,6 +17,7 @@ from app.models.destination import Destination
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
 from app.models.tour_detail import TourDetail
+from app.models.tour_departure import TourDeparture
 from app.models.account import Account
 from app.utils.security import create_access_token
 
@@ -140,7 +141,8 @@ def create_variant(db_session, package_id, *, is_active=True):
         valid_to=date(2026, 5, 15),
         duration_days=5,
         duration_nights=4,
-        base_price=4999,
+        list_price=4999,
+        selling_price=4999,
         badge="Popular",
         is_default=True,
         is_active=is_active,
@@ -194,6 +196,47 @@ def test_staff_can_list_tour_packages_and_variant_details(client, staff_user, db
     assert detail.json()["data"]["tour_id"] == str(package.id)
 
 
+def test_admin_package_variant_detail_uses_tour_departures_for_departure_dates(client, staff_user, db_session):
+    package = create_package(db_session)
+    variant = create_variant(db_session, package.id)
+    create_detail(db_session, variant.id)
+
+    departure_one = TourDeparture(
+        variant_id=variant.id,
+        departure_date=date(2026, 6, 1),
+        return_date=date(2026, 6, 8),
+        total_seats=12,
+        available_seats=8,
+        is_active=True,
+    )
+    departure_two = TourDeparture(
+        variant_id=variant.id,
+        departure_date=date(2026, 6, 12),
+        return_date=date(2026, 6, 18),
+        total_seats=45,
+        available_seats=8,
+        is_active=True,
+    )
+    db_session.add_all([departure_one, departure_two])
+    db_session.commit()
+
+    response = client.get(
+        f"/api/v1/admin/tour-packages/{package.id}/variants/{variant.id}",
+        headers={"Authorization": f"Bearer {make_token(staff_user)}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]["departure_dates"]
+    assert data[0]["departure_date"] == "2026-06-01"
+    assert data[0]["return_date"] == "2026-06-08"
+    assert data[0]["total_seats"] == 12
+    assert data[0]["available_seats"] == 8
+    assert data[1]["departure_date"] == "2026-06-12"
+    assert data[1]["return_date"] == "2026-06-18"
+    assert data[1]["total_seats"] == 45
+    assert data[1]["available_seats"] == 8
+
+
 def test_admin_detail_get_normalizes_legacy_highlight_strings(client, staff_user, db_session):
     package = create_package(db_session)
     variant = create_variant(db_session, package.id)
@@ -220,6 +263,72 @@ def test_admin_detail_get_normalizes_legacy_highlight_strings(client, staff_user
         {"id": "h1", "text": "Dal Lake shikara ride"},
         {"id": "h2", "text": "Gulmarg Gondola"},
     ]
+
+
+def test_admin_tour_package_creation_rejects_unknown_destination_id(client, admin_user, db_session):
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+    missing_destination_id = uuid.uuid4()
+
+    response = client.post(
+        "/api/v1/admin/tour-packages",
+        headers=auth_header,
+        json={
+            "tour_code": "T-4041",
+            "slug": "unknown-destination-package",
+            "title": "Unknown Destination Package",
+            "destination_id": str(missing_destination_id),
+            "type": "DOMESTIC",
+            "description": "Should be rejected",
+            "is_featured": False,
+            "is_active": True,
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["success"] is False
+    assert "Destination" in response.json()["message"]
+
+
+def test_admin_tour_package_update_uses_destination_id_only(client, admin_user, db_session):
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+
+    old_destination = Destination(name="Old Destination", slug="old-destination", country="India", is_domestic=True)
+    new_destination = Destination(name="New Destination", slug="new-destination", country="India", is_domestic=True)
+    db_session.add_all([old_destination, new_destination])
+    db_session.commit()
+    db_session.refresh(old_destination)
+    db_session.refresh(new_destination)
+
+    package = TourPackage(
+        tour_code="T-4042",
+        slug="destination-id-only-update",
+        title="Destination ID Only Update",
+        destination_id=old_destination.id,
+        type=TourType.DOMESTIC,
+        description="Package with destination relation",
+        is_featured=False,
+        is_active=True,
+    )
+    db_session.add(package)
+    db_session.commit()
+    db_session.refresh(package)
+
+    response = client.patch(
+        f"/api/v1/admin/tour-packages/{package.id}",
+        headers=auth_header,
+        json={
+            "destination_id": str(new_destination.id),
+            "destination": {"id": str(old_destination.id), "name": "Ignored Destination"},
+            "title": "Destination ID Only Updated",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Tour package updated successfully"
+
+    db_session.refresh(package)
+    assert package.destination_id == new_destination.id
+    assert package.title == "Destination ID Only Updated"
 
 
 def test_admin_tour_package_list_supports_type_filter(client, admin_user, db_session):
@@ -256,6 +365,7 @@ def test_admin_tour_package_list_supports_type_filter(client, admin_user, db_ses
     assert len(items) == 1
     assert items[0]["id"] == str(international_package.id)
     assert items[0]["type"] == "INTERNATIONAL"
+    assert items[0]["destination"] == "Ladakh"
 
 
 def test_admin_tour_package_list_supports_is_featured_filter(client, admin_user, db_session):

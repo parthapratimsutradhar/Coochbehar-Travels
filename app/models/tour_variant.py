@@ -54,7 +54,12 @@ class TourVariant(ActiveEntity):
         nullable=False,
     )
 
-    base_price: Mapped[Decimal] = mapped_column(
+    list_price: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2),
+        nullable=False,
+    )
+
+    selling_price: Mapped[Decimal] = mapped_column(
         Numeric(10, 2),
         nullable=False,
     )

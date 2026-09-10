@@ -32,10 +32,9 @@ class AdminTourVariantItem(SchemaBase):
     valid_to: str
     duration_days: int
     duration_nights: int
-    price: float
-    seats: int | None = None
+    list_price: float
+    selling_price: float
     badge: str | None = None
-    availability: str | None = None
     is_default: bool = False
     is_active: bool = True
 
@@ -68,7 +67,10 @@ class HighlightItem(SchemaBase):
 
 class DepartureDateItem(SchemaBase):
     id: str
-    date: str
+    departure_date: str | None = None
+    return_date: str | None = None
+    total_seats: int | None = None
+    available_seats: int | None = None
 
     model_config = ConfigDict(extra="allow")
 

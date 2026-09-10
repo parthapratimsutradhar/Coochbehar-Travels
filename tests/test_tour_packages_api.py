@@ -72,7 +72,8 @@ def create_package_and_variants():
         valid_to=date(2026, 6, 30),
         duration_days=5,
         duration_nights=4,
-        base_price=2499,
+        list_price=2499,
+        selling_price=2499,
         is_default=True,
         is_active=True,
     )
@@ -89,7 +90,8 @@ def create_package_and_variants():
         valid_to=date(2026, 7, 15),
         duration_days=6,
         duration_nights=5,
-        base_price=3299,
+        list_price=3299,
+        selling_price=3299,
         is_default=False,
         is_active=True,
     )

@@ -91,7 +91,9 @@ def update_admin_tour_package(
     db: Session = Depends(get_db),
 ):
     del current_user
-    AdminTourService(db).update_package(tour_package_id, payload.model_dump(exclude_unset=True))
+    payload_data = payload.model_dump(exclude_unset=True)
+    payload_data.pop("destination", None)
+    AdminTourService(db).update_package(tour_package_id, payload_data)
     return ActionResponse(message="Tour package updated successfully")
 
 
@@ -153,9 +155,11 @@ def get_admin_package_variant_details(
     db: Session = Depends(get_db),
 ):
     del current_user
-    detail = AdminTourService(db).get_package_variant_details(tour_package_id, variant_id)
+    service = AdminTourService(db)
+    detail = service.get_package_variant_details(tour_package_id, variant_id)
+    departures = service.get_variant_departures(variant_id)
     return SuccessResponse(
         message="Item fetched successfully",
-        data=AdminTourService._detail_to_response(detail, tour_package_id),
+        data=AdminTourService._detail_to_response(detail, tour_package_id, departures),
     )
 

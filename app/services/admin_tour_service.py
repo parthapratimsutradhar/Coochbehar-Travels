@@ -4,11 +4,12 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.enums import TourType
 from app.models.destination import Destination
 from app.models.tour_detail import TourDetail
+from app.models.tour_departure import TourDeparture
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
 from app.repository.admin_tour_repo import AdminTourRepository
@@ -34,7 +35,11 @@ class AdminTourService:
         type: TourType | None = None,
         search: str | None = None,
     ):
-        query = self.db.query(TourPackage).outerjoin(TourPackage.destination)
+        query = (
+            self.db.query(TourPackage)
+            .outerjoin(TourPackage.destination)
+            .options(selectinload(TourPackage.destination))
+        )
         if is_active is not None:
             query = query.filter(TourPackage.is_active.is_(is_active))
         if is_featured is not None:
@@ -70,6 +75,12 @@ class AdminTourService:
         return package
 
     def create_package(self, payload: dict[str, Any]) -> TourPackage:
+        destination_id = payload.get("destination_id")
+        if destination_id is not None:
+            destination = self.db.get(Destination, destination_id)
+            if destination is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Destination not found.")
+
         if self.repo.get_package_by_code_or_slug(payload["tour_code"], payload["slug"]):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A tour package with this code or slug already exists.")
 
@@ -81,6 +92,12 @@ class AdminTourService:
 
     def update_package(self, package_id: uuid.UUID, payload: dict[str, Any]) -> TourPackage:
         package = self.get_package(package_id)
+
+        if "destination_id" in payload and payload.get("destination_id") is not None:
+            destination = self.db.get(Destination, payload["destination_id"])
+            if destination is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Destination not found.")
+
         for field, value in payload.items():
             setattr(package, field, value)
         self.db.commit()
@@ -125,6 +142,7 @@ class AdminTourService:
         if self.repo.get_variant_by_slug(payload["slug"]):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A tour variant with this slug already exists.")
 
+        price = Decimal(str(payload["price"]))
         variant = TourVariant(
             package_id=package.id,
             slug=payload["slug"],
@@ -134,7 +152,8 @@ class AdminTourService:
             valid_to=date.fromisoformat(payload["valid_to"]),
             duration_days=payload["duration_days"],
             duration_nights=payload["duration_nights"],
-            base_price=Decimal(str(payload["price"])),
+            list_price=price,
+            selling_price=price,
             badge=payload.get("badge"),
             is_default=payload.get("is_default", False),
             is_active=payload.get("is_active", True),
@@ -149,7 +168,9 @@ class AdminTourService:
         update_data = payload.copy()
 
         if "price" in update_data:
-            update_data["base_price"] = Decimal(str(update_data.pop("price")))
+            price = Decimal(str(update_data.pop("price")))
+            update_data["list_price"] = price
+            update_data["selling_price"] = price
         if "valid_from" in update_data and isinstance(update_data["valid_from"], str):
             update_data["valid_from"] = date.fromisoformat(update_data["valid_from"])
         if "valid_to" in update_data and isinstance(update_data["valid_to"], str):
@@ -174,6 +195,14 @@ class AdminTourService:
         if detail is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour detail not found.")
         return detail
+
+    def get_variant_departures(self, variant_id: uuid.UUID) -> list[TourDeparture]:
+        return (
+            self.db.query(TourDeparture)
+            .filter(TourDeparture.variant_id == variant_id)
+            .order_by(TourDeparture.departure_date.asc(), TourDeparture.created_at.asc())
+            .all()
+        )
 
     def create_detail(self, payload: dict[str, Any]) -> TourDetail:
         variant = self.db.get(TourVariant, payload["variant_id"])
@@ -264,25 +293,79 @@ class AdminTourService:
             valid_to=str(item.valid_to),
             duration_days=item.duration_days,
             duration_nights=item.duration_nights,
-            price=float(item.base_price),
-            seats=getattr(item, "seats", None),
+            list_price=float(item.list_price),
+            selling_price=float(item.selling_price),
             badge=item.badge,
-            availability=getattr(item, "availability", None) or "AVAILABLE",
             is_default=item.is_default,
             is_active=item.is_active,
         )
 
     @staticmethod
-    def _detail_to_response(detail: TourDetail, package_id: uuid.UUID | None = None) -> AdminTourDetailPayload:
+    def _detail_to_response(
+        detail: TourDetail,
+        package_id: uuid.UUID | None = None,
+        departures: list[TourDeparture] | None = None,
+    ) -> AdminTourDetailPayload:
         raw_highlights = detail.highlights if isinstance(detail.highlights, list) else []
-        highlights = [
-            item if isinstance(item, dict) else {"id": f"h{index + 1}", "text": str(item)}
-            for index, item in enumerate(raw_highlights)
-        ]
-        raw_dates = getattr(detail, "departures_dates", None) if isinstance(getattr(detail, "departures_dates", None), list) else []
+        highlights = []
+        for index, item in enumerate(raw_highlights):
+            if isinstance(item, dict):
+                row = dict(item)
+                row.setdefault("id", f"h{index + 1}")
+                row.setdefault("text", str(row.get("text") or ""))
+                highlights.append(row)
+            else:
+                highlights.append({"id": f"h{index + 1}", "text": str(item)})
+
+        raw_gallery = detail.gallery if isinstance(detail.gallery, list) else []
+        gallery = []
+        for index, item in enumerate(raw_gallery):
+            if isinstance(item, dict):
+                row = dict(item)
+                row.setdefault("id", f"g{index + 1}")
+                row.setdefault("alt", row.get("alt") or "")
+                row.setdefault("url", row.get("url") or "")
+                row.setdefault("type", row.get("type") or "image")
+                row.setdefault("display_order", index + 1)
+                gallery.append(row)
+            else:
+                gallery.append({"id": f"g{index + 1}", "alt": "", "url": str(item), "type": "image", "display_order": index + 1})
+
+        raw_itinerary = detail.itinerary if isinstance(detail.itinerary, list) else []
+        itinerary = []
+        for index, item in enumerate(raw_itinerary):
+            if isinstance(item, dict):
+                row = dict(item)
+                row.setdefault("id", f"i{index + 1}")
+                row.setdefault("day", row.get("day", index + 1))
+                row.setdefault("title", row.get("title") or "")
+                row.setdefault("description", row.get("description") or "")
+                itinerary.append(row)
+            else:
+                itinerary.append({"id": f"i{index + 1}", "day": index + 1, "title": str(item), "description": ""})
+
+        raw_route = detail.route_stops if isinstance(detail.route_stops, list) else []
+        route = []
+        for index, item in enumerate(raw_route):
+            if isinstance(item, dict):
+                row = dict(item)
+                row.setdefault("id", f"r{index + 1}")
+                row.setdefault("city", row.get("city") or "")
+                row.setdefault("nights", row.get("nights", 0))
+                route.append(row)
+            else:
+                route.append({"id": f"r{index + 1}", "city": str(item), "nights": 0})
+
+        normalized_departures = departures or []
         departure_dates = [
-            item if isinstance(item, dict) and "id" in item else {"id": f"d{index + 1}", "date": str(item.get("date") if isinstance(item, dict) else item)}
-            for index, item in enumerate(raw_dates)
+            {
+                "id": str(item.id),
+                "departure_date": item.departure_date.isoformat() if item.departure_date else None,
+                "return_date": item.return_date.isoformat() if item.return_date else None,
+                "total_seats": item.total_seats,
+                "available_seats": item.available_seats,
+            }
+            for item in normalized_departures
         ]
 
         return AdminTourDetailPayload(
@@ -290,12 +373,12 @@ class AdminTourService:
             tour_id=package_id,
             variant_id=detail.variant_id,
             banner=detail.banner if isinstance(detail.banner, dict) else {"image": detail.banner} if isinstance(detail.banner, str) else None,
-            gallery=detail.gallery if isinstance(detail.gallery, list) else [],
+            gallery=gallery,
             highlights=highlights,
             inclusions=detail.inclusions if isinstance(detail.inclusions, list) else [],
             exclusions=detail.exclusions if isinstance(detail.exclusions, list) else [],
             departure_dates=departure_dates,
-            itinerary=detail.itinerary if isinstance(detail.itinerary, list) else [],
-            route=detail.route_stops if isinstance(detail.route_stops, list) else [],
+            itinerary=itinerary,
+            route=route,
         )
 

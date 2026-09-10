@@ -46,11 +46,14 @@ class TourDeparture(ActiveEntity):
         nullable=False,
     )
 
-    price: Mapped[Decimal] = mapped_column(
-        Numeric(12, 2),
-        nullable=False,
+# ── Relationships ───────────────────────────────────────────────────────
+
+    variant = relationship(
+        "TourVariant",
+        back_populates="departures"
     )
-
-
-    variant = relationship("TourVariant", back_populates="departures")
-    bookings = relationship("Booking", back_populates="departure")
+    
+    bookings = relationship(
+        "Booking", 
+        back_populates="departure"
+    )
