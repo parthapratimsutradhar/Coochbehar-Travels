@@ -44,6 +44,11 @@ UPLOAD_VIDEO_MAX_DURATION = 60            # seconds
 UPLOAD_RATE_LIMIT_PER_HOUR = 10
 GOOGLE_IMAGE_HOST_SUFFIX = ".googleusercontent.com"
 
+# A small Render instance cannot safely process multiple large uploads at once.
+# Serializing this resource-intensive section keeps concurrent requests from
+# multiplying the peak memory used by image/PIL and video/FFmpeg processing.
+_UPLOAD_CONCURRENCY = asyncio.Semaphore(1)
+
 
 def _clean_folder_segment(value: str) -> str:
     segment = re.sub(r"[^A-Za-z0-9_-]+", "-", value.strip())
@@ -64,7 +69,11 @@ def build_cloudinary_folder(sub_folder: str) -> str:
     return "/".join([CLOUDINARY_ROOT_FOLDER, *parts])
 
 
-def _validate_upload(file: UploadFile, content: bytes, sub_folder: str) -> str:
+def _validate_upload(
+    content: bytes,
+    content_type: str,
+    sub_folder: str,
+) -> str:
     if not content:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -72,7 +81,7 @@ def _validate_upload(file: UploadFile, content: bytes, sub_folder: str) -> str:
         )
     max_size = (
         UPLOAD_VIDEO_MAX_SIZE
-        if file.content_type and file.content_type.startswith("video/")
+        if content_type.startswith("video/")
         else UPLOAD_IMAGE_MAX_SIZE
     )
     if len(content) > max_size:
@@ -80,7 +89,7 @@ def _validate_upload(file: UploadFile, content: bytes, sub_folder: str) -> str:
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"Uploaded file exceeds the {max_size // (1024 * 1024)} MB limit",
         )
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
+    if content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Unsupported file type",
@@ -186,7 +195,8 @@ def _compress_video(content: bytes, filename: str) -> tuple[bytes, str, str]:
                 "+faststart",
                 output_path,
             ],
-            capture_output=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             check=False,
         )
         if result.returncode != 0:
@@ -234,7 +244,7 @@ def _validate_google_picture_url(picture_url: str) -> None:
         )
 
 
-async def upload_content_to_cloudinary(
+async def _upload_content_to_cloudinary(
     content: bytes,
     filename: str,
     content_type: str,
@@ -255,18 +265,8 @@ async def upload_content_to_cloudinary(
             detail="Cloudinary API secret is invalid. Set CLOUDINARY_API_SECRET to the hidden API Secret from your Cloudinary dashboard, not the API Key.",
         )
 
-    original_file = UploadFile(
-        filename=filename,
-        file=BytesIO(content),
-        headers={"content-type": content_type},
-    )
-    folder = _validate_upload(original_file, content, sub_folder)
+    folder = _validate_upload(content, content_type, sub_folder)
     content, filename, content_type = await _compress_upload(content, filename, content_type)
-    file = UploadFile(
-        filename=filename,
-        file=BytesIO(content),
-        headers={"content-type": content_type},
-    )
     timestamp = int(time.time())
     upload_params = {
         "folder": folder,
@@ -281,9 +281,9 @@ async def upload_content_to_cloudinary(
     }
     files = {
         "file": (
-            file.filename or "upload",
+            filename or "upload",
             content,
-            file.content_type or "application/octet-stream",
+            content_type or "application/octet-stream",
         )
     }
     upload_url = (
@@ -308,13 +308,29 @@ async def upload_content_to_cloudinary(
     return result
 
 
+async def upload_content_to_cloudinary(
+    content: bytes,
+    filename: str,
+    content_type: str,
+    sub_folder: str,
+) -> dict[str, Any]:
+    async with _UPLOAD_CONCURRENCY:
+        return await _upload_content_to_cloudinary(
+            content=content,
+            filename=filename,
+            content_type=content_type,
+            sub_folder=sub_folder,
+        )
+
+
 async def upload_file_to_cloudinary(file: UploadFile, sub_folder: str) -> dict[str, Any]:
-    return await upload_content_to_cloudinary(
-        content=await file.read(),
-        filename=file.filename or "upload",
-        content_type=file.content_type or "application/octet-stream",
-        sub_folder=sub_folder,
-    )
+    async with _UPLOAD_CONCURRENCY:
+        return await _upload_content_to_cloudinary(
+            content=await file.read(),
+            filename=file.filename or "upload",
+            content_type=file.content_type or "application/octet-stream",
+            sub_folder=sub_folder,
+        )
 
 
 async def upload_google_profile_picture(picture_url: str) -> str:
