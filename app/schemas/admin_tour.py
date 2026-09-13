@@ -45,7 +45,7 @@ class BannerPayload(SchemaBase):
     image: str | None = None
     video: str | None = None
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
 
 class GalleryItem(SchemaBase):

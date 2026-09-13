@@ -268,7 +268,7 @@ def test_admin_detail_banner_patch_replaces_only_supplied_media(client, admin_us
     }
 
 
-def test_admin_detail_banner_rejects_extra_media_fields(client, admin_user, db_session):
+def test_admin_detail_banner_ignores_extra_media_fields(client, admin_user, db_session):
     package = create_package(db_session)
     variant = create_variant(db_session, package.id)
     detail = create_detail(db_session, variant.id)
@@ -279,7 +279,11 @@ def test_admin_detail_banner_rejects_extra_media_fields(client, admin_user, db_s
         headers={"Authorization": f"Bearer {make_token(admin_user)}"},
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["data"]["banner"] == {
+        "image": "https://example.com/new-banner.jpg",
+        "video": None,
+    }
 
 
 def test_admin_detail_get_normalizes_legacy_highlight_strings(client, staff_user, db_session):
