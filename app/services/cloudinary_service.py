@@ -157,7 +157,7 @@ def _compress_image(content: bytes, content_type: str) -> bytes:
         compressed = output.getvalue()
     return compressed if len(compressed) < len(content) else content
 
-
+# NEEd to upgrade in production, too havy in render
 def _compress_video(content: bytes, filename: str) -> tuple[bytes, str, str]:
     try:
         ffmpeg = importlib.import_module("imageio_ffmpeg").get_ffmpeg_exe()
@@ -218,9 +218,15 @@ async def _compress_upload(
     content_type: str,
 ) -> tuple[bytes, str, str]:
     if content_type.startswith("image/"):
-        return await asyncio.to_thread(_compress_image, content, content_type), filename, content_type
+        return await asyncio.to_thread(
+            _compress_image,
+            content,
+            content_type,
+        ), filename, content_type
+
     if content_type.startswith("video/"):
-        return await asyncio.to_thread(_compress_video, content, filename)
+        return content, filename, content_type
+
     return content, filename, content_type
 
 
