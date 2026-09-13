@@ -237,6 +237,51 @@ def test_admin_package_variant_detail_uses_tour_departures_for_departure_dates(c
     assert data[1]["available_seats"] == 8
 
 
+def test_admin_detail_banner_patch_replaces_only_supplied_media(client, admin_user, db_session):
+    package = create_package(db_session)
+    variant = create_variant(db_session, package.id)
+    detail = create_detail(db_session, variant.id)
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+
+    response = client.patch(
+        f"/api/v1/admin/tour-details/{detail.id}",
+        json={"banner": {"image": "https://example.com/new-banner.jpg"}},
+        headers=auth_header,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["banner"] == {
+        "image": "https://example.com/new-banner.jpg",
+        "video": None,
+    }
+
+    response = client.patch(
+        f"/api/v1/admin/tour-details/{detail.id}",
+        json={"banner": {"video": "https://example.com/banner.mp4"}},
+        headers=auth_header,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["banner"] == {
+        "image": "https://example.com/new-banner.jpg",
+        "video": "https://example.com/banner.mp4",
+    }
+
+
+def test_admin_detail_banner_rejects_extra_media_fields(client, admin_user, db_session):
+    package = create_package(db_session)
+    variant = create_variant(db_session, package.id)
+    detail = create_detail(db_session, variant.id)
+
+    response = client.patch(
+        f"/api/v1/admin/tour-details/{detail.id}",
+        json={"banner": {"image": "https://example.com/new-banner.jpg", "thumbnail": "extra"}},
+        headers={"Authorization": f"Bearer {make_token(admin_user)}"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_admin_detail_get_normalizes_legacy_highlight_strings(client, staff_user, db_session):
     package = create_package(db_session)
     variant = create_variant(db_session, package.id)

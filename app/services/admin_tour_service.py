@@ -249,7 +249,7 @@ class AdminTourService:
         departure_payloads = payload.pop("departure_dates", [])
         detail = TourDetail(
             variant_id=payload["variant_id"],
-            banner=normalize_json_payload(payload.get("banner")) or {"image": None, "video": None},
+            banner=self._normalize_banner(payload.get("banner")),
             gallery=normalize_json_payload(payload.get("gallery")) or [],
             highlights=normalize_json_payload(payload.get("highlights")) or [],
             inclusions=normalize_json_payload(payload.get("inclusions")) or [],
@@ -271,7 +271,7 @@ class AdminTourService:
         departure_payloads = payload.pop("departure_dates", None)
         for key, value in payload.items():
             if key == "banner":
-                detail.banner = normalize_json_payload(value) or {"image": None, "video": None}
+                detail.banner = self._update_banner(detail.banner, value)
             elif key == "gallery":
                 detail.gallery = normalize_json_payload(value) or []
             elif key == "highlights":
@@ -292,6 +292,41 @@ class AdminTourService:
         self.db.commit()
         self.db.refresh(detail)
         return detail
+
+    @staticmethod
+    def _normalize_banner(value: Any) -> dict[str, str | None]:
+        if value is None:
+            return {"image": None, "video": None}
+
+        normalized = normalize_json_payload(value)
+        if not isinstance(normalized, dict):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Banner must contain image and video fields.",
+            )
+
+        return {
+            "image": normalized.get("image"),
+            "video": normalized.get("video"),
+        }
+
+    @classmethod
+    def _update_banner(cls, current: Any, value: Any) -> dict[str, str | None]:
+        if value is None:
+            return {"image": None, "video": None}
+
+        existing = cls._normalize_banner(current)
+        normalized = normalize_json_payload(value)
+        if not isinstance(normalized, dict):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Banner must contain image and video fields.",
+            )
+
+        for media_type in ("image", "video"):
+            if media_type in normalized:
+                existing[media_type] = normalized[media_type]
+        return existing
 
     def delete_detail(self, detail_id: uuid.UUID) -> TourDetail:
         detail = self.get_detail_by_id(detail_id)
@@ -423,4 +458,3 @@ class AdminTourService:
             itinerary=itinerary,
             route=route,
         )
-
