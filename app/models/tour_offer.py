@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from decimal import Decimal
 
@@ -12,11 +13,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.enums import OfferDiscountType,OfferStatus
-from app.models.base import ActiveUUIDEntity
+from app.core.enums import OfferDiscountType, OfferStatus
+from app.models.base import ActiveEntity
 
 
-class TourOffer(ActiveUUIDEntity):
+class TourOffer(ActiveEntity):
     """Offer/discount campaign applicable to tours."""
 
     __tablename__ = "tour_offers"
@@ -128,3 +129,7 @@ class TourOffer(ActiveUUIDEntity):
         "Quotation",
         back_populates="offer",
     )
+
+    @property
+    def variant_ids(self) -> list[uuid.UUID]:
+        return [link.variant_id for link in self.package_links]

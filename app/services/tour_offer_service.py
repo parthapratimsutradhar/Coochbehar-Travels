@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.enums import OfferDiscountType, OfferStatus
@@ -12,13 +11,14 @@ from app.models.quotation import Quotation
 from app.models.tour_offer import TourOffer
 from app.models.tour_offer_package import TourOfferPackage
 from app.models.tour_offer_usage import TourOfferUsage
-from app.models.tour_variant import TourVariant
-from app.schemas.tour_offer import TourOfferCalculationResult, TourOfferCreate, TourOfferResponse, TourOfferUpdate
+from app.repository.tour_offer_repo import TourOfferRepository
+from app.schemas.tour_offer import TourOfferCalculationResult, TourOfferCreate, TourOfferUpdate
 
 
 class TourOfferService:
     def __init__(self, db: Session) -> None:
         self.db = db
+        self.repo = TourOfferRepository(db)
 
     def create_offer(self, payload: TourOfferCreate) -> TourOffer:
         if payload.valid_until <= payload.valid_from:
@@ -42,14 +42,6 @@ class TourOfferService:
             status=payload.status,
         )
         self.db.add(offer)
-        self.db.flush()
-
-        for variant_id in payload.variant_ids:
-            variant = self.db.get(TourVariant, variant_id)
-            if not variant:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Variant {variant_id} not found.")
-            self.db.add(TourOfferPackage(offer_id=offer.id, variant_id=variant.id))
-
         self.db.commit()
         self.db.refresh(offer)
         return offer
@@ -57,7 +49,6 @@ class TourOfferService:
     def update_offer(self, offer_id: uuid.UUID, payload: TourOfferUpdate) -> TourOffer:
         offer = self.get_offer(offer_id)
         update_data = payload.model_dump(exclude_unset=True)
-        variant_ids = update_data.pop("variant_ids", None)
 
         for field, value in update_data.items():
             setattr(offer, field, value)
@@ -68,44 +59,50 @@ class TourOfferService:
         if offer.discount_type == OfferDiscountType.PERCENTAGE and offer.discount_value > Decimal("100"):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Percentage discount cannot exceed 100%.")
 
-        if variant_ids is not None:
-            self.db.query(TourOfferPackage).filter(TourOfferPackage.offer_id == offer.id).delete()
-            for variant_id in variant_ids:
-                if not self.db.get(TourVariant, variant_id):
-                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Variant {variant_id} not found.")
-                self.db.add(TourOfferPackage(offer_id=offer.id, variant_id=variant_id))
-
         self.db.commit()
         self.db.refresh(offer)
         return offer
 
     def get_offer(self, offer_id: uuid.UUID) -> TourOffer:
-        offer = self.db.get(TourOffer, offer_id)
+        offer = self.repo.get(offer_id)
         if not offer:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found.")
         return offer
 
-    def get_offer_response(self, offer_id: uuid.UUID) -> TourOfferResponse:
-        offer = self.get_offer(offer_id)
-        return TourOfferResponse.model_validate(offer)
-
     def list_offers(self, *, status: OfferStatus | None = None) -> list[TourOffer]:
-        stmt = select(TourOffer)
-        if status is not None:
-            stmt = stmt.where(TourOffer.status == status)
-        stmt = stmt.order_by(TourOffer.created_at.desc())
-        return self.db.execute(stmt).scalars().all()
+        return self.repo.list(status)
 
-    def update_offer_status(self, offer_id: uuid.UUID, offer_status: OfferStatus) -> TourOffer:
+    def update_variants(self, offer_id: uuid.UUID, variant_ids: list[uuid.UUID]) -> None:
         offer = self.get_offer(offer_id)
-        offer.status = offer_status
+        variants = []
+        for variant_id in dict.fromkeys(variant_ids):
+            variant = self.repo.get_variant(variant_id)
+            if not variant:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Variant {variant_id} not found.",
+                )
+            variants.append(variant)
+
+        self.db.query(TourOfferPackage).filter(
+            TourOfferPackage.offer_id == offer.id
+        ).delete()
+        for variant in variants:
+            self.db.add(TourOfferPackage(offer_id=offer.id, variant_id=variant.id))
         self.db.commit()
-        self.db.refresh(offer)
-        return offer
+
+    def list_bookings(self, offer_id: uuid.UUID) -> list[Booking]:
+        self.get_offer(offer_id)
+        return self.repo.list_bookings(offer_id)
+
+    def delete_offer(self, offer_id: uuid.UUID) -> None:
+        offer = self.get_offer(offer_id)
+        self.db.delete(offer)
+        self.db.commit()
 
     def _get_variant_ids(self, offer_id: uuid.UUID) -> set[uuid.UUID]:
-        rows = self.db.query(TourOfferPackage.variant_id).filter(TourOfferPackage.offer_id == offer_id).all()
-        return {row[0] for row in rows}
+        offer = self.get_offer(offer_id)
+        return {link.variant_id for link in offer.package_links}
 
     def validate_offer(self, *, offer: TourOffer, variant_id: uuid.UUID, booking_amount: Decimal, customer_id: uuid.UUID | None = None) -> None:
         now = datetime.now(timezone.utc)

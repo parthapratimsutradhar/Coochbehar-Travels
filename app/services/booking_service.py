@@ -146,6 +146,7 @@ class BookingService:
             variant_id=booking.variant_id,
             departure_id=booking.departure_id,
             quotation_id=booking.quotation_id,
+            offer_id=booking.offer_id,
             booking_type=booking.booking_type,
             source=booking.source,
             sales_account_id=booking.sales_account_id,

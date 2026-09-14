@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import Field
@@ -12,8 +12,27 @@ class TourOfferApplyRequest(SchemaBase):
     offer_id: uuid.UUID
 
 
-class TourOfferStatusUpdate(SchemaBase):
-    status: OfferStatus
+class TourOfferVariantsUpdate(SchemaBase):
+    variant_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+class TourOfferVariantResponse(SchemaBase):
+    id: uuid.UUID
+    package_id: uuid.UUID
+    slug: str
+    name: str
+    season_name: str | None = None
+    valid_from: date
+    valid_to: date
+    duration_days: int
+    duration_nights: int
+    list_price: Decimal
+    selling_price: Decimal
+    badge: str | None = None
+    is_default: bool
+    is_active: bool
+
+    model_config = {"from_attributes": True}
 
 
 class TourOfferCreate(SchemaBase):
@@ -28,7 +47,6 @@ class TourOfferCreate(SchemaBase):
     valid_from: datetime
     valid_until: datetime
     status: OfferStatus = OfferStatus.DRAFT
-    variant_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class TourOfferUpdate(SchemaBase):
@@ -43,10 +61,9 @@ class TourOfferUpdate(SchemaBase):
     valid_from: datetime | None = None
     valid_until: datetime | None = None
     status: OfferStatus | None = None
-    variant_ids: list[uuid.UUID] | None = None
 
 
-class TourOfferResponse(SchemaBase):
+class TourOfferBaseResponse(SchemaBase):
     id: uuid.UUID
     name: str
     description: str | None = None
@@ -62,9 +79,12 @@ class TourOfferResponse(SchemaBase):
     valid_until: datetime
     created_at: datetime
     updated_at: datetime
-    variant_ids: list[uuid.UUID] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
+
+
+class TourOfferListResponse(TourOfferBaseResponse):
+    pass
 
 
 class TourOfferCalculationResult(SchemaBase):

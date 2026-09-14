@@ -91,6 +91,22 @@ class BookingRepository:
         stmt = stmt.order_by(Booking.created_at.desc()).offset(skip).limit(limit)
         return list(self.db.execute(stmt).unique().scalars().all())
 
+    def list_for_offer(self, offer_id: uuid.UUID) -> list[Booking]:
+        stmt = (
+            select(Booking)
+            .options(
+                joinedload(Booking.customer),
+                joinedload(Booking.package),
+                joinedload(Booking.variant),
+                joinedload(Booking.departure),
+                joinedload(Booking.travellers),
+                joinedload(Booking.status_history),
+            )
+            .where(Booking.offer_id == offer_id)
+            .order_by(Booking.created_at.desc())
+        )
+        return list(self.db.execute(stmt).unique().scalars().all())
+
     def create(
         self,
         booking_data: dict,
