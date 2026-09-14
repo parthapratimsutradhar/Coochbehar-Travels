@@ -39,7 +39,6 @@ class TourOfferService:
             usage_count=0,
             valid_from=payload.valid_from,
             valid_until=payload.valid_until,
-            is_public=payload.is_public,
             status=payload.status,
         )
         self.db.add(offer)
@@ -90,12 +89,10 @@ class TourOfferService:
         offer = self.get_offer(offer_id)
         return TourOfferResponse.model_validate(offer)
 
-    def list_offers(self, *, status: OfferStatus | None = None, is_public: bool | None = None) -> list[TourOffer]:
+    def list_offers(self, *, status: OfferStatus | None = None) -> list[TourOffer]:
         stmt = select(TourOffer)
         if status is not None:
             stmt = stmt.where(TourOffer.status == status)
-        if is_public is not None:
-            stmt = stmt.where(TourOffer.is_public == is_public)
         stmt = stmt.order_by(TourOffer.created_at.desc())
         return self.db.execute(stmt).scalars().all()
 

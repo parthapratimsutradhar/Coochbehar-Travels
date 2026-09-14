@@ -105,12 +105,6 @@ class TourOffer(ActiveUUIDEntity):
         nullable=False,
     )
 
-    is_public: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
-        nullable=False,
-    )
-
 # ── Relationships ───────────────────────────────────────────────────────
 
     package_links = relationship(

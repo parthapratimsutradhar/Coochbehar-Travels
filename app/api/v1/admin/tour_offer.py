@@ -43,12 +43,11 @@ def create_offer(
 )
 def list_offers(
     status: OfferStatus | None = Query(default=None),
-    is_public: bool | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_only),
 ):
     del current_user
-    offers = TourOfferService(db).list_offers(status=status, is_public=is_public)
+    offers = TourOfferService(db).list_offers(status=status)
     return SuccessResponse(message="Offers fetched successfully", data=[TourOfferResponse.model_validate(o) for o in offers])
 
 

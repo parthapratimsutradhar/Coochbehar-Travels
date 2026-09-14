@@ -27,7 +27,6 @@ class TourOfferCreate(SchemaBase):
     per_customer_limit: int | None = Field(default=None, gt=0)
     valid_from: datetime
     valid_until: datetime
-    is_public: bool = True
     status: OfferStatus = OfferStatus.DRAFT
     variant_ids: list[uuid.UUID] = Field(default_factory=list)
 
@@ -43,7 +42,6 @@ class TourOfferUpdate(SchemaBase):
     per_customer_limit: int | None = Field(default=None, gt=0)
     valid_from: datetime | None = None
     valid_until: datetime | None = None
-    is_public: bool | None = None
     status: OfferStatus | None = None
     variant_ids: list[uuid.UUID] | None = None
 
@@ -62,7 +60,6 @@ class TourOfferResponse(SchemaBase):
     per_customer_limit: int | None = None
     valid_from: datetime
     valid_until: datetime
-    is_public: bool = True
     created_at: datetime
     updated_at: datetime
     variant_ids: list[uuid.UUID] = Field(default_factory=list)
