@@ -153,6 +153,45 @@ def test_admin_can_update_any_staff_account(client, admin_user, staff_user):
     assert response.json()["message"] == "User updated successfully."
 
 
+def test_admin_can_create_staff_account(client, admin_user, db_session):
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+
+    response = client.post(
+        "/api/v1/admin/account",
+        json={
+            "name": "New Staff",
+            "email": "new.staff@example.com",
+            "mobile": "+919000000010",
+            "role": "STAFF",
+            "profile_pic": "",
+            "is_active": True,
+        },
+        headers=auth_header,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["message"] == "User created successfully."
+    created = db_session.query(Account).filter_by(email="new.staff@example.com").one()
+    assert created.role == AccountRole.STAFF
+
+
+def test_staff_cannot_create_staff_account(client, staff_user):
+    auth_header = {"Authorization": f"Bearer {make_token(staff_user)}"}
+
+    response = client.post(
+        "/api/v1/admin/account",
+        json={
+            "name": "Blocked Staff",
+            "email": "blocked.staff@example.com",
+            "mobile": "+919000000011",
+            "role": "STAFF",
+        },
+        headers=auth_header,
+    )
+
+    assert response.status_code == 403
+
+
 def test_admin_cannot_update_another_admin_account(client, admin_user, second_admin_user):
     auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
 

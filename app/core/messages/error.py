@@ -5,6 +5,7 @@ from fastapi import status
 class UserError(StrEnum):
     USER_NOT_FOUND = "User not found."
     USER_ALREADY_EXISTS = "User already exists."
+    STAFF_ONLY = "Only STAFF accounts can be created through this endpoint."
     EMAIL_ALREADY_EXISTS = "Email is already in use."
     MOBILE_ALREADY_EXISTS = "Mobile is already in use."
     CONTACT_ALREADY_EXISTS = "Account contact messages are already in use."

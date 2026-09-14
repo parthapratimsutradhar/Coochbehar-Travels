@@ -4,6 +4,15 @@ from app.schemas.base import SchemaBase
 from app.core.enums import AccountRole
 
 
+class AdminStaffCreate(SchemaBase):
+    name: str = Field(..., min_length=1, max_length=100)
+    email: str = Field(..., min_length=3, max_length=255)
+    mobile: str = Field(..., min_length=3, max_length=20)
+    role: AccountRole = Field(default=AccountRole.STAFF)
+    profile_pic: str | None = Field(default=None, max_length=500)
+    is_active: bool = True
+
+
 class AdminProfileUpdate(SchemaBase):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     email: str | None = Field(default=None, min_length=3, max_length=255)
@@ -16,5 +25,4 @@ class AdminProfileUpdate(SchemaBase):
 class AdminDeleteProfileRequest(SchemaBase):
     identifier: str = Field(..., min_length=3, max_length=255)
     otp: str = Field(..., min_length=4, max_length=10)
-
 
