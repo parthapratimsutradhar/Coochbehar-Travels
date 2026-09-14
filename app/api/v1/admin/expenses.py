@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin_or_staff
 from app.db.database import get_db
 from app.models.account import Account
-from app.schemas.expense import ExpenseCreate, ExpenseResponse, ExpenseUpdate
+from app.schemas.expense import ExpenseCreate, ExpenseResponse, ExpenseUpdate, expense_response
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.expense_service import ExpenseService
@@ -33,7 +33,7 @@ def create_expense(
     expense = service.create_expense(payload, staff_user=current_user)
     return SuccessResponse(
         message="Expense recorded successfully",
-        data=ExpenseResponse.model_validate(expense),
+        data=expense_response(expense),
     )
 
 
@@ -55,7 +55,7 @@ def list_expenses(
     result = service.list_expenses(page=page, page_size=page_size, category=category, month=month, year=year)
     return PaginatedResponse(
         message="Expenses fetched successfully",
-        data=[ExpenseResponse.model_validate(e) for e in result["items"]],
+        data=[expense_response(e) for e in result["items"]],
         pagination=PaginationMeta(
             current_page=result["page"],
             page_size=result["page_size"],
@@ -82,7 +82,7 @@ def get_expense(
     expense = service.get_expense(expense_id)
     return SuccessResponse(
         message="Expense fetched successfully",
-        data=ExpenseResponse.model_validate(expense),
+        data=expense_response(expense),
     )
 
 
@@ -102,7 +102,7 @@ def update_expense(
     expense = service.update_expense(expense_id, payload)
     return SuccessResponse(
         message="Expense updated successfully",
-        data=ExpenseResponse.model_validate(expense),
+        data=expense_response(expense),
     )
 
 

@@ -3,12 +3,12 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.enums import BookingSource, BookingStatus, LeadSource, PaymentStatus, TransactionType
+from app.core.enums import BookingSource, BookingStatus, LeadSource, PaymentStatus
 from app.models.account import Account
 from app.models.booking import Booking
 from app.repository.booking_repo import BookingRepository
 from app.repository.customer_repo import CustomerRepository
-from app.repository.payment_repo import PaymentRepository
+from app.services.financial_service import FinancialService
 from app.schemas.booking import (
     BookingCostCreate,
     BookingDetailResponse,
@@ -24,7 +24,6 @@ class BookingService:
         self.db = db
         self.booking_repo = BookingRepository(db)
         self.customer_repo = CustomerRepository(db)
-        self.payment_repo = PaymentRepository(db)
 
     def create_offline_booking(self, payload: OfflineBookingCreate, staff_user: Account) -> Booking:
         # 1. Resolve or create customer account
@@ -81,16 +80,20 @@ class BookingService:
 
         # 2. Record advance payment if present
         if advance > Decimal(0):
-            self.payment_repo.create({
-                "booking_id": booking.id,
-                "amount": advance,
-                "currency": "INR",
-                "transaction_type": TransactionType.PAYMENT,
-                "payment_method": payload.payment_mode,
-                "status": PaymentStatus.SUCCESS,
-                "notes": f"Initial advance payment for offline booking {booking_code}",
-                "recorded_by_account_id": staff_user.id,
-            })
+            self.db.commit()
+            FinancialService(self.db).record_booking_payment(
+                booking_id=booking.id,
+                customer_id=booking.customer_id,
+                amount=advance,
+                currency="INR",
+                payment_method=payload.payment_mode,
+                payment_status=PaymentStatus.SUCCESS,
+                gateway=None,
+                gateway_transaction_id=None,
+                description=f"Initial advance payment for offline booking {booking_code}",
+                recorded_by_account_id=staff_user.id,
+                transaction_date=None,
+            )
 
         return booking
 

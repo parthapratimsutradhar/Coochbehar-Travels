@@ -7,9 +7,8 @@ from app.core.enums import AccountRole, BookingStatus, QuotationStatus
 from app.models.account import Account
 from app.models.booking import Booking
 from app.models.booking_costs import BookingCost
-from app.models.booking_payment import BookingPayment
+from app.models.financial_transaction import FinancialTransaction
 from app.models.enquiry import Enquiry
-from app.models.expense import Expense
 from app.models.quotation import Quotation
 
 
@@ -32,9 +31,10 @@ class DashboardRepository:
         ).scalar_one()
 
         collections = self.db.execute(
-            select(func.coalesce(func.sum(BookingPayment.amount), 0)).where(
-                func.date(BookingPayment.paid_at) == today,
-                BookingPayment.status == "SUCCESS",
+            select(func.coalesce(func.sum(FinancialTransaction.amount), 0)).where(
+                func.date(FinancialTransaction.transaction_date) == today,
+                FinancialTransaction.transaction_type == "BOOKING_PAYMENT",
+                FinancialTransaction.status == "POSTED",
             )
         ).scalar_one()
 
@@ -129,12 +129,13 @@ class DashboardRepository:
         profit_margin = round(float((gross_profit / revenue) * 100), 2) if revenue > Decimal(0) else 0.0
 
         # General business expenses
-        stmt_exp = select(func.coalesce(func.sum(Expense.amount), 0)).where(
-            Expense.is_active.is_(True),
-            extract("year", Expense.date) == year,
+        stmt_exp = select(func.coalesce(func.sum(FinancialTransaction.amount), 0)).where(
+            FinancialTransaction.transaction_type == "EXPENSE",
+            FinancialTransaction.status == "POSTED",
+            extract("year", FinancialTransaction.transaction_date) == year,
         )
         if month is not None:
-            stmt_exp = stmt_exp.where(extract("month", Expense.date) == month)
+            stmt_exp = stmt_exp.where(extract("month", FinancialTransaction.transaction_date) == month)
         general_expenses = Decimal(self.db.execute(stmt_exp).scalar_one())
 
         net_profit = gross_profit - general_expenses

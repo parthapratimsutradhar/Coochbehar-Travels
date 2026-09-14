@@ -165,12 +165,6 @@ class Booking(BaseEntity):
         back_populates="created_bookings",
     )
 
-    payments = relationship(
-        "BookingPayment",
-        back_populates="booking",
-        cascade="all, delete-orphan",
-    )
-
     travellers = relationship(
         "BookingTraveler",
         back_populates="booking",

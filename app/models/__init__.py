@@ -4,14 +4,15 @@ from app.models.auth_session import AuthSession
 from app.models.base import ActiveEntity, Base, BaseEntity, UUIDEntity
 from app.models.booking import Booking
 from app.models.booking_costs import BookingCost
-from app.models.booking_payment import BookingPayment
 from app.models.booking_status_history import BookingStatusHistory
 from app.models.booking_traveler import BookingTraveler
 from app.models.customer_profile import CustomerProfile
 from app.models.destination import Destination
 from app.models.document import Document
 from app.models.enquiry import Enquiry
-from app.models.expense import Expense
+from app.models.financial_account import FinancialAccount
+from app.models.financial_transaction import FinancialTransaction
+from app.models.financial_transaction_entry import FinancialTransactionEntry
 from app.models.hotel import Hotel
 from app.models.lead import Lead
 from app.models.lead_activity import LeadActivity
@@ -36,8 +37,6 @@ from app.models.vehicle import Vehicle
 from app.models.vehicle_allocation import VehicleAllocation
 from app.models.vendor import Vendor
 from app.models.vendor_booking import VendorBooking
-from app.models.vendor_expense import VendorExpense
-from app.models.vendor_payment import VendorPayment
 from app.models.visitor import Visitor
 from app.models.visitor_event import VisitorEvent
 from app.models.visitor_session import VisitorSession
@@ -53,13 +52,14 @@ __all__ = [
     "AuthSession",
     "Booking",
     "BookingCost",
-    "BookingPayment",
     "BookingStatusHistory",
     "BookingTraveler",
     "Destination",
     "Document",
     "Enquiry",
-    "Expense",
+    "FinancialAccount",
+    "FinancialTransaction",
+    "FinancialTransactionEntry",
     "Hotel",
     "Lead",
     "LeadActivity",
@@ -84,8 +84,6 @@ __all__ = [
     "VehicleAllocation",
     "Vendor",
     "VendorBooking",
-    "VendorExpense",
-    "VendorPayment",
     "Visitor",
     "VisitorEvent",
     "VisitorSession",

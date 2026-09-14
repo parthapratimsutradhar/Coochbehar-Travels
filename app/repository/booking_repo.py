@@ -23,7 +23,6 @@ class BookingRepository:
                 joinedload(Booking.departure),
                 joinedload(Booking.customer),
                 joinedload(Booking.status_history),
-                joinedload(Booking.payments),
             )
             .where(Booking.id == booking_id)
         )

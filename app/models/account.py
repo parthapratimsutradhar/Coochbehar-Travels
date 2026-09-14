@@ -95,12 +95,6 @@ class Account(ActiveEntity):
         back_populates="customer",
     )
 
-    payments_recorded = relationship(
-        "BookingPayment",
-        foreign_keys="BookingPayment.recorded_by_account_id",
-        back_populates="recorded_by",
-    )
-
     notification_campaigns = relationship(
         "NotificationCampaign",
         foreign_keys="NotificationCampaign.recipient_id",

@@ -148,6 +148,7 @@ class PaymentMethod(str, Enum):
     UPI = "UPI"
     CASH = "CASH"
     BANK_TRANSFER = "BANK_TRANSFER"
+    NET_BANKING = "NET_BANKING"
     CARD = "CARD"
     OFFLINE = "OFFLINE"
     OTHER = "OTHER"
@@ -155,6 +156,40 @@ class PaymentMethod(str, Enum):
 class TransactionType(str, Enum):
     PAYMENT = "PAYMENT"
     REFUND = "REFUND"  
+
+
+class FinancialAccountType(str, Enum):
+    ASSET = "ASSET"
+    LIABILITY = "LIABILITY"
+    EQUITY = "EQUITY"
+    REVENUE = "REVENUE"
+    EXPENSE = "EXPENSE"
+
+
+class FinancialAccountOwnerType(str, Enum):
+    SYSTEM = "SYSTEM"
+    CUSTOMER = "CUSTOMER"
+    VENDOR = "VENDOR"
+
+
+class FinancialTransactionType(str, Enum):
+    BOOKING_PAYMENT = "BOOKING_PAYMENT"
+    BOOKING_REFUND = "BOOKING_REFUND"
+    WALLET_CREDIT = "WALLET_CREDIT"
+    WALLET_DEBIT = "WALLET_DEBIT"
+    EXPENSE = "EXPENSE"
+    VENDOR_PAYMENT = "VENDOR_PAYMENT"
+    TRANSFER = "TRANSFER"
+    ADJUSTMENT = "ADJUSTMENT"
+    REFERRAL_REWARD = "REFERRAL_REWARD"
+
+
+class FinancialTransactionStatus(str, Enum):
+    PENDING = "PENDING"
+    POSTED = "POSTED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    REVERSED = "REVERSED"
     
 class BookingStatus(str, Enum):
     TENTATIVE = "TENTATIVE"

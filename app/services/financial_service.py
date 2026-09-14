@@ -1,0 +1,296 @@
+import uuid
+from datetime import datetime
+from decimal import Decimal
+from typing import Iterable, TypedDict
+
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.core.enums import (
+    FinancialTransactionStatus,
+    FinancialTransactionType,
+)
+from app.models.financial_account import FinancialAccount
+from app.models.financial_transaction import FinancialTransaction
+from app.models.financial_transaction_entry import FinancialTransactionEntry
+
+
+SYSTEM_ACCOUNT_DEFINITIONS = (
+    ("1000", "Cash", "ASSET"),
+    ("1010", "Bank", "ASSET"),
+    ("1020", "Razorpay", "ASSET"),
+    ("1100", "Customer Receivable", "ASSET"),
+    ("2000", "Vendor Payable", "LIABILITY"),
+    ("4000", "Tour Revenue", "REVENUE"),
+    ("5000", "Hotel Expense", "EXPENSE"),
+    ("5010", "Transport Expense", "EXPENSE"),
+    ("5020", "Flight Expense", "EXPENSE"),
+    ("5030", "Meal Expense", "EXPENSE"),
+    ("5040", "Activity Expense", "EXPENSE"),
+    ("5050", "Marketing Expense", "EXPENSE"),
+    ("5060", "Other Expense", "EXPENSE"),
+    ("6000", "Referral Reward Expense", "EXPENSE"),
+)
+
+
+class LedgerEntry(TypedDict):
+    account_id: uuid.UUID
+    debit: Decimal
+    credit: Decimal
+    description: str | None
+
+
+class FinancialService:
+    """Single write boundary for posted double-entry financial transactions."""
+
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def initialize_system_accounts(self) -> list[FinancialAccount]:
+        """Create stable system accounts without duplicating existing accounts."""
+        if self.db.in_transaction():
+            self.db.commit()
+        with self.db.begin():
+            accounts = []
+            for account_code, name, account_type in SYSTEM_ACCOUNT_DEFINITIONS:
+                account = (
+                    self.db.query(FinancialAccount)
+                    .filter_by(account_code=account_code)
+                    .one_or_none()
+                )
+                if account is None:
+                    account = FinancialAccount(
+                        account_code=account_code,
+                        name=name,
+                        account_type=account_type,
+                    )
+                    self.db.add(account)
+                    self.db.flush()
+                accounts.append(account)
+            return accounts
+
+    def create_transaction(
+        self,
+        *,
+        transaction_type: FinancialTransactionType,
+        amount: Decimal,
+        entries: Iterable[LedgerEntry],
+        status_: FinancialTransactionStatus = FinancialTransactionStatus.POSTED,
+        external_reference: str | None = None,
+        transaction_code: str | None = None,
+        transaction_date: datetime | None = None,
+        **attributes: object,
+    ) -> FinancialTransaction:
+        if amount <= 0:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Amount must be positive.")
+
+        normalized_entries = list(entries)
+        if not normalized_entries:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="At least two ledger entries are required.")
+
+        total_debit = sum((Decimal(entry["debit"]) for entry in normalized_entries), Decimal("0"))
+        total_credit = sum((Decimal(entry["credit"]) for entry in normalized_entries), Decimal("0"))
+        if total_debit != total_credit or total_debit != amount:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Financial transaction entries must balance to the transaction amount.",
+            )
+
+        if self.db.in_transaction():
+            self.db.commit()
+        with self.db.begin():
+            account_ids = {entry["account_id"] for entry in normalized_entries}
+            accounts = self.db.query(FinancialAccount).filter(FinancialAccount.id.in_(account_ids)).all()
+            if len(accounts) != len(account_ids) or any(not account.is_active for account in accounts):
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Every ledger account must be active.")
+
+            transaction = FinancialTransaction(
+                transaction_code=transaction_code or f"FT-{uuid.uuid4().hex[:20].upper()}",
+                transaction_type=transaction_type,
+                status=status_,
+                amount=amount,
+                external_reference=external_reference,
+                transaction_date=transaction_date or datetime.utcnow(),
+                **attributes,
+            )
+            self.db.add(transaction)
+            self.db.flush()
+            self.db.add_all(
+                [
+                    FinancialTransactionEntry(transaction_id=transaction.id, **entry)
+                    for entry in normalized_entries
+                ]
+            )
+            self.db.flush()
+            return transaction
+
+    def _system_account(
+        self,
+        account_code: str,
+        name: str,
+        account_type: str,
+    ) -> FinancialAccount:
+        account = self.db.query(FinancialAccount).filter_by(account_code=account_code).one_or_none()
+        if account is None:
+            account = FinancialAccount(
+                account_code=account_code,
+                name=name,
+                account_type=account_type,
+            )
+            self.db.add(account)
+            self.db.flush()
+        return account
+
+    def record_booking_payment(
+        self,
+        *,
+        booking_id: uuid.UUID,
+        customer_id: uuid.UUID | None,
+        amount: Decimal,
+        currency: str,
+        payment_method: object,
+        payment_status: object,
+        gateway: str | None,
+        gateway_transaction_id: str | None,
+        description: str | None,
+        recorded_by_account_id: uuid.UUID | None,
+        transaction_date: datetime | None,
+    ) -> FinancialTransaction:
+        if str(payment_status) not in {
+            "FinancialTransactionStatus.POSTED",
+            "PaymentStatus.SUCCESS",
+            "POSTED",
+            "SUCCESS",
+        }:
+            raise HTTPException(
+                status_code=422,
+                detail="Only successful payments can be posted to the financial ledger.",
+            )
+        if self.db.in_transaction():
+            self.db.commit()
+        with self.db.begin():
+            source = {
+                "RAZORPAY": ("1020", "Razorpay"),
+                "BANK_TRANSFER": ("1010", "Bank"),
+            }.get(getattr(payment_method, "value", payment_method), ("1000", "Cash"))
+            source_account = self._system_account(source[0], source[1], "ASSET")
+            receivable = self._system_account("1100", "Customer Receivable", "ASSET")
+            return self._create_transaction_in_current_transaction(
+                transaction_type=FinancialTransactionType.BOOKING_PAYMENT,
+                amount=amount,
+                entries=[
+                    {"account_id": source_account.id, "debit": amount, "credit": Decimal("0"), "description": None},
+                    {"account_id": receivable.id, "debit": Decimal("0"), "credit": amount, "description": None},
+                ],
+                booking_id=booking_id,
+                customer_id=customer_id,
+                currency=currency,
+                payment_method=payment_method,
+                gateway=gateway,
+                gateway_transaction_id=gateway_transaction_id,
+                description=description,
+                created_by_account_id=recorded_by_account_id,
+                transaction_date=transaction_date,
+            )
+
+    def record_expense(
+        self,
+        *,
+        amount: Decimal,
+        currency: str,
+        payment_method: object,
+        category: str,
+        description: str | None,
+        vendor_id: uuid.UUID | None,
+        reference: str | None,
+        attachments: list[str] | None,
+        created_by_account_id: uuid.UUID,
+        transaction_date: datetime | None,
+    ) -> FinancialTransaction:
+        category_codes = {
+            "hotel": ("5000", "Hotel Expense"),
+            "transport": ("5010", "Transport Expense"),
+            "flight": ("5020", "Flight Expense"),
+            "meal": ("5030", "Meal Expense"),
+            "activity": ("5040", "Activity Expense"),
+            "marketing": ("5050", "Marketing Expense"),
+        }
+        source_codes = {
+            "RAZORPAY": ("1020", "Razorpay"),
+            "BANK_TRANSFER": ("1010", "Bank"),
+        }
+        if self.db.in_transaction():
+            self.db.commit()
+        with self.db.begin():
+            expense_code, expense_name = category_codes.get(
+                category.lower(), ("5060", "Other Expense")
+            )
+            source_code, source_name = source_codes.get(
+                getattr(payment_method, "value", payment_method), ("1000", "Cash")
+            )
+            expense_account = self._system_account(expense_code, expense_name, "EXPENSE")
+            source_account = self._system_account(source_code, source_name, "ASSET")
+            return self._create_transaction_in_current_transaction(
+                transaction_type=FinancialTransactionType.EXPENSE,
+                amount=amount,
+                entries=[
+                    {"account_id": expense_account.id, "debit": amount, "credit": Decimal("0"), "description": description},
+                    {"account_id": source_account.id, "debit": Decimal("0"), "credit": amount, "description": description},
+                ],
+                currency=currency,
+                payment_method=payment_method,
+                category=category,
+                reference=reference,
+                vendor_id=vendor_id,
+                description=description,
+                metadata_={"attachments": attachments} if attachments else None,
+                created_by_account_id=created_by_account_id,
+                transaction_date=transaction_date,
+            )
+
+    def _create_transaction_in_current_transaction(
+        self,
+        *,
+        transaction_type: FinancialTransactionType,
+        amount: Decimal,
+        entries: list[LedgerEntry],
+        **attributes: object,
+    ) -> FinancialTransaction:
+        transaction = FinancialTransaction(
+            transaction_code=f"FT-{uuid.uuid4().hex[:20].upper()}",
+            transaction_type=transaction_type,
+            status=FinancialTransactionStatus.POSTED,
+            amount=amount,
+            transaction_date=attributes.pop("transaction_date", None) or datetime.utcnow(),
+            **attributes,
+        )
+        self.db.add(transaction)
+        self.db.flush()
+        self.db.add_all([
+            FinancialTransactionEntry(transaction_id=transaction.id, **entry)
+            for entry in entries
+        ])
+        self.db.flush()
+        return transaction
+
+    def create_customer_wallet(self, customer_id: uuid.UUID, customer_name: str) -> FinancialAccount:
+        if self.db.in_transaction():
+            self.db.commit()
+        with self.db.begin():
+            existing = (
+                self.db.query(FinancialAccount)
+                .filter_by(owner_id=customer_id, account_type="LIABILITY", owner_type="CUSTOMER")
+                .one_or_none()
+            )
+            if existing:
+                return existing
+            wallet = FinancialAccount(
+                account_code=f"WALLET-{customer_id.hex[:12].upper()}",
+                name=f"{customer_name} Wallet",
+                account_type="LIABILITY",
+                owner_type="CUSTOMER",
+                owner_id=customer_id,
+            )
+            self.db.add(wallet)
+            self.db.flush()
+            return wallet

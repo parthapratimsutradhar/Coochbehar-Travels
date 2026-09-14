@@ -40,3 +40,28 @@ class ExpenseResponse(ExpenseBase):
     is_active: bool
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+def expense_response(transaction) -> ExpenseResponse:
+    metadata = transaction.metadata_ or {}
+    return ExpenseResponse.model_validate(
+        {
+            "id": transaction.id,
+            "amount": transaction.amount,
+            "description": transaction.description,
+            "date": transaction.transaction_date,
+            "expense_category": transaction.category,
+            "payment_method": (
+                transaction.payment_method.value
+                if transaction.payment_method is not None
+                else "OTHER"
+            ),
+            "vendor_id": transaction.vendor_id,
+            "reference": transaction.reference,
+            "attachments": metadata.get("attachments"),
+            "created_by_account_id": transaction.created_by_account_id,
+            "is_active": transaction.status not in {"CANCELLED", "REVERSED"},
+            "created_at": transaction.created_at,
+            "updated_at": transaction.updated_at,
+        }
+    )

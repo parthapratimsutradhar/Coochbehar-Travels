@@ -18,7 +18,7 @@ from app.schemas.booking import (
     OfflineBookingCreate,
 )
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
-from app.schemas.payment import BookingPaymentCreate, BookingPaymentResponse
+from app.schemas.payment import BookingPaymentCreate, BookingPaymentResponse, payment_response
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.schemas.tour_offer import TourOfferApplyRequest, TourOfferCalculationResult
 from app.services.booking_service import BookingService
@@ -206,7 +206,7 @@ def record_booking_payment(
     payment = service.record_payment(payload, recorded_by=current_user)
     return SuccessResponse(
         message="Payment recorded successfully",
-        data=BookingPaymentResponse.model_validate(payment),
+        data=payment_response(payment),
     )
 
 
@@ -225,5 +225,5 @@ def list_booking_payments(
     payments = service.list_booking_payments(booking_id)
     return SuccessResponse(
         message="Booking payments fetched successfully",
-        data=[BookingPaymentResponse.model_validate(p) for p in payments],
+        data=[payment_response(p) for p in payments],
     )
