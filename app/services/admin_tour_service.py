@@ -212,7 +212,8 @@ class AdminTourService:
         }
         retained_ids: set[uuid.UUID] = set()
 
-        for payload in departure_payloads:
+        for raw_payload in departure_payloads:
+            payload = dict(raw_payload)
             departure_id = payload.pop("id", None)
             if departure_id is not None:
                 departure = existing.get(departure_id)

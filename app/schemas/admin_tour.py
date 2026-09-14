@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import Field, ConfigDict
+from pydantic import AliasChoices, Field, ConfigDict
 from app.schemas.base import SchemaBase
 
 from app.core.enums import TourType
@@ -67,7 +67,10 @@ class HighlightItem(SchemaBase):
 
 class DepartureDateItem(SchemaBase):
     id: uuid.UUID | None = None
-    departure_date: date
+    departure_date: date = Field(
+        validation_alias=AliasChoices("departure_date", "date"),
+        serialization_alias="departure_date",
+    )
     return_date: date | None = None
     total_seats: int = Field(..., ge=0)
     available_seats: int = Field(..., ge=0)
