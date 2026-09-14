@@ -101,12 +101,6 @@ class VehicleType(str, Enum):
     TEMPO = "Tempo"
 
 
-class OauthPurpose(str, Enum):
-    ADMIN_LOGIN = "ADMIN_LOGIN"
-    CUSTOMER_LOGIN = "CUSTOMER_LOGIN"
-    CUSTOMER_LINK = "CUSTOMER_LINK"
-
-
 class CustomerTourStatus(str, Enum):
     PLANNED = "PLANNED"
     CONFIRMED = "CONFIRMED"

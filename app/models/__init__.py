@@ -12,7 +12,6 @@ from app.models.destination import Destination
 from app.models.document import Document
 from app.models.enquiry import Enquiry
 from app.models.expense import Expense
-from app.models.google_oauth_state import GoogleOAuthState
 from app.models.hotel import Hotel
 from app.models.lead import Lead
 from app.models.lead_activity import LeadActivity
@@ -61,7 +60,6 @@ __all__ = [
     "Document",
     "Enquiry",
     "Expense",
-    "GoogleOAuthState",
     "Hotel",
     "Lead",
     "LeadActivity",
