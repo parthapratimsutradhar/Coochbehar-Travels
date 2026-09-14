@@ -255,12 +255,12 @@ class CustomerService:
                             "customer_id",
                             "uploaded_by_account_id",
                             "uploaded_at",
-                            "file_url",
                             "file_name",
                             "mime_type",
                             "file_size",
                         )
                     },
+                    file_url=f"/api/v1/documents/{item.id}/file",
                     customer_name=customer.name,
                     customer_profile_pic=customer.profile_pic,
                     uploaded_by_customer_id=item.uploaded_by_account_id if item.uploaded_by_account and item.uploaded_by_account.role.value == "CUSTOMER" else None,

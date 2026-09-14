@@ -2,6 +2,7 @@ import hashlib
 import asyncio
 import importlib
 from io import BytesIO
+import logging
 import re
 import shutil
 import subprocess
@@ -9,10 +10,23 @@ import tempfile
 import time
 from typing import Any
 
+import cloudinary
+import cloudinary.api
+import cloudinary.uploader
 import httpx
 from fastapi import HTTPException, UploadFile, status
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+if settings.CLOUDINARY_CLOUD_NAME and settings.CLOUDINARY_API_KEY:
+    cloudinary.config(
+        cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+        api_key=settings.CLOUDINARY_API_KEY,
+        api_secret=settings.CLOUDINARY_API_SECRET,
+        secure=True,
+    )
 
 
 CLOUDINARY_ROOT_FOLDER = "Coochbehar-travels"
@@ -367,3 +381,100 @@ async def upload_google_profile_picture(picture_url: str) -> str:
         sub_folder="profile-picture",
     )
     return result["secure_url"]
+
+
+_CLOUDINARY_URL_PATTERN = re.compile(
+    r"cloudinary\.com/[^/]+/(?P<resource_type>image|video|raw)/upload/(?:v\d+/)?(?P<public_id_with_ext>[^?#]+)"
+)
+
+
+def extract_cloudinary_asset_info(url_or_identifier: str | None) -> dict[str, str | None]:
+    """
+    Extracts public_id and resource_type from a Cloudinary URL or raw public_id.
+    Returns:
+        {
+            "public_id": str | None,
+            "resource_type": "image" | "video" | "raw" | None,
+            "is_temporary": bool,
+        }
+    """
+    if not url_or_identifier or not isinstance(url_or_identifier, str):
+        return {"public_id": None, "resource_type": None, "is_temporary": False}
+
+    cleaned = url_or_identifier.strip()
+    match = _CLOUDINARY_URL_PATTERN.search(cleaned)
+    if match:
+        resource_type = match.group("resource_type")
+        public_id_raw = match.group("public_id_with_ext")
+        if resource_type in ("image", "video"):
+            public_id = re.sub(r"\.[a-zA-Z0-9]+$", "", public_id_raw)
+        else:
+            public_id = public_id_raw
+    elif cleaned.startswith(f"{CLOUDINARY_ROOT_FOLDER}/"):
+        public_id = cleaned
+        resource_type = None
+    else:
+        return {"public_id": None, "resource_type": None, "is_temporary": False}
+
+    temp_prefix = f"{CLOUDINARY_ROOT_FOLDER}/temporary-uploads/"
+    is_temporary = public_id.startswith(temp_prefix)
+    return {
+        "public_id": public_id,
+        "resource_type": resource_type,
+        "is_temporary": is_temporary,
+    }
+
+
+async def promote_cloudinary_asset(
+    url_or_identifier: str | None,
+    target_sub_folder: str,
+    resource_type: str | None = None,
+) -> dict[str, str]:
+    """
+    Promotes an asset from 'temporary-uploads' to the target permanent sub-folder
+    using Cloudinary's rename API.
+    If the asset is not in 'temporary-uploads', external, or empty, it returns the input unmodified.
+
+    Returns:
+        dict with {"url": str, "public_id": str}
+    """
+    if not url_or_identifier:
+        return {"url": url_or_identifier or "", "public_id": ""}
+
+    info = extract_cloudinary_asset_info(url_or_identifier)
+    public_id = info["public_id"]
+    if not public_id or not info["is_temporary"]:
+        return {"url": url_or_identifier, "public_id": public_id or ""}
+
+    temp_prefix = f"{CLOUDINARY_ROOT_FOLDER}/temporary-uploads/"
+    relative_filename = public_id[len(temp_prefix):].lstrip("/")
+    target_folder = build_cloudinary_folder(target_sub_folder)
+    new_public_id = f"{target_folder}/{relative_filename}"
+
+    resolved_resource_type = resource_type or info["resource_type"] or "image"
+
+    try:
+        rename_fn = getattr(cloudinary.uploader, "rename", None)
+        if rename_fn:
+            result = await asyncio.to_thread(
+                rename_fn,
+                from_public_id=public_id,
+                to_public_id=new_public_id,
+                resource_type=resolved_resource_type,
+                overwrite=True,
+            )
+            return {
+                "url": result.get("secure_url") or result.get("url") or url_or_identifier,
+                "public_id": result.get("public_id") or new_public_id,
+            }
+    except Exception as exc:
+        logger.warning(
+            "Failed to promote Cloudinary asset %s to %s (%s): %s",
+            public_id,
+            new_public_id,
+            resolved_resource_type,
+            exc,
+        )
+
+    fallback_url = url_or_identifier.replace("/temporary-uploads/", f"/{target_sub_folder}/")
+    return {"url": fallback_url, "public_id": new_public_id}

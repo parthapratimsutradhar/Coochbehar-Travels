@@ -19,6 +19,7 @@ from app.schemas.admin_tour import (
     AdminTourVariantItem,
     normalize_json_payload,
 )
+from app.services.cloudinary_service import promote_cloudinary_asset
 
 
 class AdminTourService:
@@ -239,7 +240,39 @@ class AdminTourService:
             if departure_id not in retained_ids:
                 self.db.delete(departure)
 
-    def create_detail(self, payload: dict[str, Any]) -> TourDetail:
+    @staticmethod
+    async def _promote_banner(banner_dict: dict[str, Any] | None) -> dict[str, str | None]:
+        if not banner_dict:
+            return {"image": None, "video": None}
+        image = banner_dict.get("image")
+        video = banner_dict.get("video")
+        if image:
+            promoted_img = await promote_cloudinary_asset(image, "tour-packages", resource_type="image")
+            image = promoted_img["url"]
+        if video:
+            promoted_vid = await promote_cloudinary_asset(video, "tour-packages", resource_type="video")
+            video = promoted_vid["url"]
+        return {"image": image, "video": video}
+
+    @staticmethod
+    async def _promote_gallery(gallery_list: list[Any] | None) -> list[Any]:
+        if not gallery_list:
+            return []
+        promoted_gallery = []
+        for item in gallery_list:
+            if isinstance(item, dict):
+                url = item.get("url")
+                media_type = item.get("type") or "image"
+                if url:
+                    promoted = await promote_cloudinary_asset(url, "tour-packages", resource_type=media_type)
+                    item = {**item, "url": promoted["url"]}
+            elif isinstance(item, str):
+                promoted = await promote_cloudinary_asset(item, "tour-packages", resource_type="image")
+                item = promoted["url"]
+            promoted_gallery.append(item)
+        return promoted_gallery
+
+    async def create_detail(self, payload: dict[str, Any]) -> TourDetail:
         variant = self.db.get(TourVariant, payload["variant_id"])
         if variant is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour variant not found.")
@@ -248,10 +281,15 @@ class AdminTourService:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This variant already has details.")
 
         departure_payloads = payload.pop("departure_dates", [])
+        normalized_banner = self._normalize_banner(payload.get("banner"))
+        promoted_banner = await self._promote_banner(normalized_banner)
+        raw_gallery = normalize_json_payload(payload.get("gallery")) or []
+        promoted_gallery = await self._promote_gallery(raw_gallery)
+
         detail = TourDetail(
             variant_id=payload["variant_id"],
-            banner=self._normalize_banner(payload.get("banner")),
-            gallery=normalize_json_payload(payload.get("gallery")) or [],
+            banner=promoted_banner,
+            gallery=promoted_gallery,
             highlights=normalize_json_payload(payload.get("highlights")) or [],
             inclusions=normalize_json_payload(payload.get("inclusions")) or [],
             exclusions=normalize_json_payload(payload.get("exclusions")) or [],
@@ -267,14 +305,16 @@ class AdminTourService:
         self.db.refresh(detail)
         return detail
 
-    def update_detail(self, detail_id: uuid.UUID, payload: dict[str, Any]) -> TourDetail:
+    async def update_detail(self, detail_id: uuid.UUID, payload: dict[str, Any]) -> TourDetail:
         detail = self.get_detail_by_id(detail_id)
         departure_payloads = payload.pop("departure_dates", None)
         for key, value in payload.items():
             if key == "banner":
-                detail.banner = self._update_banner(detail.banner, value)
+                updated_banner = self._update_banner(detail.banner, value)
+                detail.banner = await self._promote_banner(updated_banner)
             elif key == "gallery":
-                detail.gallery = normalize_json_payload(value) or []
+                raw_gallery = normalize_json_payload(value) or []
+                detail.gallery = await self._promote_gallery(raw_gallery)
             elif key == "highlights":
                 detail.highlights = normalize_json_payload(value) or []
             elif key == "inclusions":

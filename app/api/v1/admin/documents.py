@@ -1,15 +1,21 @@
+import mimetypes
 import uuid
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin, get_current_admin_only
 from app.core.enums import DocumentType
 from app.db.database import get_db
 from app.models.account import Account
-from app.schemas.document import AdminDocumentResponse, BulkDeleteDocumentsRequest, DocumentUpdate
+from app.schemas.document import (
+    AdminDocumentResponse,
+    AdminDocumentUploadRequest,
+    BulkDeleteDocumentsRequest,
+    DocumentUpdate,
+)
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.admin_document_service import AdminDocumentService
@@ -59,20 +65,31 @@ def bulk_delete_documents(
 
 @router.post("", response_model=SuccessResponse[AdminDocumentResponse], status_code=status.HTTP_201_CREATED)
 async def upload_customer_document(
-    customer_id: uuid.UUID = Form(...),
-    file: UploadFile = File(...),
-    document_type: DocumentType = Form(...),
-    title: str = Form(..., min_length=1, max_length=200),
-    description: str | None = Form(None),
+    payload: AdminDocumentUploadRequest,
     current_user: Account = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ) -> SuccessResponse[AdminDocumentResponse]:
     data = {
-        "document_type": document_type,
-        "title": title.strip(),
-        "description": description.strip() if description else None,
+        "document_type": payload.document_type,
+        "title": payload.title.strip(),
+        "description": payload.description.strip() if payload.description else None,
     }
-    document = await AdminDocumentService(db).upload(customer_id, file, current_user, **data)
+    if not (
+        payload.file.startswith("http://")
+        or payload.file.startswith("https://")
+        or "temporary-uploads" in payload.file
+    ):
+        raise HTTPException(status_code=422, detail="file must reference a temporary upload")
+
+    mime_type = mimetypes.guess_type(payload.file_name)[0] or "application/octet-stream"
+    document = await AdminDocumentService(db).upload_from_url(
+        customer_id=payload.customer_id,
+        url_or_id=payload.file,
+        current_user=current_user,
+        file_name=payload.file_name,
+        mime_type=mime_type,
+        **data,
+    )
     return SuccessResponse(message="Document uploaded successfully", data=document)
 
 
@@ -85,4 +102,3 @@ def update_document(
 ) -> ActionResponse:
     AdminDocumentService(db).update(document_id, payload)
     return ActionResponse(message="Document updated successfully")
-

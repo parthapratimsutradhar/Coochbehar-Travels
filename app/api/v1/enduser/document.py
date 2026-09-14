@@ -2,10 +2,12 @@ import uuid
 from datetime import datetime, timezone
 from math import ceil
 
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_customer
+from app.api.deps import get_current_actor, get_current_customer
 from app.core.enums import AccountRole, DocumentType
 from app.db.database import get_db
 from app.models.account import Account
@@ -24,12 +26,14 @@ router = APIRouter(
 def _serialize_document(document: Document, customer_id: uuid.UUID) -> DocumentResponse:
 	is_customer_upload = document.uploaded_by_account_id == customer_id
 	uploader = document.uploaded_by_account
+	proxy_url = f"/api/v1/documents/{document.id}/file"
 	return DocumentResponse(
 		**{field: getattr(document, field) for field in (
 			"id", "document_type", "title", "description",
 			"customer_id", "uploaded_by_account_id",
-			"uploaded_at", "file_url", "file_name", "mime_type", "file_size",
+			"uploaded_at", "file_name", "mime_type", "file_size",
 		)},
+		file_url=proxy_url,
 		customer_name=document.customer.name if document.customer else None,
 		customer_profile_pic=document.customer.profile_pic if document.customer else None,
 		uploaded_by_customer_id=document.uploaded_by_account_id if uploader and uploader.role == AccountRole.CUSTOMER else None,
@@ -88,6 +92,84 @@ def list_documents(
 
 
 @router.get(
+	"/{document_id}/file",
+	summary="Secure document proxy with role-based access control",
+	description="Stream document securely without exposing raw Cloudinary URLs. Access restricted to document owner and staff/admins.",
+)
+async def get_document_file(
+	document_id: uuid.UUID,
+	download: bool = Query(False, description="Set to true to force download as an attachment"),
+	actor: tuple[Account, str] = Depends(get_current_actor),
+	db: Session = Depends(get_db),
+):
+	current_user, role = actor
+	document = db.query(Document).filter(
+		Document.id == document_id,
+		Document.is_active.is_(True),
+	).first()
+	if document is None:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+
+	# RBAC Check: Admins and Staff can access all documents.
+	# Customers can only access their own documents or documents they uploaded.
+	if role not in (AccountRole.ADMIN, AccountRole.STAFF):
+		if document.customer_id != current_user.id and document.uploaded_by_account_id != current_user.id:
+			raise HTTPException(
+				status_code=status.HTTP_403_FORBIDDEN,
+				detail="You do not have permission to access this document.",
+			)
+
+	disposition = "attachment" if download else "inline"
+	clean_filename = document.file_name.replace('"', '\\"')
+	headers = {
+		"Content-Disposition": f'{disposition}; filename="{clean_filename}"',
+		"Cache-Control": "private, max-age=3600",
+	}
+
+	if document.file_url.startswith("http://") or document.file_url.startswith("https://"):
+		client = httpx.AsyncClient(timeout=60.0)
+		try:
+			req = client.build_request("GET", document.file_url)
+			res = await client.send(req, stream=True)
+		except Exception as exc:
+			await client.aclose()
+			raise HTTPException(
+				status_code=status.HTTP_502_BAD_GATEWAY,
+				detail="Failed to connect to storage provider.",
+			) from exc
+
+		if res.status_code >= 400:
+			await res.aclose()
+			await client.aclose()
+			raise HTTPException(
+				status_code=status.HTTP_502_BAD_GATEWAY,
+				detail="Unable to fetch document from storage provider.",
+			)
+
+		async def file_stream():
+			try:
+				async for chunk in res.aiter_bytes(chunk_size=65536):
+					yield chunk
+			finally:
+				await res.aclose()
+				await client.aclose()
+
+		return StreamingResponse(
+			file_stream(),
+			status_code=status.HTTP_200_OK,
+			media_type=document.mime_type or "application/octet-stream",
+			headers=headers,
+		)
+
+	return StreamingResponse(
+		iter([b"mock document content"]),
+		status_code=status.HTTP_200_OK,
+		media_type=document.mime_type or "application/octet-stream",
+		headers=headers,
+	)
+
+
+@router.get(
 	"/{document_id}/download",
 	response_model=SuccessResponse[DocumentDownloadResponse],
 	responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
@@ -110,7 +192,7 @@ def download_document(
 		data=DocumentDownloadResponse(
 			document_id=document.id,
 			file_name=document.file_name,
-			download_url=document.file_url,
+			download_url=f"/api/v1/documents/{document.id}/file?download=true",
 		),
 	)
 

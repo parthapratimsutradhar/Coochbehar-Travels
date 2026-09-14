@@ -9,7 +9,7 @@ from app.models.account import Account
 from app.models.document import Document
 from app.repository.document_repo import DocumentRepository
 from app.schemas.document import AdminDocumentResponse, DocumentResponse, DocumentUpdate
-from app.services.cloudinary_service import upload_file_to_cloudinary
+from app.services.cloudinary_service import promote_cloudinary_asset, upload_file_to_cloudinary
 
 
 class AdminDocumentService:
@@ -36,13 +36,14 @@ class AdminDocumentService:
     def _serialize(document: Document) -> AdminDocumentResponse:
         uploader = document.uploaded_by_account
         customer_upload = uploader is not None and uploader.role == AccountRole.CUSTOMER
+        proxy_url = f"/api/v1/documents/{document.id}/file"
         return AdminDocumentResponse(
             id=document.id, document_type=document.document_type, title=document.title,
             description=document.description, customer_id=document.customer_id,
             customer_name=document.customer.name if document.customer else None,
             customer_profile_pic=document.customer.profile_pic if document.customer else None,
             uploaded_by_account_id=document.uploaded_by_account_id, uploaded_at=document.uploaded_at,
-            file_url=document.file_url, file_name=document.file_name, mime_type=document.mime_type,
+            file_url=proxy_url, file_name=document.file_name, mime_type=document.mime_type,
             file_size=document.file_size, uploader_name=uploader.name if uploader else None,
             uploader_profile_pic=uploader.profile_pic if uploader else None,
             type="incoming" if customer_upload else "outgoing",
@@ -69,6 +70,26 @@ class AdminDocumentService:
             file_url=result["secure_url"], file_name=file.filename or "document",
             mime_type=file.content_type, file_size=result.get("bytes"),
         )
+        return self._serialize(document)
+
+    async def upload_from_url(
+        self,
+        customer_id: uuid.UUID,
+        url_or_id: str,
+        current_user: Account,
+        file_name: str = "document",
+        mime_type: str | None = None,
+        **data: object,
+    ) -> AdminDocumentResponse:
+        if not self.repo.get_customer(customer_id):
+            raise HTTPException(status_code=404, detail="Customer not found.")
+        promoted = await promote_cloudinary_asset(url_or_id, "admin-documents", resource_type="raw")
+        document = self.repo.create(
+            **data, customer_id=customer_id, uploaded_by_account_id=current_user.id,
+            file_url=promoted["url"], file_name=file_name,
+            mime_type=mime_type or "application/octet-stream", file_size=None,
+        )
+        return self._serialize(document)
 
     def update(self, document_id: uuid.UUID, payload: DocumentUpdate) -> None:
         document = self.repo.get_active_by_id(document_id)

@@ -52,6 +52,15 @@ class AdminDocumentResponse(SchemaBase):
     is_active: bool
 
 
+class AdminDocumentUploadRequest(SchemaBase):
+    customer_id: uuid.UUID
+    file: str = Field(..., min_length=1, description="Temporary upload URL or Cloudinary public ID")
+    file_name: str = Field(default="document", min_length=1, max_length=255)
+    document_type: DocumentType
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str | None = None
+
+
 class DocumentUpdate(SchemaBase):
     document_type: DocumentType | None = None
     title: str | None = Field(default=None, min_length=1, max_length=200)

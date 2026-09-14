@@ -24,13 +24,13 @@ router = APIRouter(
     responses={409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
     summary="Create a new destination",
 )
-def create_destination(
+async def create_destination(
     payload: DestinationCreate,
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
     service = DestinationService(db)
-    service.create_destination(payload)
+    await service.create_destination(payload)
     return ActionResponse(message="Destination created successfully")
 
 
@@ -75,14 +75,14 @@ def list_destinations(
     responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
     summary="Update a destination",
 )
-def update_destination(
+async def update_destination(
     destination_id: uuid.UUID,
     payload: DestinationUpdate,
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
     service = DestinationService(db)
-    service.update_destination(destination_id, payload)
+    await service.update_destination(destination_id, payload)
     return ActionResponse(message="Destination updated successfully")
 
 

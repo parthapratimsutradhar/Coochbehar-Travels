@@ -24,14 +24,14 @@ router = APIRouter(prefix="/admin/tour-details", tags=["Admin Tour Details"])
     response_model=SuccessResponse[AdminTourDetailPayload],
     summary="Create tour variant details",
 )
-def create_admin_tour_detail(
+async def create_admin_tour_detail(
     payload: TourDetailCreateRequest,
     current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user
     service = AdminTourService(db)
-    detail = service.create_detail(payload.model_dump())
+    detail = await service.create_detail(payload.model_dump())
     return SuccessResponse(
         message="Tour details created successfully",
         data=service._detail_to_response(
@@ -47,7 +47,7 @@ def create_admin_tour_detail(
     response_model=SuccessResponse[AdminTourDetailPayload],
     summary="Update tour variant details",
 )
-def update_admin_tour_detail(
+async def update_admin_tour_detail(
     detail_id: uuid.UUID,
     payload: TourDetailUpdateRequest,
     current_user: Account = Depends(get_current_admin_only),
@@ -55,7 +55,7 @@ def update_admin_tour_detail(
 ):
     del current_user
     service = AdminTourService(db)
-    detail = service.update_detail(detail_id, payload.model_dump(exclude_unset=True))
+    detail = await service.update_detail(detail_id, payload.model_dump(exclude_unset=True))
     return SuccessResponse(
         message="Tour details updated successfully",
         data=service._detail_to_response(

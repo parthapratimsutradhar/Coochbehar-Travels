@@ -1,5 +1,6 @@
 from datetime import date
 from math import ceil
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -24,6 +25,7 @@ from app.schemas.review import (
 	ReviewResponse,
 	ReviewUpdate,
 )
+from app.services.cloudinary_service import promote_cloudinary_asset
 from app.schemas.tour_package import ReviewItemResponse
 from app.services.notification_service import NotificationService
 
@@ -160,6 +162,21 @@ def get_review_eligibility(
 	)
 
 
+async def _promote_review_gallery(gallery_items: list[Any] | None) -> list[dict[str, Any]]:
+	if not gallery_items:
+		return []
+	promoted_items: list[dict[str, Any]] = []
+	for item in gallery_items:
+		item_dict = item.model_dump() if hasattr(item, "model_dump") else (item if isinstance(item, dict) else {"url": str(item)})
+		url = item_dict.get("url")
+		media_type = item_dict.get("type") or "image"
+		if url:
+			promoted = await promote_cloudinary_asset(url, "review-gallery", resource_type=media_type)
+			item_dict["url"] = promoted["url"]
+		promoted_items.append(item_dict)
+	return promoted_items
+
+
 @router.post(
 	"",
 	response_model=ActionResponse,
@@ -212,13 +229,14 @@ async def create_review(
 			detail=ReviewError.ALREADY_REVIEWED,
 		)
 
+	promoted_gallery = await _promote_review_gallery(payload.review_gallery)
 	review = Review(
 		package_id=payload.package_id,
 		customer_id=current_customer.id,
 		name=current_customer.name,
 		rating=payload.rating,
 		review=payload.review,
-		review_gallery=payload.review_gallery,
+		review_gallery=promoted_gallery,
 		is_verified=True,
 		is_published=True,
 	)
@@ -258,7 +276,7 @@ async def create_review(
 	summary="Edit a review",
 	description="Allow a customer to edit their own review rating, text, or gallery.",
 )
-def update_review(
+async def update_review(
 	review_id: UUID,
 	payload: ReviewUpdate,
 	current_customer: Account = Depends(get_current_customer),
@@ -275,7 +293,11 @@ def update_review(
 			detail="Review not found.",
 		)
 
-	for field, value in payload.model_dump(exclude_unset=True).items():
+	update_data = payload.model_dump(exclude_unset=True)
+	if "review_gallery" in update_data and update_data["review_gallery"] is not None:
+		update_data["review_gallery"] = await _promote_review_gallery(update_data["review_gallery"])
+
+	for field, value in update_data.items():
 		setattr(review, field, value)
 	db.commit()
 	db.refresh(review)
