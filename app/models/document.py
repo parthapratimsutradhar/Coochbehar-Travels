@@ -118,6 +118,12 @@ class Document(ActiveEntity):
 
 # ── Relationships ─────────────────────────────────────────────
 
+    customer = relationship(
+        "Account",
+        foreign_keys=[customer_id],
+        back_populates="documents_owned",
+    )
+
     uploaded_by_account = relationship(
         "Account",
         foreign_keys=[uploaded_by_account_id],

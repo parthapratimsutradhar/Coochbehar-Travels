@@ -253,8 +253,7 @@ class CustomerService:
                             "title",
                             "description",
                             "customer_id",
-                            "uploaded_by_customer_id",
-                            "uploaded_by_user_id",
+                            "uploaded_by_account_id",
                             "uploaded_at",
                             "file_url",
                             "file_name",
@@ -264,15 +263,18 @@ class CustomerService:
                     },
                     customer_name=customer.name,
                     customer_profile_pic=customer.profile_pic,
-                    uploader_name=(item.uploaded_by_customer or item.uploaded_by_user).name
-                    if item.uploaded_by_customer or item.uploaded_by_user
+                    uploaded_by_customer_id=item.uploaded_by_account_id if item.uploaded_by_account and item.uploaded_by_account.role.value == "CUSTOMER" else None,
+                    uploaded_by_user_id=item.uploaded_by_account_id if item.uploaded_by_account and item.uploaded_by_account.role.value != "CUSTOMER" else None,
+                    uploaded_by_account_id=item.uploaded_by_account_id,
+                    uploader_name=item.uploaded_by_account.name
+                    if item.uploaded_by_account
                     else None,
-                    uploader_profile_pic=(item.uploaded_by_customer or item.uploaded_by_user).profile_pic
-                    if item.uploaded_by_customer or item.uploaded_by_user
+                    uploader_profile_pic=item.uploaded_by_account.profile_pic
+                    if item.uploaded_by_account
                     else None,
-                    uploaded_by="CUSTOMER" if item.uploaded_by_customer_id else "ADMIN",
+                    uploaded_by="CUSTOMER" if item.uploaded_by_account and item.uploaded_by_account.role.value == "CUSTOMER" else "ADMIN",
                     can_delete=False,
-                    type="outgoing" if item.uploaded_by_customer_id == customer.id else "incoming",
+                    type="outgoing" if item.uploaded_by_account_id == customer.id else "incoming",
                 ).model_dump(mode="json")
                 for item in records
             ]

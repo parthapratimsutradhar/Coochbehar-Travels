@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_customer
-from app.core.enums import DocumentType
+from app.core.enums import AccountRole, DocumentType
 from app.db.database import get_db
 from app.models.account import Account
 from app.models.document import Document
@@ -22,21 +22,23 @@ router = APIRouter(
 
 
 def _serialize_document(document: Document, customer_id: uuid.UUID) -> DocumentResponse:
-	is_customer_upload = document.uploaded_by_customer_id == customer_id
-	uploader = document.uploaded_by_customer or document.uploaded_by_user
+	is_customer_upload = document.uploaded_by_account_id == customer_id
+	uploader = document.uploaded_by_account
 	return DocumentResponse(
 		**{field: getattr(document, field) for field in (
 			"id", "document_type", "title", "description",
-			"customer_id", "uploaded_by_customer_id", "uploaded_by_user_id",
+			"customer_id", "uploaded_by_account_id",
 			"uploaded_at", "file_url", "file_name", "mime_type", "file_size",
 		)},
 		customer_name=document.customer.name if document.customer else None,
 		customer_profile_pic=document.customer.profile_pic if document.customer else None,
+		uploaded_by_customer_id=document.uploaded_by_account_id if uploader and uploader.role == AccountRole.CUSTOMER else None,
+		uploaded_by_user_id=document.uploaded_by_account_id if uploader and uploader.role != AccountRole.CUSTOMER else None,
 		uploader_name=uploader.name if uploader else None,
 		uploader_profile_pic=uploader.profile_pic if uploader else None,
 		uploaded_by="CUSTOMER" if is_customer_upload else "ADMIN",
 		can_delete=is_customer_upload,
-		type= "outgoing" if is_customer_upload else "incoming",
+		type="outgoing" if is_customer_upload else "incoming",
 	)
 
 
@@ -62,9 +64,9 @@ def list_documents(
 	if document_type:
 		query = query.filter(Document.document_type == document_type)
 	if uploaded_by == "CUSTOMER":
-		query = query.filter(Document.uploaded_by_customer_id == current_customer.id)
+		query = query.filter(Document.uploaded_by_account_id == current_customer.id)
 	elif uploaded_by == "ADMIN":
-		query = query.filter(Document.uploaded_by_user_id.is_not(None))
+		query = query.join(Document.uploaded_by_account).filter(Account.role != AccountRole.CUSTOMER)
 
 	total_items = query.count()
 	documents = query.order_by(Document.uploaded_at.desc()).offset(
@@ -134,7 +136,7 @@ async def upload_document(
 		title=title.strip(),
 		description=description,
 		customer_id=current_customer.id,
-		uploaded_by_customer_id=current_customer.id,
+		uploaded_by_account_id=current_customer.id,
 		file_url=result["secure_url"],
 		file_name=file.filename or "document",
 		mime_type=file.content_type,
@@ -160,13 +162,13 @@ def delete_document(
 	document = db.query(Document).filter(
 		Document.id == document_id,
 		Document.customer_id == current_customer.id,
-		Document.uploaded_by_customer_id == current_customer.id,
+		Document.uploaded_by_account_id == current_customer.id,
 		Document.is_active.is_(True),
 	).first()
 	if document is None:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer-uploaded document not found.")
 	document.is_active = False
 	document.deleted_at = datetime.now(timezone.utc)
-	document.deleted_by_customer_id = current_customer.id
+	document.deleted_by_account_id = current_customer.id
 	db.commit()
 	return ActionResponse(message="Document deleted successfully")

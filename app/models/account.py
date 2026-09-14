@@ -141,6 +141,12 @@ class Account(ActiveEntity):
         back_populates="uploaded_by_account",
     )
 
+    documents_owned = relationship(
+        "Document",
+        foreign_keys="Document.customer_id",
+        back_populates="customer",
+    )
+
     documents_deleted = relationship(
         "Document",
         foreign_keys="Document.deleted_by_account_id",

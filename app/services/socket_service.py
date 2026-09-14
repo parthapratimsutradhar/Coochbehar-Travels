@@ -449,7 +449,7 @@ def emit_document_uploaded(document: Any) -> None:
         "title": document.title,
         "customer_id": str(document.customer_id) if document.customer_id else None,
         "file_name": document.file_name,
-        "uploaded_by": "CUSTOMER" if document.uploaded_by_customer_id else "ADMIN",
+        "uploaded_by": "CUSTOMER" if document.uploaded_by_account and document.uploaded_by_account.role.value == "CUSTOMER" else "ADMIN",
         "uploaded_at": document.uploaded_at.isoformat() if document.uploaded_at else None,
     }
     rooms = ["ADMIN"]
@@ -824,5 +824,4 @@ async def publish_notification(item, db: Any | None = None) -> None:
     finally:
         if close_session and session is not None:
             session.close()
-
 
