@@ -97,13 +97,13 @@ def get_customer(
     responses={400: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
     summary="Create a customer",
 )
-def create_customer(
+async def create_customer(
     payload: CustomerCreate,
     current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user
-    CustomerService(db).create_customer(payload)
+    await CustomerService(db).create_customer(payload)
     return ActionResponse(message="Customer created successfully")
 
 
@@ -113,14 +113,14 @@ def create_customer(
     responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
     summary="Update a customer",
 )
-def update_customer(
+async def update_customer(
     customer_id: uuid.UUID,
     payload: CustomerUpdate,
     current_user: Account = Depends(get_current_admin_only),
     db: Session = Depends(get_db),
 ):
     del current_user
-    CustomerService(db).update_customer(customer_id, payload)
+    await CustomerService(db).update_customer(customer_id, payload)
     return ActionResponse(message="Customer updated successfully")
 
 

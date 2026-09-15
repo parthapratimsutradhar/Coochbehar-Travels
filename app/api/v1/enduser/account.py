@@ -7,6 +7,7 @@ from app.schemas.auth import CustomerOtpVerifySchema
 from app.schemas.customer import CustomerResponse, CustomerUpdate
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.auth_service import AuthService
+from app.services.customer_service import CustomerService
 
 router = APIRouter(
     prefix="/account",
@@ -34,16 +35,12 @@ def get_current_customer_profile(
     responses={422: {"model": ErrorResponse}},
     summary="Update Customer Profile",
 )
-def update_customer_profile(
+async def update_customer_profile(
     payload: CustomerUpdate,
     current_customer: Account = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ):
-    auth_service = AuthService(db)
-    updated = auth_service.customer_repo.update_customer(
-        customer=current_customer,
-        update_data=payload.model_dump(exclude_unset=True),
-    )
+    updated = await CustomerService(db).update_customer(current_customer.id, payload)
     return SuccessResponse(
         message="Customer profile updated successfully.",
         data=CustomerResponse.model_validate(updated),

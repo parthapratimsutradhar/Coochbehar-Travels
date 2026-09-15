@@ -25,6 +25,7 @@ from app.schemas.lead import LeadResponse
 from app.schemas.pagination import PaginationMeta
 from app.schemas.referral import ReferralHistoryItemResponse
 from app.schemas.review import ReviewResponse
+from app.services.cloudinary_service import promote_cloudinary_asset
 
 
 class CustomerService:
@@ -92,7 +93,7 @@ class CustomerService:
         customer = self.get_customer(customer_id)
         return self._to_customer_response(customer)
 
-    def create_customer(self, payload: CustomerCreate) -> CustomerResponse:
+    async def create_customer(self, payload: CustomerCreate) -> CustomerResponse:
         email = payload.email.strip().lower() if payload.email else None
         mobile = payload.mobile.strip() if payload.mobile else None
 
@@ -107,6 +108,15 @@ class CustomerService:
                 detail="A customer with this mobile number already exists.",
             )
 
+        profile_pic = payload.profile_pic.strip() if payload.profile_pic else None
+        if profile_pic:
+            promoted = await promote_cloudinary_asset(
+                profile_pic,
+                "profile-picture",
+                resource_type="image",
+            )
+            profile_pic = promoted["url"]
+
         customer = self.repo.create_customer(
             name=payload.name.strip(),
             mobile=mobile,
@@ -114,13 +124,13 @@ class CustomerService:
             address=payload.address.strip() if payload.address else None,
             emergency_contact_name=payload.emergency_contact_name.strip() if payload.emergency_contact_name else None,
             emergency_contact_mobile=payload.emergency_contact_mobile.strip() if payload.emergency_contact_mobile else None,
-            profile_pic=payload.profile_pic,
+            profile_pic=profile_pic,
             source=payload.source,
             is_active=payload.is_active,
         )
         return self._to_customer_response(customer)
 
-    def update_customer(self, customer_id: uuid.UUID, payload: CustomerUpdate) -> CustomerResponse:
+    async def update_customer(self, customer_id: uuid.UUID, payload: CustomerUpdate) -> CustomerResponse:
         customer = self.get_customer(customer_id)
         update_data = payload.model_dump(exclude_unset=True)
 
@@ -141,6 +151,17 @@ class CustomerService:
                     status_code=status.HTTP_409_CONFLICT,
                     detail="A customer with this mobile number already exists.",
                 )
+
+        if "profile_pic" in update_data:
+            profile_pic = update_data["profile_pic"].strip() if update_data["profile_pic"] else None
+            if profile_pic:
+                promoted = await promote_cloudinary_asset(
+                    profile_pic,
+                    "profile-picture",
+                    resource_type="image",
+                )
+                profile_pic = promoted["url"]
+            update_data["profile_pic"] = profile_pic
 
         updated = self.repo.update_customer(customer, update_data)
         return self._to_customer_response(updated)
