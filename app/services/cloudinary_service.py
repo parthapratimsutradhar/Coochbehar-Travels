@@ -290,6 +290,7 @@ async def _upload_content_to_cloudinary(
     timestamp = int(time.time())
     upload_params = {
         "folder": folder,
+        "public_id_prefix": folder,
         "timestamp": timestamp,
     }
     signature = _sign_upload_params(upload_params)
@@ -431,50 +432,66 @@ async def promote_cloudinary_asset(
     resource_type: str | None = None,
 ) -> dict[str, str]:
     """
-    Promotes an asset from 'temporary-uploads' to the target permanent sub-folder
-    using Cloudinary's rename API.
-    If the asset is not in 'temporary-uploads', external, or empty, it returns the input unmodified.
+    Promotes an asset from temporary-uploads to the target permanent folder.
 
-    Returns:
-        dict with {"url": str, "public_id": str}
+    In Cloudinary Dynamic Folder mode:
+    - asset_folder controls the Media Library folder
+    - public_id controls the delivery URL
+
+    Both are updated so the Media Library location and URL remain consistent.
     """
     if not url_or_identifier:
-        return {"url": url_or_identifier or "", "public_id": ""}
+        return {"url": "", "public_id": ""}
 
     info = extract_cloudinary_asset_info(url_or_identifier)
     public_id = info["public_id"]
+
     if not public_id or not info["is_temporary"]:
-        return {"url": url_or_identifier, "public_id": public_id or ""}
+        return {
+            "url": url_or_identifier,
+            "public_id": public_id or "",
+        }
 
     temp_prefix = f"{CLOUDINARY_ROOT_FOLDER}/temporary-uploads/"
     relative_filename = public_id[len(temp_prefix):].lstrip("/")
+
     target_folder = build_cloudinary_folder(target_sub_folder)
     new_public_id = f"{target_folder}/{relative_filename}"
-
     resolved_resource_type = resource_type or info["resource_type"] or "image"
 
     try:
-        rename_fn = getattr(cloudinary.uploader, "rename", None)
-        if rename_fn:
-            result = await asyncio.to_thread(
-                rename_fn,
-                from_public_id=public_id,
-                to_public_id=new_public_id,
-                resource_type=resolved_resource_type,
-                overwrite=True,
-            )
-            return {
-                "url": result.get("secure_url") or result.get("url") or url_or_identifier,
-                "public_id": result.get("public_id") or new_public_id,
-            }
+        # 1. Move the actual asset inside Cloudinary's Media Library.
+        await asyncio.to_thread(
+            cloudinary.uploader.explicit,
+            public_id=public_id,
+            type="upload",
+            resource_type=resolved_resource_type,
+            asset_folder=target_folder,
+        )
+
+        # 2. Change the public ID so the delivery URL also uses the
+        #    permanent folder path.
+        result = await asyncio.to_thread(
+            cloudinary.uploader.rename,
+            from_public_id=public_id,
+            to_public_id=new_public_id,
+            resource_type=resolved_resource_type,
+            type="upload",
+            overwrite=True,
+        )
+
+        return {
+            "url": result.get("secure_url") or result.get("url") or url_or_identifier,
+            "public_id": result.get("public_id") or new_public_id,
+        }
+
     except Exception as exc:
-        logger.warning(
+        logger.exception(
             "Failed to promote Cloudinary asset %s to %s (%s): %s",
             public_id,
             new_public_id,
             resolved_resource_type,
             exc,
         )
+        raise
 
-    fallback_url = url_or_identifier.replace("/temporary-uploads/", f"/{target_sub_folder}/")
-    return {"url": fallback_url, "public_id": new_public_id}
