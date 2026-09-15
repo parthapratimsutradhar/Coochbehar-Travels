@@ -24,7 +24,11 @@ from app.services.admin_document_service import AdminDocumentService
 router = APIRouter(prefix="/admin/documents", tags=["Admin Documents"])
 
 
-@router.get("", response_model=PaginatedResponse[AdminDocumentResponse], responses={401: {"model": ErrorResponse}})
+@router.get(
+    "",
+    response_model=PaginatedResponse[AdminDocumentResponse], 
+    responses={401: {"model": ErrorResponse}}
+)
 def list_documents(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -53,7 +57,10 @@ def list_documents(
     )
 
 
-@router.delete("/bulk", response_model=ActionResponse)
+@router.delete(
+    "/bulk", 
+    response_model=ActionResponse
+)
 def bulk_delete_documents(
     payload: BulkDeleteDocumentsRequest,
     current_user: Account = Depends(get_current_admin_only),
@@ -63,12 +70,18 @@ def bulk_delete_documents(
     return ActionResponse(message=f"{count} document(s) deleted successfully")
 
 
-@router.post("", response_model=SuccessResponse[AdminDocumentResponse], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ActionResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    summary="Upload a customer document",
+)
 async def upload_customer_document(
     payload: AdminDocumentUploadRequest,
     current_user: Account = Depends(get_current_admin),
     db: Session = Depends(get_db),
-) -> SuccessResponse[AdminDocumentResponse]:
+) -> ActionResponse:
     data = {
         "document_type": payload.document_type,
         "title": payload.title.strip(),
@@ -82,7 +95,7 @@ async def upload_customer_document(
         raise HTTPException(status_code=422, detail="file must reference a temporary upload")
 
     mime_type = mimetypes.guess_type(payload.file_name)[0] or "application/octet-stream"
-    document = await AdminDocumentService(db).upload_from_url(
+    await AdminDocumentService(db).upload_from_url(
         customer_id=payload.customer_id,
         url_or_id=payload.file,
         current_user=current_user,
@@ -90,10 +103,14 @@ async def upload_customer_document(
         mime_type=mime_type,
         **data,
     )
-    return SuccessResponse(message="Document uploaded successfully", data=document)
+    return ActionResponse(message="Document uploaded successfully")
 
 
-@router.patch("/{document_id}", response_model=ActionResponse, responses={404: {"model": ErrorResponse}})
+@router.patch(
+    "/{document_id}", 
+    response_model=ActionResponse, 
+    responses={404: {"model": ErrorResponse}}
+)
 def update_document(
     document_id: uuid.UUID,
     payload: DocumentUpdate,
