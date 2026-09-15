@@ -17,3 +17,9 @@ class PackageSuccess(StrEnum):
     CREATED = "Tour package created successfully."
     UPDATED = "Tour package updated successfully."
     DELETED = "Tour package deleted successfully."
+
+
+class TourDetailSuccess(StrEnum):
+    CREATED = "Tour details created successfully."
+    UPDATED = "Tour details updated successfully."
+    DELETED = "Tour details deleted successfully."

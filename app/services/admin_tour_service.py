@@ -19,7 +19,7 @@ from app.schemas.admin_tour import (
     AdminTourVariantItem,
     normalize_json_payload,
 )
-from app.services.cloudinary_service import promote_cloudinary_asset
+from app.services import cloudinary_service
 
 
 class AdminTourService:
@@ -241,34 +241,43 @@ class AdminTourService:
                 self.db.delete(departure)
 
     @staticmethod
-    async def _promote_banner(banner_dict: dict[str, Any] | None) -> dict[str, str | None]:
+    async def _promote_asset(asset: str, resource_type: str) -> str:
+        normalized_resource_type = "video" if resource_type.lower() == "video" else "image"
+        promoted = await cloudinary_service.promote_cloudinary_asset(
+            asset,
+            "tour-packages",
+            resource_type=normalized_resource_type,
+        )
+        return promoted["url"]
+
+    @classmethod
+    async def _promote_banner(cls, banner_dict: dict[str, Any] | None) -> dict[str, str | None]:
         if not banner_dict:
             return {"image": None, "video": None}
         image = banner_dict.get("image")
         video = banner_dict.get("video")
         if image:
-            promoted_img = await promote_cloudinary_asset(image, "tour-packages", resource_type="image")
-            image = promoted_img["url"]
+            image = await cls._promote_asset(image, "image")
         if video:
-            promoted_vid = await promote_cloudinary_asset(video, "tour-packages", resource_type="video")
-            video = promoted_vid["url"]
+            video = await cls._promote_asset(video, "video")
         return {"image": image, "video": video}
 
-    @staticmethod
-    async def _promote_gallery(gallery_list: list[Any] | None) -> list[Any]:
+    @classmethod
+    async def _promote_gallery(cls, gallery_list: list[Any] | None) -> list[Any]:
         if not gallery_list:
             return []
         promoted_gallery = []
         for item in gallery_list:
             if isinstance(item, dict):
                 url = item.get("url")
-                media_type = item.get("type") or "image"
+                media_type = str(item.get("type") or "image")
                 if url:
-                    promoted = await promote_cloudinary_asset(url, "tour-packages", resource_type=media_type)
-                    item = {**item, "url": promoted["url"]}
+                    item = {
+                        **item,
+                        "url": await cls._promote_asset(url, media_type),
+                    }
             elif isinstance(item, str):
-                promoted = await promote_cloudinary_asset(item, "tour-packages", resource_type="image")
-                item = promoted["url"]
+                item = await cls._promote_asset(item, "image")
             promoted_gallery.append(item)
         return promoted_gallery
 

@@ -3,15 +3,15 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin, get_current_admin_only
+from app.api.deps import get_current_admin_only
+from app.core.messages.success import TourDetailSuccess
 from app.db.database import get_db
 from app.models.account import Account
 from app.schemas.admin_tour import (
-    AdminTourDetailPayload,
     TourDetailCreateRequest,
     TourDetailUpdateRequest,
 )
-from app.schemas.response import ActionResponse, SuccessResponse
+from app.schemas.response import ActionResponse, ErrorResponse
 from app.services.admin_tour_service import AdminTourService
 
 
@@ -21,7 +21,12 @@ router = APIRouter(prefix="/admin/tour-details", tags=["Admin Tour Details"])
 @router.post(
     "",
     status_code=status.HTTP_201_CREATED,
-    response_model=SuccessResponse[AdminTourDetailPayload],
+    response_model=ActionResponse,
+    responses={
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+    },
     summary="Create tour variant details",
 )
 async def create_admin_tour_detail(
@@ -30,21 +35,14 @@ async def create_admin_tour_detail(
     db: Session = Depends(get_db),
 ):
     del current_user
-    service = AdminTourService(db)
-    detail = await service.create_detail(payload.model_dump())
-    return SuccessResponse(
-        message="Tour details created successfully",
-        data=service._detail_to_response(
-            detail,
-            detail.variant.package_id,
-            service.get_variant_departures(detail.variant_id),
-        ),
-    )
+    await AdminTourService(db).create_detail(payload.model_dump())
+    return ActionResponse(message=TourDetailSuccess.CREATED)
 
 
 @router.patch(
     "/{detail_id}",
-    response_model=SuccessResponse[AdminTourDetailPayload],
+    response_model=ActionResponse,
+    responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
     summary="Update tour variant details",
 )
 async def update_admin_tour_detail(
@@ -54,21 +52,14 @@ async def update_admin_tour_detail(
     db: Session = Depends(get_db),
 ):
     del current_user
-    service = AdminTourService(db)
-    detail = await service.update_detail(detail_id, payload.model_dump(exclude_unset=True))
-    return SuccessResponse(
-        message="Tour details updated successfully",
-        data=service._detail_to_response(
-            detail,
-            detail.variant.package_id,
-            service.get_variant_departures(detail.variant_id),
-        ),
-    )
+    await AdminTourService(db).update_detail(detail_id, payload.model_dump(exclude_unset=True))
+    return ActionResponse(message=TourDetailSuccess.UPDATED)
 
 
 @router.delete(
     "/{detail_id}",
     response_model=ActionResponse,
+    responses={404: {"model": ErrorResponse}},
     summary="Delete tour variant details",
 )
 def delete_admin_tour_detail(
@@ -78,4 +69,4 @@ def delete_admin_tour_detail(
 ):
     del current_user
     AdminTourService(db).delete_detail(detail_id)
-    return ActionResponse(message="Tour details deleted successfully")
+    return ActionResponse(message=TourDetailSuccess.DELETED)
