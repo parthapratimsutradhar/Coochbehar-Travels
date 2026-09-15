@@ -303,7 +303,7 @@ class AuthService:
                 detail=AuthError.GOOGLE_ADMIN_NOT_FOUND,
             )
 
-        if google_data.get("picture"):
+        if google_data.get("picture") and not user.profile_pic:
             user.profile_pic = await upload_google_profile_picture(google_data["picture"])
             self.db.commit()
 
@@ -511,11 +511,10 @@ class AuthService:
             )
             if referrer:
                 self._create_referral(referrer, customer)
-            if picture:
-                customer.profile_pic = await upload_google_profile_picture(picture)
-                self.db.commit()
-        else:
-            pass
+        
+        if picture and not customer.profile_pic:
+            customer.profile_pic = await upload_google_profile_picture(picture)
+            self.db.commit()
 
         if visitor_id:
             self.customer_repo.link_visitor_to_customer(

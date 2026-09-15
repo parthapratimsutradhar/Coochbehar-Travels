@@ -599,6 +599,9 @@ def test_active_session_marks_current_without_refresh_cookie(client: TestClient,
 
 def test_19_admin_google_login(client: TestClient, test_user: Account, db_session, monkeypatch):
     """19. Test Admin Continue with Google."""
+    test_user.profile_pic = None
+    db_session.commit()
+
     async def fake_upload_google_profile_picture(picture_url: str) -> str:
         assert picture_url.startswith("https://lh3.googleusercontent.com/")
         return "https://res.cloudinary.com/example/image/upload/profile-picture/admin.jpg"
@@ -622,6 +625,43 @@ def test_19_admin_google_login(client: TestClient, test_user: Account, db_sessio
     db_session.refresh(test_user)
     assert test_user.profile_pic == "https://res.cloudinary.com/example/image/upload/profile-picture/admin.jpg"
     assert settings.REFRESH_COOKIE_NAME in res.cookies
+
+
+def test_admin_google_login_preserves_existing_profile_pic(
+    client: TestClient,
+    test_user: Account,
+    db_session,
+    monkeypatch,
+):
+    """Google login must not overwrite a profile picture set by the user."""
+    test_user.profile_pic = "https://example.com/custom-admin-picture.jpg"
+    db_session.commit()
+    upload_called = False
+
+    async def fake_upload_google_profile_picture(picture_url: str) -> str:
+        nonlocal upload_called
+        upload_called = True
+        return "https://res.cloudinary.com/example/image/upload/profile-picture/google.jpg"
+
+    monkeypatch.setattr(
+        "app.services.auth_service.upload_google_profile_picture",
+        fake_upload_google_profile_picture,
+    )
+    google_token = make_mock_google_id_token(
+        email=test_user.email,
+        name=test_user.name,
+        picture="https://lh3.googleusercontent.com/a/new-admin-pic.jpg",
+    )
+
+    res = client.post(
+        "/api/v1/admin/auth/google",
+        json={"id_token": google_token},
+    )
+
+    assert res.status_code == 200
+    db_session.refresh(test_user)
+    assert test_user.profile_pic == "https://example.com/custom-admin-picture.jpg"
+    assert upload_called is False
 
 
 def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClient, db_session, monkeypatch):
@@ -667,6 +707,48 @@ def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClien
     cust_id = uuid.UUID(me_data["id"])
     db_session.refresh(visitor)
     assert visitor.customer_id == cust_id
+
+
+def test_existing_customer_google_login_adds_missing_profile_pic(
+    client: TestClient,
+    db_session,
+    monkeypatch,
+):
+    """Google login adds an avatar for an existing customer without one."""
+    customer = Account(
+        account_code="CUS-GGL02",
+        name="Existing Traveler",
+        email="existing-traveler@gmail.com",
+        role=AccountRole.CUSTOMER,
+        is_active=True,
+        profile_pic=None,
+    )
+    db_session.add(customer)
+    db_session.commit()
+
+    async def fake_upload_google_profile_picture(picture_url: str) -> str:
+        return "https://res.cloudinary.com/example/image/upload/profile-picture/existing.jpg"
+
+    monkeypatch.setattr(
+        "app.services.auth_service.upload_google_profile_picture",
+        fake_upload_google_profile_picture,
+    )
+    google_token = make_mock_google_id_token(
+        email=customer.email,
+        name=customer.name,
+        picture="https://lh3.googleusercontent.com/a/existing-avatar.jpg",
+    )
+
+    res = client.post(
+        "/api/v1/auth/google",
+        json={"id_token": google_token},
+    )
+
+    assert res.status_code == 200
+    db_session.refresh(customer)
+    assert customer.profile_pic == (
+        "https://res.cloudinary.com/example/image/upload/profile-picture/existing.jpg"
+    )
 
 
 def test_21_room_and_vehicle_float_types(db_session):
