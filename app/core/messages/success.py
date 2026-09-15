@@ -23,3 +23,10 @@ class TourDetailSuccess(StrEnum):
     CREATED = "Tour details created successfully."
     UPDATED = "Tour details updated successfully."
     DELETED = "Tour details deleted successfully."
+
+
+class ReviewSuccess(StrEnum):
+    RETRIEVED = "Package reviews fetched successfully."
+    CREATED = "Review created successfully."
+    UPDATED = "Review updated successfully."
+    DELETED = "Review deleted successfully."

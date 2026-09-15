@@ -24,10 +24,42 @@ class ReviewUpdate(SchemaBase):
     review_gallery: list[GalleryItemResponse] | None = None
 
 
+class AdminReviewGalleryItemCreate(SchemaBase):
+    """Gallery item accepted when an administrator creates a review."""
+
+    alt: str | None = None
+    url: str
+    type: str | None = None
+    display_order: int | None = None
+
+
+class AdminReviewCreate(SchemaBase):
+    """Review an administrator can create for a package."""
+
+    customer_id: uuid.UUID | None = None
+    name: str | None = Field(None, min_length=1, max_length=100)
+    rating: int = Field(..., ge=1, le=5)
+    review: str = Field(..., min_length=1, max_length=5000)
+    review_gallery: list[AdminReviewGalleryItemCreate] = Field(default_factory=list)
+    is_published: bool = True
+
+
+class AdminReviewUpdate(SchemaBase):
+    """Fields an administrator may edit on a review."""
+
+    customer_id: uuid.UUID | None = None
+    name: str | None = Field(None, min_length=1, max_length=100)
+    rating: int | None = Field(None, ge=1, le=5)
+    review: str | None = Field(None, min_length=1, max_length=5000)
+    review_gallery: list[GalleryItemResponse] | None = None
+    is_published: bool | None = None
+
+
 class ReviewResponse(SchemaBase):
     id: uuid.UUID
     package_id: uuid.UUID
     customer_id: uuid.UUID | None
+    customer_profile_picture: str | None = None
     name: str
     rating: int
     review: str

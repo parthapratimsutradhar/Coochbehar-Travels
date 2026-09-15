@@ -23,6 +23,8 @@ class PackageError(StrEnum):
 class ReviewError(StrEnum):
     TOUR_NOT_COMPLETED = "You can review only a tour you previously completed or converted."
     ALREADY_REVIEWED = "You have already reviewed this tour."
+    REVIEW_NOT_FOUND = "Review not found."
+    CUSTOMER_NOT_FOUND = "Customer not found."
 
 
 class AccessError(StrEnum):
