@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,7 @@ from app.core.messages.validation import AuthError
 from app.models.account import Account
 from app.models.customer_profile import CustomerProfile
 from app.models.referral import Referral
+from app.models.referral_config import ReferralRewardConfig
 from app.repository.auth_session_repo import AuthSessionRepository
 from app.repository.customer_repo import CustomerRepository
 from app.repository.otp_repo import OtpRepository
@@ -565,11 +567,20 @@ class AuthService:
         return referrer
 
     def _create_referral(self, referrer: Account, referred: Account) -> None:
+        config = (
+            self.db.query(ReferralRewardConfig)
+            .filter_by(is_active=True)
+            .order_by(ReferralRewardConfig.created_at.desc())
+            .first()
+        )
+        default_reward = Decimal(str(config.default_reward_amount)) if config else Decimal("500.00")
         referral = Referral(
             referrer_customer_id=referrer.id,
             referred_customer_id=referred.id,
-            status=ReferralStatus.CONVERTED,
-            converted_at=datetime.now(timezone.utc),
+            status=ReferralStatus.REGISTERED,
+            default_reward_amount=default_reward,
+            booking_window_days=config.booking_window_days if config else 30,
+            notes="Created from referral registration.",
         )
         self.db.add(referral)
         self.db.commit()

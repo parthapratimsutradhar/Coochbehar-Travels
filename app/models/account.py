@@ -129,6 +129,18 @@ class Account(ActiveEntity):
         back_populates="referred_customer",
     )
 
+    updated_referral_config = relationship(
+        "ReferralRewardConfig",
+        foreign_keys="ReferralRewardConfig.updated_by_account_id",
+        back_populates="updated_by",
+    )
+
+    approved_referral_rewards = relationship(
+        "ReferralRewardHistory",
+        foreign_keys="ReferralRewardHistory.approved_by_account_id",
+        back_populates="approved_by",
+    )
+
     documents_uploaded = relationship(
         "Document",
         foreign_keys="Document.uploaded_by_account_id",

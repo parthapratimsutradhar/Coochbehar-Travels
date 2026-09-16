@@ -22,6 +22,8 @@ from app.models.otp_challenge import OtpChallenge
 from app.models.quotation import Quotation
 from app.models.quotation_item import QuotationItem
 from app.models.referral import Referral
+from app.models.referral_config import ReferralRewardConfig
+from app.models.referral_reward_history import ReferralRewardHistory
 from app.models.review import Review
 from app.models.room import Room
 from app.models.room_allocation import RoomAllocation
@@ -69,6 +71,8 @@ __all__ = [
     "Quotation",
     "QuotationItem",
     "Referral",
+    "ReferralRewardConfig",
+    "ReferralRewardHistory",
     "Review",
     "Room",
     "RoomAllocation",
