@@ -257,3 +257,9 @@ class QuotationItemType(AppEnum):
     PERMIT = "permit"
     TRANSFER = "transfer"
     OTHER = "other"
+    
+class HotelCategory(AppEnum):
+    BUDGET = "BUDGET"
+    STANDARD = "STANDARD"
+    DELUXE = "DELUXE"
+    LUXURY = "LUXURY"    

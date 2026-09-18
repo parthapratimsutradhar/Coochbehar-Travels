@@ -1,9 +1,12 @@
 
 import uuid
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import Any
+from sqlalchemy.dialects.postgresql import JSONB
 
+from app.core.enums import HotelCategory
 from app.models.base import ActiveEntity
 
 
@@ -14,9 +17,9 @@ class Hotel(ActiveEntity):
         String(255),
         nullable=False,
     )
-
-    destination: Mapped[str] = mapped_column(
-        String(255),
+    
+    image: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
         nullable=False,
     )
 
@@ -26,11 +29,12 @@ class Hotel(ActiveEntity):
         index=True,
     )
 
-    category: Mapped[str | None] = mapped_column(
-        String(50),
+    category: Mapped[HotelCategory | None] = mapped_column(
+        Enum(HotelCategory, name="hotel_category"),
         nullable=True,
+        index=True,
     )
-
+    
     address: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
