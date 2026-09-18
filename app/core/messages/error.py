@@ -24,6 +24,11 @@ class PackageError(StrEnum):
     PACKAGE_NOT_FOUND = "Tour package not found."
 
 
+class RoomError(StrEnum):
+    ROOM_NOT_FOUND = "Room not found."
+    HOTEL_NOT_FOUND = "Hotel not found."
+
+
 class ReviewError(StrEnum):
     TOUR_NOT_COMPLETED = "You can review only a tour you previously completed or converted."
     ALREADY_REVIEWED = "You have already reviewed this tour."

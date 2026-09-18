@@ -263,3 +263,14 @@ class HotelCategory(AppEnum):
     STANDARD = "STANDARD"
     DELUXE = "DELUXE"
     LUXURY = "LUXURY"    
+    
+class RoomType(AppEnum):
+    SINGLE = "SINGLE"
+    DOUBLE = "DOUBLE"
+    TWIN = "TWIN"
+    TRIPLE = "TRIPLE"
+    FAMILY = "FAMILY"
+    SUITE = "SUITE"
+    DELUXE = "DELUXE"
+    EXECUTIVE = "EXECUTIVE"
+    PRESIDENTIAL = "PRESIDENTIAL"    

@@ -39,3 +39,10 @@ class EnquirySuccess(StrEnum):
     LEAD_RETRIEVED = "Enquiry lead retrieved successfully."
     CREATED = "Enquiry created successfully."
     UPDATED = "Enquiry updated successfully."
+
+
+class RoomSuccess(StrEnum):
+    RETRIEVED = "Rooms fetched successfully."
+    CREATED = "Room created successfully."
+    UPDATED = "Room updated successfully."
+    DELETED = "Room deleted successfully."
