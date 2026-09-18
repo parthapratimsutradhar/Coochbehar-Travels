@@ -46,3 +46,10 @@ class RoomSuccess(StrEnum):
     CREATED = "Room created successfully."
     UPDATED = "Room updated successfully."
     DELETED = "Room deleted successfully."
+
+
+class VehicleSuccess(StrEnum):
+    RETRIEVED = "Vehicles fetched successfully."
+    CREATED = "Vehicle created successfully."
+    UPDATED = "Vehicle updated successfully."
+    DELETED = "Vehicle deleted successfully."

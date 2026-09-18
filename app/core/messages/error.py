@@ -29,6 +29,10 @@ class RoomError(StrEnum):
     HOTEL_NOT_FOUND = "Hotel not found."
 
 
+class VehicleError(StrEnum):
+    VEHICLE_NOT_FOUND = "Vehicle not found."
+
+
 class ReviewError(StrEnum):
     TOUR_NOT_COMPLETED = "You can review only a tour you previously completed or converted."
     ALREADY_REVIEWED = "You have already reviewed this tour."

@@ -2,6 +2,8 @@ from sqlalchemy import Enum, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import ActiveEntity
 from decimal import Decimal
+from typing import Any
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.enums import VehicleType
 
@@ -10,6 +12,12 @@ class Vehicle(ActiveEntity):
 
     name: Mapped[str] = mapped_column(
         String(100),
+    )
+    
+    vehicle_image: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
     )
     
     vehicle_type: Mapped[VehicleType] = mapped_column(

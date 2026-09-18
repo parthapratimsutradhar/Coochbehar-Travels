@@ -21,6 +21,7 @@ from app.api.v1.admin.tour_offer import router as tour_offer_router
 from app.api.v1.admin.tour_package import router as tour_package_router
 from app.api.v1.admin.tour_variant import router as tour_variant_router
 from app.api.v1.admin.vendors import router as vendors_router
+from app.api.v1.admin.vehicle import router as vehicle_router
 
 router = APIRouter()
 
@@ -45,3 +46,4 @@ router.include_router(bookings_router)
 router.include_router(destinations_router)
 router.include_router(expenses_router)
 router.include_router(vendors_router)
+router.include_router(vehicle_router)
