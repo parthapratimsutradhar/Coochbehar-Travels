@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.core.enums import EnquiryChannel
+from app.core.enums import LeadChannel, LeadActivityType
 from app.models.base import BaseEntity
 
 
@@ -20,13 +20,13 @@ class LeadActivity(BaseEntity):
         nullable=True,
     )
 
-    channel: Mapped[EnquiryChannel] = mapped_column(
-        Enum(EnquiryChannel, name="enquiry_channel"),
+    channel: Mapped[LeadChannel] = mapped_column(
+        Enum(LeadChannel, name="lead_channel"),
         nullable=False,
     )
 
-    activity_type: Mapped[str] = mapped_column(
-        String(50),
+    activity_type: Mapped[LeadActivityType] = mapped_column(
+        Enum(LeadActivityType, name="lead_activity_type"),
         nullable=False,
     )
 

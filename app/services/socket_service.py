@@ -64,14 +64,7 @@ def emit_lead_created(lead: Lead) -> None:
         "lead_code": lead.lead_code,
         "lead_score": lead.lead_score,
         "status": lead.status.value if hasattr(lead.status, "value") else str(lead.status),
-        "source": lead.source.value if hasattr(lead.source, "value") else str(lead.source),
-        "full_name": lead.full_name,
-        "mobile": lead.mobile,
-        "email": lead.email,
         "enquiry_id": str(lead.enquiry_id) if lead.enquiry_id else None,
-        "customer_id": str(lead.customer_id) if lead.customer_id else None,
-        "visitor_id": str(lead.visitor_id) if lead.visitor_id else None,
-        "notes": lead.notes,
         "created_at": lead.created_at.isoformat() if lead.created_at else None,
     }
     _safe_broadcast(["lead:created", "lead.created"], payload, rooms=["ADMIN"])
@@ -94,8 +87,6 @@ def emit_lead_score_updated(
         "delta": delta,
         "reason": reason,
         "status": lead.status.value if hasattr(lead.status, "value") else str(lead.status),
-        "customer_id": str(lead.customer_id) if lead.customer_id else None,
-        "visitor_id": str(lead.visitor_id) if lead.visitor_id else None,
     }
     _safe_broadcast(
         ["lead:score_updated", "lead.score_updated", "lead_score.updated"],
@@ -137,7 +128,7 @@ def emit_lead_activity_created(
         "activity_type": activity.activity_type,
         "channel": activity.channel.value if hasattr(activity.channel, "value") else str(activity.channel),
         "notes": activity.notes,
-        "user_id": str(activity.user_id) if activity.user_id else None,
+        "user_id": str(activity.account_id) if activity.account_id else None,
         "next_follow_up_at": activity.next_follow_up_at.isoformat() if activity.next_follow_up_at else None,
         "created_at": activity.created_at.isoformat() if activity.created_at else None,
     }
@@ -157,7 +148,7 @@ def emit_enquiry_created(enquiry: Any) -> None:
         "enquiry_code": enquiry.enquiry_code,
         "enquiry_type": enquiry.enquiry_type.value if hasattr(enquiry.enquiry_type, "value") else str(enquiry.enquiry_type),
         "status": enquiry.status.value if hasattr(enquiry.status, "value") else str(enquiry.status),
-        "subject": enquiry.subject,
+        "message": enquiry.message,
         "enquirer_name": enquiry.enquirer_name,
         "enquirer_phone": enquiry.enquirer_phone,
         "customer_id": str(enquiry.customer_id) if enquiry.customer_id else None,
@@ -178,7 +169,7 @@ def emit_enquiry_updated(enquiry: Any) -> None:
         "enquiry_code": enquiry.enquiry_code,
         "status": enquiry.status.value if hasattr(enquiry.status, "value") else str(enquiry.status),
         "enquiry_type": enquiry.enquiry_type.value if hasattr(enquiry.enquiry_type, "value") else str(enquiry.enquiry_type),
-        "subject": enquiry.subject,
+        "message": enquiry.message,
         "updated_at": enquiry.updated_at.isoformat() if hasattr(enquiry, "updated_at") and enquiry.updated_at else None,
     }
     rooms = ["ADMIN", f"enquiry:{enquiry.id}"]

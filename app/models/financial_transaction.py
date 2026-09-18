@@ -71,6 +71,11 @@ class FinancialTransaction(BaseEntity):
         UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True
     )
 
+    enquiry = relationship(
+        "Enquiry",
+        back_populates="financial_transactions",
+    )
+
     entries: Mapped[list["FinancialTransactionEntry"]] = relationship(
         "FinancialTransactionEntry",
         back_populates="transaction",

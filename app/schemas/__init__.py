@@ -23,9 +23,7 @@ from app.schemas.enquiry import EnquiryCreate, EnquiryResponse, EnquiryUpdate
 from app.schemas.lead import (
     LeadActivityCreate,
     LeadActivityResponse,
-    LeadCreate,
     LeadResponse,
-    LeadUpdate,
 )
 from app.schemas.review import ReviewCreate, ReviewResponse
 from app.schemas.upload import FileUploadResponse
@@ -69,9 +67,7 @@ __all__ = [
     "EnquiryUpdate",
     "LeadActivityCreate",
     "LeadActivityResponse",
-    "LeadCreate",
     "LeadResponse",
-    "LeadUpdate",
     "ReviewCreate",
     "ReviewResponse",
     "FileUploadResponse",

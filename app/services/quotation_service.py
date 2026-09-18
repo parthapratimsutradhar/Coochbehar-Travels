@@ -22,19 +22,14 @@ class QuotationService:
         self.booking_repo = BookingRepository(db)
 
     def create_quotation(self, payload: QuotationCreate, staff_user: Account) -> Quotation:
-        enquiry = None
-        if payload.enquiry_id:
-            enquiry = self.enquiry_repo.get_by_id(payload.enquiry_id)
+        enquiry = self.enquiry_repo.get_by_id(payload.enquiry_id)
+        if not enquiry:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enquiry not found.")
 
         # Version calculation
         enquiry_id = payload.enquiry_id
-        if enquiry_id:
-            version = self.quotation_repo.get_latest_version(enquiry_id) + 1
-            code_prefix = enquiry.enquiry_code if enquiry else f"ENQ-{uuid.uuid4().hex[:6].upper()}"
-            quotation_code = f"QT-{code_prefix}-V{version}"
-        else:
-            version = 1
-            quotation_code = f"QT-{uuid.uuid4().hex[:8].upper()}-V1"
+        version = self.quotation_repo.get_latest_version(enquiry_id) + 1
+        quotation_code = f"QT-{enquiry.enquiry_code}-V{version}"
 
         # Calculate totals from items if provided
         items_data = [item.model_dump() for item in payload.items]
@@ -46,20 +41,22 @@ class QuotationService:
         quotation_data = {
             "quotation_code": quotation_code,
             "version": version,
-            "customer_id": payload.customer_id or (enquiry.customer_id if enquiry else None),
+            "customer_id": enquiry.customer_id,
             "enquiry_id": payload.enquiry_id,
             "package_id": payload.package_id,
             "variant_id": payload.variant_id,
             "destination_id": payload.destination_id,
+            "hotel_id": payload.hotel_id,
+            "room_id": payload.room_id,
+            "vehicle_id": payload.vehicle_id,
             "tour_name": payload.tour_name,
-            "destination": payload.destination,
             "travel_date": payload.travel_date,
             "return_date": payload.return_date,
             "adult_count": payload.adult_count,
             "child_count": payload.child_count,
             "senior_count": payload.senior_count,
             "room_count": payload.room_count,
-            "vehicle": payload.vehicle,
+            "vehicle_count": payload.vehicle_count,
             "meal_plan": payload.meal_plan,
             "subtotal": subtotal,
             "discount_amount": payload.discount_amount,
@@ -67,7 +64,6 @@ class QuotationService:
             "total_amount": total_amount,
             "valid_until": payload.valid_until,
             "status": QuotationStatus.DRAFT,
-            "notes": payload.notes,
             "terms_and_conditions": payload.terms_and_conditions,
             "created_by_account_id": staff_user.id,
         }
@@ -180,7 +176,7 @@ class QuotationService:
             "total_amount": quotation.total_amount,
             "paid_amount": Decimal(0),
             "due_amount": quotation.total_amount,
-            "notes": notes or quotation.notes,
+            "notes": notes,
             "created_by": staff_user.id,
         }
 

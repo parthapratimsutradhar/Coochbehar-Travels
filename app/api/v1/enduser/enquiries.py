@@ -2,7 +2,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from app.api.deps import get_current_customer
+from app.api.deps import get_current_customer, get_optional_customer
 from app.db.database import get_db
 from app.models.account import Account
 from app.models.lead import Lead
@@ -50,7 +50,10 @@ def list_my_enquiries(
 async def create_enquiry(
     payload: EnquiryCreate,
     db: Session = Depends(get_db),
+    current_customer: Account | None = Depends(get_optional_customer),
 ):
+    if current_customer:
+        payload.customer_id = current_customer.id
     service = EnquiryService(db)
     enquiry = await service.create_fixed_tour_enquiry(payload)
     lead = db.scalar(select(Lead).where(Lead.enquiry_id == enquiry.id))
@@ -70,7 +73,10 @@ async def create_enquiry(
 async def create_custom_tour_request(
     payload: CustomTourRequestCreate,
     db: Session = Depends(get_db),
+    current_customer: Account | None = Depends(get_optional_customer),
 ):
+    if current_customer:
+        payload.customer_id = current_customer.id
     service = EnquiryService(db)
     enquiry = await service.create_custom_tour_enquiry(payload)
     lead = db.scalar(select(Lead).where(Lead.enquiry_id == enquiry.id))

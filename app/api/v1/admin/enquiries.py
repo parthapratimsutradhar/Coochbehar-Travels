@@ -4,22 +4,37 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin_or_staff
-from app.core.enums import EnquiryStatus, EnquiryType
+from app.core.enums import EnquiryStatus
+from app.core.messages.success import EnquirySuccess
 from app.db.database import get_db
 from app.models.account import Account
-from app.schemas.enquiry import EnquiryResponse, EnquiryUpdate
+from app.schemas.enquiry import EnquiryCreate, EnquiryResponse, EnquiryUpdate
+from app.schemas.lead import LeadResponse
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
-from app.schemas.response import SuccessResponse
+from app.schemas.response import ActionResponse, SuccessResponse
 from app.services.enquiry_service import EnquiryService
-from app.services.socket_service import (
-    emit_enquiry_status_updated,
-    emit_enquiry_updated,
-)
+from app.services.lead_service import LeadService
 
 router = APIRouter(
     prefix="/admin/enquiries",
     tags=["Admin - Enquiries"],
 )
+
+
+@router.post(
+    "",
+    response_model=ActionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create an enquiry and sales lead (Admin)",
+)
+async def create_enquiry(
+    payload: EnquiryCreate,
+    db: Session = Depends(get_db),
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    del current_user
+    await EnquiryService(db).create_fixed_tour_enquiry(payload)
+    return ActionResponse(message=EnquirySuccess.CREATED)
 
 
 @router.get(
@@ -39,7 +54,7 @@ def list_enquiries(
     service = EnquiryService(db)
     result = service.list_all_enquiries(page=page, page_size=page_size, status=status_filter, search=search)
     return PaginatedResponse(
-        message="Enquiries fetched successfully",
+        message=EnquirySuccess.RETRIEVED,
         data=[EnquiryResponse.model_validate(e) for e in result["items"]],
         pagination=PaginationMeta(
             current_page=result["page"],
@@ -53,26 +68,26 @@ def list_enquiries(
 
 
 @router.get(
-    "/{enquiry_id}",
-    response_model=SuccessResponse[EnquiryResponse],
-    summary="Get single enquiry detail",
+    "/{enquiry_id}/lead",
+    response_model=SuccessResponse[LeadResponse],
+    summary="Get an enquiry lead with activities",
 )
-def get_enquiry(
+def get_enquiry_lead(
     enquiry_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
-    service = EnquiryService(db)
-    enquiry = service.get_enquiry(enquiry_id)
+    del current_user
+    lead = LeadService(db).get_lead_for_enquiry(enquiry_id)
     return SuccessResponse(
-        message="Enquiry fetched successfully",
-        data=EnquiryResponse.model_validate(enquiry),
+        message=EnquirySuccess.LEAD_RETRIEVED,
+        data=LeadResponse.model_validate(lead),
     )
 
 
 @router.patch(
     "/{enquiry_id}",
-    response_model=SuccessResponse[EnquiryResponse],
+    response_model=ActionResponse,
     summary="Update enquiry (Admin)",
 )
 def update_enquiry(
@@ -81,33 +96,6 @@ def update_enquiry(
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
-    service = EnquiryService(db)
-    enquiry = service.get_enquiry(enquiry_id)
-    prev_status = enquiry.status
-
-    # Apply field-level updates via repo (through service)
-    update_data = payload.model_dump(exclude_unset=True)
-
-    if "status" in update_data:
-        enquiry = service.update_enquiry_status(enquiry_id, update_data.pop("status"))
-
-    # For any remaining fields, apply directly and commit
-    if update_data:
-        for field, value in update_data.items():
-            setattr(enquiry, field, value)
-        db.commit()
-        db.refresh(enquiry)
-
-    # Emit real-time Socket.IO events for enquiry changes
-    emit_enquiry_updated(enquiry)
-    if enquiry.status != prev_status:
-        emit_enquiry_status_updated(
-            enquiry,
-            previous_status=prev_status.value if hasattr(prev_status, "value") else str(prev_status),
-            new_status=enquiry.status.value if hasattr(enquiry.status, "value") else str(enquiry.status),
-        )
-
-    return SuccessResponse(
-        message="Enquiry updated successfully",
-        data=EnquiryResponse.model_validate(enquiry),
-    )
+    del current_user
+    EnquiryService(db).update_enquiry(enquiry_id, payload)
+    return ActionResponse(message=EnquirySuccess.UPDATED)

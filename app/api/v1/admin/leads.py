@@ -1,247 +1,153 @@
 import uuid
-from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.orm import Session
 
-from app.core.enums import LeadSource, LeadStatus
-from app.core.messages.error import LeadError
+from app.api.deps import get_current_admin_or_staff
 from app.core.messages.success import LeadSuccess
 from app.db.database import get_db
-from app.models.lead import Lead
-from app.models.lead_activity import LeadActivity
+from app.models.account import Account
 from app.schemas.lead import (
-    LeadActivityCreate,
-    LeadActivityResponse,
-    LeadCreate,
-    LeadResponse,
-    LeadUpdate,
+	AdminLeadActivityCreate,
+	LeadActivityResponse,
+	LeadActivityUpdate,
+	LeadAssignmentUpdate,
+	LeadManageUpdate,
+	LeadStatusUpdate,
 )
-from app.schemas.response import SuccessResponse
-from app.services.lead_scoring_service import LeadScoringService
-from app.services.socket_service import (
-    emit_lead_activity_created,
-    emit_lead_created,
-    emit_lead_score_updated,
-    emit_lead_status_updated,
-)
+from app.schemas.pagination import PaginatedResponse, PaginationMeta
+from app.schemas.response import ActionResponse
+from app.services.lead_service import LeadService
 
 router = APIRouter(
-    prefix="/admin/leads",
-    tags=["Admin - Sales Leads Pipeline"],
+	prefix="/admin/leads",
+	tags=["Admin - Leads"],
 )
 
 
-@router.get(
-    "",
-    response_model=SuccessResponse[list[LeadResponse]],
-    summary="List sales leads",
-    description="Retrieve sales leads with status, source, and search filters.",
+@router.put(
+	"/{lead_id}/assignment",
+	response_model=ActionResponse,
+	summary="Assign or unassign a lead (Admin)",
 )
-def list_leads(
-    status: LeadStatus | None = Query(None, description="Filter by lead status"),
-    source: LeadSource | None = Query(None, description="Filter by lead source"),
-    search: str | None = Query(None, description="Search by name, email, or mobile"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+def update_lead_assignment(
+	lead_id: uuid.UUID,
+	payload: LeadAssignmentUpdate,
+	db: Session = Depends(get_db),
+	current_user: Account = Depends(get_current_admin_or_staff),
 ):
-    stmt = select(Lead).options(selectinload(Lead.activities)).order_by(Lead.created_at.desc())
-
-    if status:
-        stmt = stmt.where(Lead.status == status)
-    if source:
-        stmt = stmt.where(Lead.source == source)
-    if search:
-        search_pattern = f"%{search}%"
-        stmt = stmt.where(
-            (Lead.full_name.ilike(search_pattern))
-            | (Lead.email.ilike(search_pattern))
-            | (Lead.mobile.ilike(search_pattern))
-        )
-
-    stmt = stmt.offset(skip).limit(limit)
-    leads = db.execute(stmt).scalars().all()
-    return SuccessResponse(
-        message=LeadSuccess.RETRIEVED,
-        data=[LeadResponse.model_validate(l) for l in leads],
-    )
-
-
-@router.get(
-    "/{lead_id}",
-    response_model=SuccessResponse[LeadResponse],
-    summary="Get single sales lead detail",
-)
-def get_lead(
-    lead_id: uuid.UUID,
-    db: Session = Depends(get_db),
-):
-    stmt = select(Lead).options(selectinload(Lead.activities)).where(Lead.id == lead_id)
-    lead = db.execute(stmt).scalar_one_or_none()
-    if not lead:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=LeadError.LEAD_NOT_FOUND,
-        )
-    return SuccessResponse(
-        message=LeadSuccess.RETRIEVED,
-        data=LeadResponse.model_validate(lead),
-    )
-
-
-@router.post(
-    "",
-    response_model=SuccessResponse[LeadResponse],
-    status_code=status.HTTP_201_CREATED,
-    summary="Manually create a new lead",
-)
-def create_lead(
-    payload: LeadCreate,
-    db: Session = Depends(get_db),
-):
-    lead_code = f"LEAD-{uuid.uuid4().hex[:8].upper()}"
-    lead_score = max(0, min(100, payload.lead_score))
-    lead = Lead(
-        lead_code=lead_code,
-        enquiry_id=payload.enquiry_id,
-        customer_id=payload.customer_id,
-        visitor_id=payload.visitor_id,
-        full_name=payload.full_name,
-        mobile=payload.mobile,
-        email=payload.email,
-        whatsapp_opt_in=payload.whatsapp_opt_in,
-        lead_score=lead_score,
-        status=payload.status,
-        source=payload.source,
-        notes=payload.notes,
-    )
-    db.add(lead)
-    db.commit()
-
-    stmt = select(Lead).options(selectinload(Lead.activities)).where(Lead.id == lead.id)
-    created = db.execute(stmt).scalar_one()
-
-    # Emit real-time Socket.IO event to admin dashboard
-    emit_lead_created(created)
-
-    return SuccessResponse(
-        message=LeadSuccess.CREATED,
-        data=LeadResponse.model_validate(created),
-    )
+	LeadService(db).manage_lead(
+		lead_id,
+		LeadManageUpdate(assigned_account_id=payload.assigned_account_id),
+		current_user.id,
+	)
+	return ActionResponse(message=LeadSuccess.UPDATED)
 
 
 @router.patch(
-    "/{lead_id}",
-    response_model=SuccessResponse[LeadResponse],
-    summary="Update sales lead status / notes",
+	"/{lead_id}/status",
+	response_model=ActionResponse,
+	summary="Update a lead status (Admin)",
 )
-def update_lead(
-    lead_id: uuid.UUID,
-    payload: LeadUpdate,
-    db: Session = Depends(get_db),
+def update_lead_status(
+	lead_id: uuid.UUID,
+	payload: LeadStatusUpdate,
+	db: Session = Depends(get_db),
+	current_user: Account = Depends(get_current_admin_or_staff),
 ):
-    stmt = select(Lead).options(selectinload(Lead.activities)).where(Lead.id == lead_id)
-    lead = db.execute(stmt).scalar_one_or_none()
-    if not lead:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=LeadError.LEAD_NOT_FOUND,
-        )
-
-    prev_status = lead.status
-    prev_score = lead.lead_score
-
-    update_data = payload.model_dump(exclude_unset=True)
-    if "lead_score" in update_data and update_data["lead_score"] is not None:
-        update_data["lead_score"] = max(0, min(100, update_data["lead_score"]))
-
-    for field, value in update_data.items():
-        setattr(lead, field, value)
-
-    db.commit()
-    db.refresh(lead)
-
-    # Emit real-time Socket.IO events for status or score changes
-    if "status" in update_data and lead.status != prev_status:
-        emit_lead_status_updated(
-            lead,
-            previous_status=prev_status.value if hasattr(prev_status, "value") else str(prev_status),
-            new_status=lead.status.value if hasattr(lead.status, "value") else str(lead.status),
-        )
-
-    if "lead_score" in update_data and lead.lead_score != prev_score:
-        emit_lead_score_updated(
-            lead,
-            previous_score=prev_score,
-            new_score=lead.lead_score,
-            delta=lead.lead_score - prev_score,
-            reason="ADMIN_MANUAL_UPDATE",
-        )
-
-    return SuccessResponse(
-        message=LeadSuccess.UPDATED,
-        data=LeadResponse.model_validate(lead),
-    )
+	LeadService(db).manage_lead(
+		lead_id,
+		LeadManageUpdate(
+			status=payload.status,
+			lost_reason=payload.lost_reason,
+			lost_reason_notes=payload.lost_reason_notes,
+		),
+		current_user.id,
+	)
+	return ActionResponse(message=LeadSuccess.UPDATED)
 
 
 @router.post(
-    "/{lead_id}/activities",
-    response_model=SuccessResponse[LeadActivityResponse],
-    status_code=status.HTTP_201_CREATED,
-    summary="Log sales activity / follow-up for a lead",
-    description="Record WhatsApp messages, phone calls, emails, and schedule next follow-up dates.",
+	"/{lead_id}/activities",
+	response_model=ActionResponse,
+	status_code=status.HTTP_201_CREATED,
+	summary="Add a lead activity (Admin)",
 )
-def log_lead_activity(
-    lead_id: uuid.UUID,
-    payload: LeadActivityCreate,
-    db: Session = Depends(get_db),
+def create_lead_activity(
+	lead_id: uuid.UUID,
+	payload: AdminLeadActivityCreate,
+	db: Session = Depends(get_db),
+	current_user: Account = Depends(get_current_admin_or_staff),
 ):
-    stmt = select(Lead).where(Lead.id == lead_id)
-    lead = db.execute(stmt).scalar_one_or_none()
-    if not lead:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=LeadError.LEAD_NOT_FOUND,
-        )
+	LeadService(db).create_activity(lead_id, payload, current_user.id)
+	return ActionResponse(message=LeadSuccess.ACTIVITY_CREATED)
 
-    activity = LeadActivity(
-        lead_id=lead_id,
-        account_id=payload.account_id or payload.user_id,
-        channel=payload.channel,
-        activity_type=payload.activity_type,
-        notes=payload.notes,
-        next_follow_up_at=payload.next_follow_up_at,
-    )
-    db.add(activity)
 
-    # Update lead last_contacted_at
-    lead.last_contacted_at = datetime.now()
+@router.patch(
+	"/{lead_id}/activities/{activity_id}",
+	response_model=ActionResponse,
+	summary="Update a lead activity (Admin)",
+)
+def update_lead_activity(
+	lead_id: uuid.UUID,
+	activity_id: uuid.UUID,
+	payload: LeadActivityUpdate,
+	db: Session = Depends(get_db),
+	current_user: Account = Depends(get_current_admin_or_staff),
+):
+	del current_user
+	LeadService(db).update_activity(lead_id, activity_id, payload)
+	return ActionResponse(message=LeadSuccess.UPDATED)
 
-    # Dynamic scoring for staff activity
-    scoring_service = LeadScoringService(db)
-    delta = scoring_service.calculate_activity_score(activity)
-    prev_score, new_score, actual_delta = scoring_service.apply_score_change(
-        lead, delta, reason=activity.activity_type
-    )
 
-    db.commit()
-    db.refresh(activity)
-    db.refresh(lead)
+@router.delete(
+	"/{lead_id}/activities/{activity_id}",
+	response_model=ActionResponse,
+	summary="Delete a lead activity (Admin)",
+)
+def delete_lead_activity(
+	lead_id: uuid.UUID,
+	activity_id: uuid.UUID,
+	db: Session = Depends(get_db),
+	current_user: Account = Depends(get_current_admin_or_staff),
+):
+	del current_user
+	LeadService(db).delete_activity(lead_id, activity_id)
+	return ActionResponse(message=LeadSuccess.DELETED)
 
-    # Emit real-time Socket.IO events to admin dashboard
-    emit_lead_activity_created(lead, activity)
-    if actual_delta > 0:
-        emit_lead_score_updated(
-            lead,
-            previous_score=prev_score,
-            new_score=new_score,
-            delta=actual_delta,
-            reason=f"ACTIVITY_{activity.activity_type.upper()}",
-        )
 
-    return SuccessResponse(
-        message="Lead activity logged successfully",
-        data=LeadActivityResponse.model_validate(activity),
-    )
+@router.get(
+	"/{lead_id}/activities",
+	response_model=PaginatedResponse[LeadActivityResponse],
+	summary="List lead activities (Admin)",
+)
+def list_lead_activities(
+	lead_id: uuid.UUID,
+	view: str = Query("all", pattern="^(all|upcoming|today|overdue)$"),
+	page: int = Query(1, ge=1),
+	page_size: int = Query(20, ge=1, le=100),
+	db: Session = Depends(get_db),
+	current_user: Account = Depends(get_current_admin_or_staff),
+):
+	del current_user
+	service = LeadService(db)
+	activities = service.list_activities(
+		lead_id,
+		skip=(page - 1) * page_size,
+		limit=page_size,
+		view=view,
+	)
+	total_items = service.count_activities(lead_id, view=view)
+	total_pages = (total_items + page_size - 1) // page_size
+	return PaginatedResponse(
+		message=LeadSuccess.ACTIVITIES_RETRIEVED,
+		data=[LeadActivityResponse.model_validate(activity) for activity in activities],
+		pagination=PaginationMeta(
+			current_page=page,
+			page_size=page_size,
+			total_items=total_items,
+			total_pages=total_pages,
+			has_next=page < total_pages,
+			has_previous=page > 1,
+		),
+	)

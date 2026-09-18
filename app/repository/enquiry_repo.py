@@ -16,6 +16,7 @@ class EnquiryRepository:
                 joinedload(Enquiry.package),
                 joinedload(Enquiry.variant),
                 joinedload(Enquiry.customer),
+                joinedload(Enquiry.lead),
             )
             .where(Enquiry.id == enquiry_id)
         )
@@ -40,7 +41,11 @@ class EnquiryRepository:
     ) -> list[Enquiry]:
         stmt = (
             select(Enquiry)
-            .options(joinedload(Enquiry.package), joinedload(Enquiry.variant))
+            .options(
+                joinedload(Enquiry.package),
+                joinedload(Enquiry.variant),
+                joinedload(Enquiry.lead),
+            )
             .where(Enquiry.customer_id == customer_id)
             .order_by(Enquiry.created_at.desc())
             .offset(skip)
@@ -59,6 +64,7 @@ class EnquiryRepository:
             joinedload(Enquiry.package),
             joinedload(Enquiry.variant),
             joinedload(Enquiry.customer),
+            joinedload(Enquiry.lead),
         )
         if status is not None:
             stmt = stmt.where(Enquiry.status == status)
@@ -68,8 +74,8 @@ class EnquiryRepository:
                 Enquiry.enquiry_code.ilike(term)
                 | Enquiry.enquirer_name.ilike(term)
                 | Enquiry.enquirer_phone.ilike(term)
-                | Enquiry.subject.ilike(term)
-                | Enquiry.destination.ilike(term)
+                | Enquiry.enquirer_email.ilike(term)
+                | Enquiry.message.ilike(term)
             )
 
         total = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
@@ -80,6 +86,13 @@ class EnquiryRepository:
 
     def update_status(self, enquiry: Enquiry, new_status: EnquiryStatus) -> Enquiry:
         enquiry.status = new_status
+        self.db.commit()
+        self.db.refresh(enquiry)
+        return enquiry
+
+    def update(self, enquiry: Enquiry, **fields) -> Enquiry:
+        for field, value in fields.items():
+            setattr(enquiry, field, value)
         self.db.commit()
         self.db.refresh(enquiry)
         return enquiry

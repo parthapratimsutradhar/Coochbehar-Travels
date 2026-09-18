@@ -211,7 +211,7 @@ class CustomerService:
             stmt_count = select(func.count()).select_from(Booking).where(Booking.customer_id == customer_id)
             total_items = self.db.execute(stmt_count).scalar_one()
         elif tab == "leads":
-            stmt = select(Lead).where(Lead.customer_id == customer_id)
+            stmt = select(Lead).join(Lead.enquiry).where(Enquiry.customer_id == customer_id)
             total_items = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
             records = self.db.execute(
                 stmt.order_by(Lead.created_at.desc()).offset((page - 1) * page_size).limit(page_size)

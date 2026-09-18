@@ -30,27 +30,28 @@ class QuotationItemResponse(QuotationItemBase):
 
 class QuotationBase(SchemaBase):
     customer_id: UUID | None = None
-    enquiry_id: UUID | None = None
+    enquiry_id: UUID
     package_id: UUID | None = None
     variant_id: UUID | None = None
     offer_id: UUID | None = None
     destination_id: UUID | None = None
+    hotel_id: UUID | None = None
+    room_id: UUID | None = None
+    vehicle_id: UUID | None = None
     tour_name: str = Field(..., min_length=1, max_length=255)
-    destination: str | None = Field(default=None, max_length=255)
     travel_date: datetime | None = None
     return_date: datetime | None = None
     adult_count: int = Field(default=1, ge=0)
     child_count: int = Field(default=0, ge=0)
     senior_count: int = Field(default=0, ge=0)
     room_count: int = Field(default=1, ge=1)
-    vehicle: str | None = Field(default=None, max_length=100)
+    vehicle_count: int | None = Field(default=None, ge=1)
     meal_plan: str | None = Field(default=None, max_length=255)
     subtotal: Decimal = Field(default=Decimal(0), ge=0)
     discount_amount: Decimal = Field(default=Decimal(0), ge=0)
     tax_amount: Decimal = Field(default=Decimal(0), ge=0)
     total_amount: Decimal = Field(default=Decimal(0), ge=0)
     valid_until: datetime | None = None
-    notes: str | None = None
     terms_and_conditions: str | None = None
 
 
@@ -60,15 +61,17 @@ class QuotationCreate(QuotationBase):
 
 class QuotationUpdate(SchemaBase):
     destination_id: UUID | None = None
+    hotel_id: UUID | None = None
+    room_id: UUID | None = None
+    vehicle_id: UUID | None = None
     tour_name: str | None = Field(default=None, min_length=1, max_length=255)
-    destination: str | None = Field(default=None, max_length=255)
     travel_date: datetime | None = None
     return_date: datetime | None = None
     adult_count: int | None = Field(default=None, ge=0)
     child_count: int | None = Field(default=None, ge=0)
     senior_count: int | None = Field(default=None, ge=0)
     room_count: int | None = Field(default=None, ge=1)
-    vehicle: str | None = Field(default=None, max_length=100)
+    vehicle_count: int | None = Field(default=None, ge=1)
     meal_plan: str | None = Field(default=None, max_length=255)
     subtotal: Decimal | None = Field(default=None, ge=0)
     discount_amount: Decimal | None = Field(default=None, ge=0)
@@ -76,8 +79,8 @@ class QuotationUpdate(SchemaBase):
     total_amount: Decimal | None = Field(default=None, ge=0)
     offer_id: UUID | None = None
     valid_until: datetime | None = None
-    notes: str | None = None
     terms_and_conditions: str | None = None
+    rejected_reason: str | None = None
     status: QuotationStatus | None = None
     items: list[QuotationItemCreate] | None = None
 
@@ -97,6 +100,7 @@ class QuotationResponse(QuotationBase):
     sent_at: datetime | None
     accepted_at: datetime | None
     rejected_at: datetime | None
+    rejected_reason: str | None
     created_at: datetime
     updated_at: datetime
     items: list[QuotationItemResponse] = []

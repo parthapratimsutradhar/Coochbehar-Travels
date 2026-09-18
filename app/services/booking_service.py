@@ -56,6 +56,8 @@ class BookingService:
         booking_data = {
             "booking_code": booking_code,
             "customer_id": customer.id,
+            "enquiry_id": payload.enquiry_id,
+            "quotation_id": payload.quotation_id,
             "package_id": payload.package_id,
             "variant_id": payload.variant_id,
             "departure_id": payload.departure_id,
@@ -102,6 +104,8 @@ class BookingService:
         booking_data = {
             "booking_code": booking_code,
             "customer_id": customer.id,
+            "enquiry_id": payload.enquiry_id,
+            "quotation_id": payload.quotation_id,
             "package_id": payload.package_id,
             "variant_id": payload.variant_id,
             "departure_id": payload.departure_id,

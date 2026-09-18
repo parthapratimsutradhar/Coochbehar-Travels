@@ -28,6 +28,7 @@ class CustomTourRequestBase(SchemaBase):
 class CustomTourRequestCreate(SchemaBase):
     name: str = Field(..., max_length=100)
     mobile: str = Field(..., max_length=20)
+    email: str | None = Field(default=None, max_length=255)
     destination_id: UUID | None = None
     destination: str = Field(..., max_length=150)
     travel_date: date | None = None
@@ -42,11 +43,7 @@ class CustomTourRequestCreate(SchemaBase):
     vehicle_type: VehicleType | str | None = None
     meal_plan: MealPlan | str | None = None
     special_requirements: str | None = None
-    enquiry_type: Literal[
-        EnquiryType.CUSTOM_TOUR,
-        EnquiryType.ROOM_REQUEST,
-        EnquiryType.VEHICLE_REQUEST,
-    ] | None = None
+    enquiry_type: EnquiryType | None = None
     channel: Literal[EnquiryChannel.WEBSITE, EnquiryChannel.APP] = EnquiryChannel.WEBSITE
     visitor_id: UUID | None = None
     customer_id: UUID | None = None

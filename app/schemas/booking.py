@@ -65,6 +65,8 @@ class BookingStatusHistoryResponse(SchemaBase):
 class OfflineBookingCreate(SchemaBase):
     """Staff manual offline booking creation per whatreq.md specification."""
     customer_id: UUID | None = None
+    enquiry_id: UUID | None = None
+    quotation_id: UUID | None = None
     customer_name: str = Field(..., min_length=1, max_length=100)
     mobile: str = Field(..., min_length=3, max_length=20)
     email: str | None = None
@@ -88,6 +90,8 @@ class OfflineBookingCreate(SchemaBase):
 
 
 class OnlineBookingCreate(SchemaBase):
+    enquiry_id: UUID | None = None
+    quotation_id: UUID | None = None
     package_id: UUID | None = None
     variant_id: UUID | None = None
     departure_id: UUID | None = None

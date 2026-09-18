@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.core.enums import LeadSource, LeadStatus
+from app.core.enums import LeadLostReason, LeadStatus
 from app.models.base import BaseEntity
 
 
@@ -16,12 +16,6 @@ class Lead(BaseEntity):
         nullable=False,
     )
 
-    customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("accounts.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-
     enquiry_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("enquiries.id", ondelete="CASCADE"),
         nullable=False,
@@ -29,33 +23,10 @@ class Lead(BaseEntity):
         index=True,
     )
 
-    visitor_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("visitors.id", ondelete="SET NULL"),
+    assigned_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
-    )
-
-    full_name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-    )
-
-    mobile: Mapped[str | None] = mapped_column(
-        String(20),
-        nullable=True,
-        index=True,
-    )
-
-    email: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True,
-        index=True,
-    )
-
-    whatsapp_opt_in: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
     )
 
     lead_score: Mapped[int] = mapped_column(
@@ -71,26 +42,43 @@ class Lead(BaseEntity):
         index=True,
     )
 
-    source: Mapped[LeadSource] = mapped_column(
-        Enum(LeadSource, name="lead_source"),
-        nullable=False,
-        default=LeadSource.WEBSITE,
-        index=True,
-    )
-
-    notes: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
     last_contacted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
+    qualified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    converted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    lost_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    lost_reason: Mapped[LeadLostReason | None] = mapped_column(
+        Enum(LeadLostReason, name="lead_lost_reason"),
+        nullable=True,
+    )
+
+    lost_reason_notes: Mapped[str | None] = mapped_column(
+        String(1000),
+        nullable=True,
+    )
+
+    qualification_notes: Mapped[str | None] = mapped_column(
+        String(1000),
+        nullable=True,
+    )
+
 # ── Relationships ───────────────────────────────────────────────────────
     enquiry = relationship("Enquiry", back_populates="lead")
-    customer = relationship("Account", back_populates="leads")
-    visitor = relationship("Visitor", back_populates="leads")
     activities = relationship("LeadActivity", back_populates="lead", cascade="all, delete-orphan")
+    assigned_account = relationship("Account", foreign_keys=[assigned_account_id])
     

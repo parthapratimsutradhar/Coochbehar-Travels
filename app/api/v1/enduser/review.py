@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_customer
 from app.core.messages.error import PackageError, ReviewError
-from app.core.enums import BookingStatus, CustomerTourStatus, EnquiryStatus
+from app.core.enums import BookingStatus, EnquiryStatus
 from app.db.database import get_db
 from app.models.account import Account
 from app.models.booking import Booking

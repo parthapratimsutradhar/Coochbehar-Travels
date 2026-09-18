@@ -9,6 +9,8 @@ class UserSuccess(StrEnum):
 
 class LeadSuccess(StrEnum):
     RETRIEVED = "Leads fetched successfully"
+    ACTIVITIES_RETRIEVED = "Lead activities fetched successfully"
+    ACTIVITY_CREATED = "Lead activity created successfully"
     CREATED = "Lead created successfully."
     UPDATED = "Lead updated successfully."
     DELETED = "Lead deleted successfully."
@@ -30,3 +32,10 @@ class ReviewSuccess(StrEnum):
     CREATED = "Review created successfully."
     UPDATED = "Review updated successfully."
     DELETED = "Review deleted successfully."
+
+
+class EnquirySuccess(StrEnum):
+    RETRIEVED = "Enquiries fetched successfully."
+    LEAD_RETRIEVED = "Enquiry lead retrieved successfully."
+    CREATED = "Enquiry created successfully."
+    UPDATED = "Enquiry updated successfully."

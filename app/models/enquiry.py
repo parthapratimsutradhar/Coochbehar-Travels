@@ -2,7 +2,7 @@ import uuid
 from sqlalchemy import Enum, ForeignKey, String, Text, Date, Integer
 from datetime import date
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType
+from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType, MealPlan
 from app.models.base import BaseEntity
 
 
@@ -57,11 +57,6 @@ class Enquiry(BaseEntity):
         index=True,
     )
 
-    subject: Mapped[str | None] = mapped_column(
-        String(200),
-        nullable=True,
-    )
-
     message: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
@@ -77,19 +72,22 @@ class Enquiry(BaseEntity):
         nullable=True,
     )
 
-    room_id: Mapped[uuid.UUID | None] = mapped_column(
+    enquirer_email: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+    )
+
+    hotel_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("rooms.id"),
         nullable=True,
+        index=True,
     )
 
     vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("vehicles.id"),
         nullable=True,
-    )
-
-    destination: Mapped[str | None] = mapped_column(
-        String(150),
-        nullable=True
+        index=True,
     )
 
     destination_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -133,16 +131,16 @@ class Enquiry(BaseEntity):
         nullable=True
     )
 
-    vehicle_type: Mapped[str | None] = mapped_column(
-        String(50),
+    vehicle_count: Mapped[int | None] = mapped_column(
+        Integer,
         nullable=True
     )
 
-    meal_plan: Mapped[str | None] = mapped_column(
-        String(50),
+    meal_plan: Mapped[MealPlan | None] = mapped_column(
+        Enum(MealPlan, name="meal_plan"),
         nullable=True
     )
-    
+
     budget_min: Mapped[float | None] = mapped_column(
         Integer,
         nullable=True
@@ -183,6 +181,23 @@ class Enquiry(BaseEntity):
         "Destination",
         foreign_keys=[destination_id],
         back_populates="enquiries",
+    )
+
+    hotel = relationship(
+        "Room",
+        foreign_keys=[hotel_id],
+        back_populates="enquiries",
+    )
+
+    vehicle = relationship(
+        "Vehicle",
+        foreign_keys=[vehicle_id],
+        back_populates="enquiries",
+    )
+
+    financial_transactions = relationship(
+        "FinancialTransaction",
+        back_populates="enquiry",
     )
     
     lead = relationship(

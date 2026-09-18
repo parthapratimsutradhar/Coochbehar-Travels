@@ -130,7 +130,7 @@ class LeadScoringService:
 
         if isinstance(enquiry, Enquiry):
             travel_date = enquiry.travel_date
-            destination = enquiry.destination
+            destination = enquiry.destination_id
             pax_no = getattr(enquiry, "pax_no", None)
             if pax_no is None:
                 total_pax = (enquiry.adult_count or 0) + (enquiry.child_count or 0) + (enquiry.senior_count or 0)
@@ -315,13 +315,13 @@ class LeadScoringService:
             return None
 
         # 1. Direct query on Lead table (newest lead first)
-        stmt = select(Lead)
+        stmt = select(Lead).join(Lead.enquiry)
         if visitor_id and customer_id:
-            stmt = stmt.where((Lead.visitor_id == visitor_id) | (Lead.customer_id == customer_id))
+            stmt = stmt.where((Enquiry.visitor_id == visitor_id) | (Enquiry.customer_id == customer_id))
         elif visitor_id:
-            stmt = stmt.where(Lead.visitor_id == visitor_id)
+            stmt = stmt.where(Enquiry.visitor_id == visitor_id)
         elif customer_id:
-            stmt = stmt.where(Lead.customer_id == customer_id)
+            stmt = stmt.where(Enquiry.customer_id == customer_id)
 
         stmt = stmt.order_by(Lead.created_at.desc())
         lead = self.db.execute(stmt).scalars().first()
@@ -349,8 +349,6 @@ class LeadScoringService:
         base_score = 0
         if lead.enquiry:
             base_score = self.calculate_initial_score(lead.enquiry)
-        elif lead.notes:
-            base_score = 20
 
         # Add activity scores
         activity_total = 0

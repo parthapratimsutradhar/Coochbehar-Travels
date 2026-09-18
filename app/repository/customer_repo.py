@@ -9,6 +9,7 @@ from app.models.account import Account
 from app.models.customer_profile import CustomerProfile
 from app.models.enquiry import Enquiry
 from app.models.lead import Lead
+from app.models.quotation import Quotation
 from app.models.visitor import Visitor
 
 
@@ -180,10 +181,32 @@ class CustomerRepository:
         )
         self.db.execute(stmt_enq)
 
-        stmt_lead = (
-            update(Lead)
-            .where(Lead.visitor_id == visitor_id, Lead.customer_id.is_(None))
-            .values(customer_id=customer_id)
+        self.db.commit()
+
+    def link_identifier_records_to_customer(self, customer: Account) -> None:
+        """Link anonymous enquiry history after mobile/email authentication."""
+        conditions = []
+        if customer.mobile:
+            conditions.append(Enquiry.enquirer_phone == customer.mobile)
+        if customer.email:
+            conditions.append(Enquiry.enquirer_email == customer.email.lower())
+        if not conditions:
+            return
+
+        enquiry_ids = list(
+            self.db.scalars(
+                select(Enquiry.id).where(Enquiry.customer_id.is_(None), or_(*conditions))
+            ).all()
         )
-        self.db.execute(stmt_lead)
+        if not enquiry_ids:
+            return
+
+        self.db.execute(
+            update(Enquiry).where(Enquiry.id.in_(enquiry_ids)).values(customer_id=customer.id)
+        )
+        self.db.execute(
+            update(Quotation)
+            .where(Quotation.enquiry_id.in_(enquiry_ids), Quotation.customer_id.is_(None))
+            .values(customer_id=customer.id)
+        )
         self.db.commit()

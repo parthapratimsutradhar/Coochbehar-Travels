@@ -454,6 +454,7 @@ class AuthService:
                 customer_id=customer.id,
                 visitor_id=target_visitor_id,
             )
+        self.customer_repo.link_identifier_records_to_customer(customer)
 
         self.otp_repo.mark_used(challenge, customer_id=customer.id)
 
@@ -523,6 +524,7 @@ class AuthService:
                 customer_id=customer.id,
                 visitor_id=visitor_id,
             )
+        self.customer_repo.link_identifier_records_to_customer(customer)
 
         raw_refresh_token = generate_secure_token(64)
         refresh_token_hash = hash_token(raw_refresh_token)

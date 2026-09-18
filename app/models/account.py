@@ -73,11 +73,6 @@ class Account(ActiveEntity):
         back_populates="customer",
     )
 
-    leads = relationship(
-        "Lead",
-        back_populates="customer",
-    )
-
     lead_activities = relationship(
         "LeadActivity",
         back_populates="account",

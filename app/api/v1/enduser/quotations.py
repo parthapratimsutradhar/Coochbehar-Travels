@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_customer
@@ -50,6 +50,8 @@ def get_quotation(
 ):
     service = QuotationService(db)
     quotation = service.get_quotation(quotation_id)
+    if quotation.customer_id != current_customer.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only view your own quotation.")
     return SuccessResponse(
         message="Quotation fetched successfully",
         data=QuotationResponse.model_validate(quotation),

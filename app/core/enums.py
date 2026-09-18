@@ -1,26 +1,24 @@
 from enum import Enum
 
 
-class AccountRole(str, Enum):
-    ADMIN = "ADMIN"
-    STAFF = "STAFF" 
-    CUSTOMER = "CUSTOMER"
+class AppEnum(str, Enum):
+    """Base class for string-backed application enums."""
 
 
-class ActorType(str, Enum):
+class AccountRole(AppEnum):
     ADMIN = "ADMIN"
     STAFF = "STAFF"
     CUSTOMER = "CUSTOMER"
 
 
-class AdminOtpPurpose(str, Enum):
+class AdminOtpPurpose(AppEnum):
     LOGIN = "LOGIN"
     VERIFY_MOBILE = "VERIFY_MOBILE"
     VERIFY_EMAIL = "VERIFY_EMAIL"
     DELETE_ACCOUNT = "DELETE_ACCOUNT"
 
 
-class CustomerOtpPurpose(str, Enum):
+class CustomerOtpPurpose(AppEnum):
     LOGIN = "LOGIN"
     SIGNUP = "SIGNUP"
     VERIFY_MOBILE = "VERIFY_MOBILE"
@@ -28,7 +26,7 @@ class CustomerOtpPurpose(str, Enum):
     DELETE_ACCOUNT = "DELETE_ACCOUNT"
 
 
-class LeadStatus(str, Enum):
+class LeadStatus(AppEnum):
     NEW = "NEW"
     CONTACTED = "CONTACTED"
     FOLLOW_UP = "FOLLOW_UP"
@@ -37,14 +35,38 @@ class LeadStatus(str, Enum):
     LOST = "LOST"
 
 
-class EnquiryType(str, Enum):
+class LeadActivityType(AppEnum):
+    CALL = "CALL"
+    WHATSAPP = "WHATSAPP"
+    EMAIL = "EMAIL"
+    NOTE = "NOTE"
+    FOLLOW_UP = "FOLLOW_UP"
+    CUSTOMER_REQUEST = "CUSTOMER_REQUEST"
+    QUOTE_SENT = "QUOTE_SENT"
+    QUOTE_UPDATED = "QUOTE_UPDATED"
+    STATUS_CHANGED = "STATUS_CHANGED"
+    BOOKING_CREATED = "BOOKING_CREATED"
+
+
+class LeadLostReason(AppEnum):
+    PRICE_TOO_HIGH = "PRICE_TOO_HIGH"
+    BUDGET_ISSUE = "BUDGET_ISSUE"
+    TRAVEL_CANCELLED = "TRAVEL_CANCELLED"
+    CHANGED_DESTINATION = "CHANGED_DESTINATION"
+    BOOKED_ELSEWHERE = "BOOKED_ELSEWHERE"
+    NO_RESPONSE = "NO_RESPONSE"
+    DATES_UNAVAILABLE = "DATES_UNAVAILABLE"
+    NOT_INTERESTED = "NOT_INTERESTED"
+    DUPLICATE = "DUPLICATE"
+    OTHER = "OTHER"
+
+
+class EnquiryType(AppEnum):
     FIXED_TOUR = "FIXED_TOUR"
     CUSTOM_TOUR = "CUSTOM_TOUR"
-    ROOM_REQUEST = "ROOM_REQUEST"
-    VEHICLE_REQUEST = "VEHICLE_REQUEST"
 
 
-class EnquiryChannel(str, Enum):
+class EnquiryChannel(AppEnum):
     WEBSITE = "WEBSITE"
     WHATSAPP = "WHATSAPP"
     APP = "APP"
@@ -54,7 +76,7 @@ class EnquiryChannel(str, Enum):
     ADMIN = "ADMIN"
 
 
-class EnquiryStatus(str, Enum):
+class EnquiryStatus(AppEnum):
     NEW = "NEW"
     IN_PROGRESS = "IN_PROGRESS"
     QUOTED = "QUOTED"
@@ -63,7 +85,7 @@ class EnquiryStatus(str, Enum):
     CLOSED = "CLOSED"
 
 
-class LeadSource(str, Enum):
+class LeadSource(AppEnum):
     WEBSITE = "WEBSITE"
     WHATSAPP = "WHATSAPP"
     PHONE = "PHONE"
@@ -72,20 +94,20 @@ class LeadSource(str, Enum):
     IMPORT = "IMPORT"
     REFERRAL = "REFERRAL"
     OTHER = "OTHER"
+    
+class LeadChannel(AppEnum):
+    WHATSAPP = "WHATSAPP"
+    PHONE = "PHONE"
+    EMAIL = "EMAIL"
+    OFFLINE = "OFFLINE"
 
 
-class ReviewStatus(str, Enum):
-    PENDING = "PENDING"
-    APPROVED = "APPROVED"
-    REJECTED = "REJECTED"
-
-
-class TourType(str, Enum):
+class TourType(AppEnum):
     DOMESTIC = "DOMESTIC"
     INTERNATIONAL = "INTERNATIONAL"
 
 
-class MealPlan(str, Enum):
+class MealPlan(AppEnum):
     ANY = "ANY"
     NONE = "NONE"
     CP = "CP"
@@ -93,7 +115,7 @@ class MealPlan(str, Enum):
     AP = "AP"
 
 
-class VehicleType(str, Enum):
+class VehicleType(AppEnum):
     ANY = "ANY"
     NONE = "NONE"
     FOUR_SEATER = "4-seater"
@@ -101,14 +123,7 @@ class VehicleType(str, Enum):
     TEMPO = "Tempo"
 
 
-class CustomerTourStatus(str, Enum):
-    PLANNED = "PLANNED"
-    CONFIRMED = "CONFIRMED"
-    CANCELLED = "CANCELLED"
-    COMPLETED = "COMPLETED"
-    
-    
-class ReferralStatus(str, Enum):
+class ReferralStatus(AppEnum):
     PENDING = "PENDING"
     REGISTERED = "REGISTERED"
     BOOKING_COMPLETED = "BOOKING_COMPLETED"
@@ -120,26 +135,26 @@ class ReferralStatus(str, Enum):
     BLOCKED = "BLOCKED"
 
 
-class DocumentType(str, Enum):
+class DocumentType(AppEnum):
     ID_PROOF = "ID_PROOF"
     ADDRESS_PROOF = "ADDRESS_PROOF"
     TOUR_DOCUMENT = "TOUR_DOCUMENT"
     OTHER = "OTHER"    
     
     
-class OfferDiscountType(str, Enum):
+class OfferDiscountType(AppEnum):
     PERCENTAGE = "PERCENTAGE"
     FIXED = "FIXED"
     
     
-class OfferStatus(str, Enum):
+class OfferStatus(AppEnum):
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
     PAUSED = "PAUSED"
     EXPIRED = "EXPIRED"
 
 
-class PaymentStatus(str, Enum):
+class PaymentStatus(AppEnum):
     PENDING = "PENDING"
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
@@ -147,7 +162,7 @@ class PaymentStatus(str, Enum):
     REFUNDED = "REFUNDED"
 
 
-class PaymentMethod(str, Enum):
+class PaymentMethod(AppEnum):
     RAZORPAY = "RAZORPAY"
     UPI = "UPI"
     CASH = "CASH"
@@ -157,12 +172,12 @@ class PaymentMethod(str, Enum):
     OFFLINE = "OFFLINE"
     OTHER = "OTHER"
 
-class TransactionType(str, Enum):
+class TransactionType(AppEnum):
     PAYMENT = "PAYMENT"
     REFUND = "REFUND"  
 
 
-class FinancialAccountType(str, Enum):
+class FinancialAccountType(AppEnum):
     ASSET = "ASSET"
     LIABILITY = "LIABILITY"
     EQUITY = "EQUITY"
@@ -170,13 +185,13 @@ class FinancialAccountType(str, Enum):
     EXPENSE = "EXPENSE"
 
 
-class FinancialAccountOwnerType(str, Enum):
+class FinancialAccountOwnerType(AppEnum):
     SYSTEM = "SYSTEM"
     CUSTOMER = "CUSTOMER"
     VENDOR = "VENDOR"
 
 
-class FinancialTransactionType(str, Enum):
+class FinancialTransactionType(AppEnum):
     BOOKING_PAYMENT = "BOOKING_PAYMENT"
     BOOKING_REFUND = "BOOKING_REFUND"
     WALLET_CREDIT = "WALLET_CREDIT"
@@ -188,14 +203,14 @@ class FinancialTransactionType(str, Enum):
     REFERRAL_REWARD = "REFERRAL_REWARD"
 
 
-class FinancialTransactionStatus(str, Enum):
+class FinancialTransactionStatus(AppEnum):
     PENDING = "PENDING"
     POSTED = "POSTED"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
     REVERSED = "REVERSED"
     
-class BookingStatus(str, Enum):
+class BookingStatus(AppEnum):
     TENTATIVE = "TENTATIVE"
     CONFIRMED = "CONFIRMED"
     PARTIALLY_PAID = "PARTIALLY_PAID"
@@ -206,7 +221,7 @@ class BookingStatus(str, Enum):
     CANCELLED = "CANCELLED"
     REFUNDED = "REFUNDED"    
     
-class BookingSource(str, Enum):
+class BookingSource(AppEnum):
     APP = "APP"
     WEBSITE = "WEBSITE"
     WHATSAPP = "WHATSAPP"
@@ -221,7 +236,7 @@ class BookingSource(str, Enum):
     OTHER = "OTHER"      
     
     
-class QuotationStatus(str, Enum):
+class QuotationStatus(AppEnum):
     DRAFT = "DRAFT"
     SENT = "SENT"
     VIEWED = "VIEWED"
@@ -231,7 +246,7 @@ class QuotationStatus(str, Enum):
     CANCELLED = "CANCELLED" 
     
         
-class QuotationItemType(str, Enum):
+class QuotationItemType(AppEnum):
     HOTEL = "hotel"
     TRANSPORT = "transport"
     FLIGHT = "flight"

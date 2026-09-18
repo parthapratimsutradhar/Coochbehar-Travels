@@ -1,4 +1,3 @@
-from tokenize import Number
 import uuid
 
 from datetime import datetime
@@ -6,7 +5,6 @@ from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
-    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -23,9 +21,12 @@ from app.core.enums import QuotationStatus
 from app.models.account import Account
 from app.models.base import BaseEntity
 from app.models.enquiry import Enquiry
+from app.models.hotel import Hotel
 from app.models.quotation_item import QuotationItem
+from app.models.room import Room
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
+from app.models.vehicle import Vehicle
 
 
 class Quotation(BaseEntity):
@@ -113,13 +114,13 @@ class Quotation(BaseEntity):
         index=True,
     )
 
-    enquiry_id: Mapped[uuid.UUID | None] = mapped_column(
+    enquiry_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
             "enquiries.id",
             ondelete="SET NULL",
         ),
-        nullable=True,
+        nullable=False,
         index=True,
     )
 
@@ -158,11 +159,6 @@ class Quotation(BaseEntity):
         nullable=False,
     )
 
-    destination: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True,
-    )
-
     destination_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
@@ -173,12 +169,12 @@ class Quotation(BaseEntity):
         index=True,
     )
 
-    travel_date: Mapped[Date | None] = mapped_column(
+    travel_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    return_date: Mapped[Date | None] = mapped_column(
+    return_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -230,14 +226,44 @@ class Quotation(BaseEntity):
         nullable=True,
     )
     
+    hotel_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "hotels.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    room_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "rooms.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "vehicles.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
     room_count: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         default=1,
     )
-    
-    vehicle: Mapped[str | None] = mapped_column(
-        String(100),
+
+    vehicle_count: Mapped[int | None] = mapped_column(
+        Integer,
         nullable=True
     )
     meal_plan: Mapped[str | None] = mapped_column(
@@ -253,11 +279,6 @@ class Quotation(BaseEntity):
         nullable=False,
         default=QuotationStatus.DRAFT,
         index=True,
-    )
-
-    notes: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
     )
 
     terms_and_conditions: Mapped[str | None] = mapped_column(
@@ -287,6 +308,11 @@ class Quotation(BaseEntity):
 
     rejected_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
+        nullable=True,
+    )
+
+    rejected_reason: Mapped[str | None] = mapped_column(
+        Text,
         nullable=True,
     )
 
@@ -329,6 +355,21 @@ class Quotation(BaseEntity):
         "Destination",
         foreign_keys=[destination_id],
         back_populates="quotations",
+    )
+
+    hotel = relationship(
+        "Hotel",
+        foreign_keys=[hotel_id],
+    )
+
+    room = relationship(
+        "Room",
+        foreign_keys=[room_id],
+    )
+
+    vehicle = relationship(
+        "Vehicle",
+        foreign_keys=[vehicle_id],
     )
 
     created_by: Mapped["Account | None"] = relationship(

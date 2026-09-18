@@ -13,6 +13,10 @@ class UserError(StrEnum):
 
 class LeadError(StrEnum):
     LEAD_NOT_FOUND = "Lead not found."
+    ACTIVITY_NOT_FOUND = "Lead activity not found."
+    ASSIGNEE_NOT_FOUND = "Assigned account not found or is not active staff."
+    LOST_REASON_REQUIRED = "A lost reason is required when the lead status is LOST."
+    LOST_REASON_ONLY_FOR_LOST = "A lost reason can only be used when the lead status is LOST."
     PACKAGE_NOT_FOUND = "Tour package not found."
 
 

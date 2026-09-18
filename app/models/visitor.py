@@ -81,4 +81,3 @@ class Visitor(UUIDEntity):
     sessions = relationship("VisitorSession", back_populates="visitor", cascade="all, delete-orphan")
     events = relationship("VisitorEvent", back_populates="visitor", cascade="all, delete-orphan")
     enquiries = relationship("Enquiry", back_populates="visitor")
-    leads = relationship("Lead", back_populates="visitor")

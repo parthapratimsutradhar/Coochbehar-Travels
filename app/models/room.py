@@ -1,7 +1,7 @@
 import uuid
 from sqlalchemy import ForeignKey, Integer, String, Text, Numeric
 from decimal import Decimal
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import ActiveEntity
 
 
@@ -34,3 +34,8 @@ class Room(ActiveEntity):
 
 # ── Relationships ───────────────────────────────────────────────────────
     description: Mapped[str | None] = mapped_column(Text)
+
+    enquiries = relationship(
+        "Enquiry",
+        back_populates="hotel",
+    )

@@ -76,6 +76,23 @@ def list_quotations(
 
 
 @router.get(
+    "/enquiry/{enquiry_id}",
+    response_model=SuccessResponse[list[QuotationResponse]],
+    summary="List quotation versions for an enquiry",
+)
+def list_enquiry_quotations(
+    enquiry_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    quotations = QuotationService(db).list_enquiry_quotations(enquiry_id)
+    return SuccessResponse(
+        message="Enquiry quotations fetched successfully",
+        data=[QuotationResponse.model_validate(q) for q in quotations],
+    )
+
+
+@router.get(
     "/{quotation_id}",
     response_model=SuccessResponse[QuotationResponse],
     responses={404: {"model": ErrorResponse}},
@@ -86,12 +103,8 @@ def get_quotation(
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
-    service = QuotationService(db)
-    quotation = service.get_quotation(quotation_id)
-    return SuccessResponse(
-        message="Quotation fetched successfully",
-        data=QuotationResponse.model_validate(quotation),
-    )
+    quotation = QuotationService(db).get_quotation(quotation_id)
+    return SuccessResponse(message="Quotation fetched successfully", data=QuotationResponse.model_validate(quotation))
 
 
 @router.patch(
@@ -106,12 +119,8 @@ def update_quotation(
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
-    service = QuotationService(db)
-    quotation = service.update_quotation(quotation_id, payload)
-    return SuccessResponse(
-        message="Quotation updated successfully",
-        data=QuotationResponse.model_validate(quotation),
-    )
+    quotation = QuotationService(db).update_quotation(quotation_id, payload)
+    return SuccessResponse(message="Quotation updated successfully", data=QuotationResponse.model_validate(quotation))
 
 
 @router.post(
@@ -179,19 +188,3 @@ def convert_quotation_to_booking(
     )
 
 
-@router.get(
-    "/enquiry/{enquiry_id}",
-    response_model=SuccessResponse[list[QuotationResponse]],
-    summary="List quotation versions for an enquiry",
-)
-def list_enquiry_quotations(
-    enquiry_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: Account = Depends(get_current_admin_or_staff),
-):
-    service = QuotationService(db)
-    quotations = service.list_enquiry_quotations(enquiry_id)
-    return SuccessResponse(
-        message="Enquiry quotations fetched successfully",
-        data=[QuotationResponse.model_validate(q) for q in quotations],
-    )

@@ -77,7 +77,6 @@ class QuotationRepository:
             stmt = stmt.where(
                 Quotation.quotation_code.ilike(term)
                 | Quotation.tour_name.ilike(term)
-                | Quotation.destination.ilike(term)
             )
 
         total = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
