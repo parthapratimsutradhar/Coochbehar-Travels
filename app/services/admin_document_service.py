@@ -64,10 +64,14 @@ class AdminDocumentService:
     async def upload(self, customer_id: uuid.UUID, file: UploadFile, current_user: Account, **data: object) -> AdminDocumentResponse:
         if not self.repo.get_customer(customer_id):
             raise HTTPException(status_code=404, detail="Customer not found.")
-        result = await upload_file_to_cloudinary(file=file, sub_folder="admin-documents")
+        result = await upload_file_to_cloudinary(file=file, sub_folder="temporary-uploads")
+        promoted = await promote_cloudinary_asset(
+            result["secure_url"],
+            "admin-documents",
+        )
         document = self.repo.create(
             **data, customer_id=customer_id, uploaded_by_account_id=current_user.id,
-            file_url=result["secure_url"], file_name=file.filename or "document",
+            file_url=promoted["url"], file_name=file.filename or "document",
             mime_type=file.content_type, file_size=result.get("bytes"),
         )
         return self._serialize(document)
@@ -83,7 +87,7 @@ class AdminDocumentService:
     ) -> AdminDocumentResponse:
         if not self.repo.get_customer(customer_id):
             raise HTTPException(status_code=404, detail="Customer not found.")
-        promoted = await promote_cloudinary_asset(url_or_id, "admin-documents", resource_type="raw")
+        promoted = await promote_cloudinary_asset(url_or_id, "admin-documents")
         document = self.repo.create(
             **data, customer_id=customer_id, uploaded_by_account_id=current_user.id,
             file_url=promoted["url"], file_name=file_name,

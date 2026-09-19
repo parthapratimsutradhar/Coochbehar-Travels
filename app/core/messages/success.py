@@ -7,6 +7,10 @@ class UserSuccess(StrEnum):
     UPDATED = "User updated successfully."
     DELETED = "User deleted successfully."
 
+
+class EnumSuccess(StrEnum):
+    RETRIEVED = "Enums fetched successfully."
+
 class LeadSuccess(StrEnum):
     RETRIEVED = "Leads fetched successfully"
     ACTIVITIES_RETRIEVED = "Lead activities fetched successfully"

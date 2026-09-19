@@ -9,6 +9,7 @@ from app.api.v1.admin.destinations import router as destinations_router
 from app.api.v1.admin.documents import router as documents_router
 from app.api.v1.admin.enquiries import router as enquiries_router
 from app.api.v1.admin.expenses import router as expenses_router
+from app.api.v1.admin.financial import router as financial_router
 from app.api.v1.admin.leads import router as leads_router
 from app.api.v1.admin.hotel import router as hotel_router
 from app.api.v1.admin.notifications import router as notifications_router
@@ -45,5 +46,6 @@ router.include_router(room_router)
 router.include_router(bookings_router)
 router.include_router(destinations_router)
 router.include_router(expenses_router)
+router.include_router(financial_router)
 router.include_router(vendors_router)
 router.include_router(vehicle_router)

@@ -47,7 +47,3 @@ class Room(ActiveEntity):
 # ── Relationships ───────────────────────────────────────────────────────
     description: Mapped[str | None] = mapped_column(Text)
 
-    enquiries = relationship(
-        "Enquiry",
-        back_populates="hotel",
-    )

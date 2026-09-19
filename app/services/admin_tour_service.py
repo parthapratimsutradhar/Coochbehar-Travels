@@ -33,6 +33,7 @@ class AdminTourService:
         page_size: int,
         is_active: bool | None = None,
         is_featured: bool | None = None,
+        destination_id: uuid.UUID | None = None,
         type: TourType | None = None,
         search: str | None = None,
     ):
@@ -45,6 +46,8 @@ class AdminTourService:
             query = query.filter(TourPackage.is_active.is_(is_active))
         if is_featured is not None:
             query = query.filter(TourPackage.is_featured.is_(is_featured))
+        if destination_id is not None:
+            query = query.filter(TourPackage.destination_id == destination_id)
         if type is not None:
             query = query.filter(TourPackage.type == type)
         if search:
@@ -401,6 +404,7 @@ class AdminTourService:
             tour_code=item.tour_code,
             slug=item.slug,
             title=item.title,
+            destination_id=item.destination_id,
             destination=destination_name,
             type=item.type,
             description=item.description,

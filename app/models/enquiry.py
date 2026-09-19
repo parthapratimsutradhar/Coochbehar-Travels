@@ -79,7 +79,7 @@ class Enquiry(BaseEntity):
     )
 
     hotel_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("rooms.id"),
+        ForeignKey("hotels.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -184,7 +184,7 @@ class Enquiry(BaseEntity):
     )
 
     hotel = relationship(
-        "Room",
+        "Hotel",
         foreign_keys=[hotel_id],
         back_populates="enquiries",
     )

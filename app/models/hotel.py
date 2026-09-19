@@ -55,3 +55,8 @@ class Hotel(ActiveEntity):
         foreign_keys=[destination_id],
         back_populates="hotels",
     )
+
+    enquiries = relationship(
+        "Enquiry",
+        back_populates="hotel",
+    )

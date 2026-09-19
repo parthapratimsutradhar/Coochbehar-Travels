@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, JSON, Numeric, String, Text
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, JSON, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 class FinancialTransaction(BaseEntity):
     __tablename__ = "financial_transactions"
     __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_financial_transactions_amount_positive"),
         Index("ix_financial_transactions_transaction_date", "transaction_date"),
         Index("ix_financial_transactions_external_reference", "external_reference"),
     )

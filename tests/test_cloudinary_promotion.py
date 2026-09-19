@@ -60,7 +60,7 @@ async def test_promote_cloudinary_asset_skips_external_and_permanent():
 async def test_promote_cloudinary_asset_renames_temporary_file(monkeypatch):
     called = {}
 
-    def fake_rename(from_public_id, to_public_id, resource_type, overwrite):
+    def fake_rename(from_public_id, to_public_id, resource_type, overwrite, type):
         called["from"] = from_public_id
         called["to"] = to_public_id
         called["resource_type"] = resource_type
@@ -69,6 +69,7 @@ async def test_promote_cloudinary_asset_renames_temporary_file(monkeypatch):
             "secure_url": f"https://res.cloudinary.com/testcloud/{resource_type}/upload/v1726000000/{to_public_id}.jpg",
         }
 
+    monkeypatch.setattr(cloudinary.uploader, "explicit", lambda **kwargs: {})
     monkeypatch.setattr(cloudinary.uploader, "rename", fake_rename)
 
     temp_url = "https://res.cloudinary.com/testcloud/image/upload/v1726000000/Coochbehar-travels/temporary-uploads/banner_img.jpg"

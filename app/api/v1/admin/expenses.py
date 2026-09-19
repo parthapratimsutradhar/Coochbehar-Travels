@@ -99,7 +99,7 @@ def update_expense(
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
     service = ExpenseService(db)
-    expense = service.update_expense(expense_id, payload)
+    expense = service.update_expense(expense_id, payload, staff_user=current_user)
     return SuccessResponse(
         message="Expense updated successfully",
         data=expense_response(expense),
@@ -118,5 +118,5 @@ def delete_expense(
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
     service = ExpenseService(db)
-    service.delete_expense(expense_id)
+    service.delete_expense(expense_id, staff_user=current_user)
     return ActionResponse(message="Expense deleted successfully")

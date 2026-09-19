@@ -26,12 +26,12 @@ router = APIRouter(
 	responses={404: {"model": ErrorResponse}},
 	summary="Create a hotel",
 )
-def create_hotel(
+async def create_hotel(
 	payload: HotelCreate,
 	db: Session = Depends(get_db),
 	current_user: Account = Depends(get_current_admin_or_staff),
 ):
-	HotelService(db).create_hotel(payload)
+	await HotelService(db).create_hotel(payload)
 	return ActionResponse(message="Hotel created successfully")
 
 
@@ -76,13 +76,13 @@ def list_hotels(
 	responses={404: {"model": ErrorResponse}},
 	summary="Update a hotel",
 )
-def update_hotel(
+async def update_hotel(
 	hotel_id: uuid.UUID,
 	payload: HotelUpdate,
 	db: Session = Depends(get_db),
 	current_user: Account = Depends(get_current_admin_or_staff),
 ):
-	HotelService(db).update_hotel(hotel_id, payload)
+	await HotelService(db).update_hotel(hotel_id, payload)
 	return ActionResponse(message="Hotel updated successfully")
 
 

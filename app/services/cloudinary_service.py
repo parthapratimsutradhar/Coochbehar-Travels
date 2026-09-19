@@ -49,7 +49,10 @@ UPLOAD_ALLOWED_FOLDERS = {
     "customer-documents",
     "admin-documents",
     "review-gallery",
-    "destination-images"
+    "destination-images",
+    "hotel-images",
+    "vehicle-images",
+    "room-images",
 }
 
 UPLOAD_IMAGE_MAX_SIZE = 10 * 1024 * 1024  # 10 MB

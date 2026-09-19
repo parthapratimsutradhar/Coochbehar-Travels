@@ -163,6 +163,7 @@ class PaymentStatus(AppEnum):
 
 
 class PaymentMethod(AppEnum):
+    WALLET = "WALLET"
     RAZORPAY = "RAZORPAY"
     UPI = "UPI"
     CASH = "CASH"
@@ -274,3 +275,32 @@ class RoomType(AppEnum):
     DELUXE = "DELUXE"
     EXECUTIVE = "EXECUTIVE"
     PRESIDENTIAL = "PRESIDENTIAL"    
+
+
+ALLOWED_ENUM_GROUPS = (
+    "BookingSource",
+    "BookingStatus",
+    "DocumentType",
+    "EnquiryChannel",
+    "EnquiryStatus",
+    "EnquiryType",
+    "HotelCategory",
+    "LeadActivityType",
+    "LeadChannel",
+    "LeadLostReason",
+    "LeadSource",
+    "LeadStatus",
+    "MealPlan",
+    "OfferDiscountType",
+    "OfferStatus",
+    "PaymentMethod",
+    "PaymentStatus",
+    "QuotationItemType",
+    "QuotationStatus",
+    "ReferralStatus",
+    "RoomType",
+    "TourType",
+    "TransactionType",
+    "FinancialTransactionType",
+    "VehicleType",
+)

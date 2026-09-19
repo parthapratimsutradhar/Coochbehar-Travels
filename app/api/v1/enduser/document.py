@@ -15,7 +15,7 @@ from app.models.document import Document
 from app.schemas.document import DocumentDownloadResponse, DocumentResponse
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
-from app.services.cloudinary_service import upload_file_to_cloudinary
+from app.services.cloudinary_service import promote_cloudinary_asset, upload_file_to_cloudinary
 
 router = APIRouter(
 	prefix="/documents",
@@ -212,14 +212,18 @@ async def upload_document(
 	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> ActionResponse:
-	result = await upload_file_to_cloudinary(file=file, sub_folder="customer-documents")
+	result = await upload_file_to_cloudinary(file=file, sub_folder="temporary-uploads")
+	promoted = await promote_cloudinary_asset(
+		result["secure_url"],
+		"customer-documents",
+	)
 	document = Document(
 		document_type=document_type,
 		title=title.strip(),
 		description=description,
 		customer_id=current_customer.id,
 		uploaded_by_account_id=current_customer.id,
-		file_url=result["secure_url"],
+		file_url=promoted["url"],
 		file_name=file.filename or "document",
 		mime_type=file.content_type,
 		file_size=result.get("bytes"),

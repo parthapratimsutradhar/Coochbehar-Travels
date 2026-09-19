@@ -13,6 +13,7 @@ class AdminTourPackageItem(SchemaBase):
     tour_code: str
     slug: str
     title: str
+    destination_id: uuid.UUID | None = None
     destination: str | None = None
     type: TourType
     description: str | None = None

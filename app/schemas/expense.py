@@ -12,6 +12,7 @@ class ExpenseBase(SchemaBase):
     expense_category: str = Field(..., min_length=1, max_length=100)
     payment_method: str = Field(..., min_length=1, max_length=100)
     vendor_id: UUID | None = None
+    financial_account_id: UUID | None = None
     reference: str | None = Field(default=None, max_length=255)
     attachments: list[str] | None = None
 
@@ -27,6 +28,7 @@ class ExpenseUpdate(SchemaBase):
     expense_category: str | None = Field(default=None, min_length=1, max_length=100)
     payment_method: str | None = Field(default=None, min_length=1, max_length=100)
     vendor_id: UUID | None = None
+    financial_account_id: UUID | None = None
     reference: str | None = Field(default=None, max_length=255)
     attachments: list[str] | None = None
     is_active: bool | None = None
@@ -57,6 +59,7 @@ def expense_response(transaction) -> ExpenseResponse:
                 else "OTHER"
             ),
             "vendor_id": transaction.vendor_id,
+            "financial_account_id": transaction.metadata_.get("financial_account_id") if transaction.metadata_ else None,
             "reference": transaction.reference,
             "attachments": metadata.get("attachments"),
             "created_by_account_id": transaction.created_by_account_id,

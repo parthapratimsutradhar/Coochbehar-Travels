@@ -35,10 +35,13 @@ register_exception_handlers(app)
 
 
 # ── API routers ───────────────────────────────────────────────────────
-app.include_router(shared_router, prefix="/api/v1")
-app.include_router(admin_router, prefix="/api/v1")
-app.include_router(enduser_router, prefix="/api/v1")
-app.include_router(public_router, prefix="/api/v1")
+API_V1_PREFIX = "/api/v1"
+
+app.include_router(shared_router, prefix=API_V1_PREFIX)
+app.include_router(admin_router, prefix=API_V1_PREFIX)
+app.include_router(enduser_router, prefix=API_V1_PREFIX)
+app.include_router(public_router, prefix=API_V1_PREFIX)
+
 app.mount("/socket.io", socketio.ASGIApp(sio, other_asgi_app=app))
 
 
@@ -96,12 +99,10 @@ def _filter_schema(
 
 
 def _enduser_openapi() -> dict:
-    """Enduser docs: /api/v1/*, public enduser routes, and shared sessions."""
-    full = app.openapi()
     return _filter_schema(
-        full,
+        app.openapi(),
         title="Coochbehar Travels — Enduser API",
-        description="Customer-facing APIs: Customer Auth, Tour Packages, Enquiries, Visitors, Telemetry & Session Management.",
+        description="Customer-facing APIs.",
         include={
             "/api/v1/auth",
             "/api/v1/account",
@@ -113,34 +114,34 @@ def _enduser_openapi() -> dict:
             "/api/v1/wishlist",
             "/api/v1/documents",
             "/api/v1/referral",
+            "/api/v1/quotations",
+            "/api/v1/wallet",
             "/api/v1/sessions",
             "/api/v1/notifications",
+            "/api/v1/enums",
         },
     )
 
 
 def _admin_openapi() -> dict:
-    """Admin docs: /api/v1/admin/* routes and shared sessions."""
-    full = app.openapi()
     return _filter_schema(
-        full,
+        app.openapi(),
         title="Coochbehar Travels — Admin API",
-        description="Administrative APIs: Staff Auth, Sales Leads Pipeline, Enquiry Management & Session Management.",
+        description="Administrative APIs.",
         include={
             "/api/v1/admin",
             "/api/v1/sessions",
             "/api/v1/notifications",
+            "/api/v1/enums",
         },
     )
 
 
 def _public_openapi() -> dict:
-    """Public/shared docs: file uploads."""
-    full = app.openapi()
     return _filter_schema(
-        full,
+        app.openapi(),
         title="Coochbehar Travels — Public API",
-        description="Shared APIs: File Uploads.",
+        description="Public APIs.",
         include={
             "/api/v1/public/files",
         },

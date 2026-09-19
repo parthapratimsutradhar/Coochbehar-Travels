@@ -1,5 +1,6 @@
 import uuid
 from decimal import Decimal
+from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -8,6 +9,23 @@ from app.core.messages.error import RoomError
 from app.models.room import Room
 from app.repository.room_repo import RoomRepository
 from app.schemas.room import RoomCreate, RoomUpdate
+from app.services.cloudinary_service import promote_cloudinary_asset
+
+
+async def _promote_room_images(image_items: list[Any]) -> list[dict[str, Any]]:
+    promoted_items: list[dict[str, Any]] = []
+    for item in image_items:
+        item_dict = item.model_dump() if hasattr(item, "model_dump") else dict(item)
+        item_dict.setdefault("id", str(uuid.uuid4()))
+        if item_dict.get("url"):
+            promoted = await promote_cloudinary_asset(
+                item_dict["url"],
+                "room-images",
+                resource_type=item_dict.get("type") or "image",
+            )
+            item_dict["url"] = promoted["url"]
+        promoted_items.append(item_dict)
+    return promoted_items
 
 
 class RoomService:
@@ -24,18 +42,23 @@ class RoomService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=RoomError.ROOM_NOT_FOUND)
         return room
 
-    def create_room(self, hotel_id: uuid.UUID, payload: RoomCreate) -> Room:
+    async def create_room(self, hotel_id: uuid.UUID, payload: RoomCreate) -> Room:
         self._validate_hotel(hotel_id)
-        return self.repo.create(hotel_id=hotel_id, **payload.model_dump())
+        data = payload.model_dump()
+        data["room_image"] = await _promote_room_images(data["room_image"])
+        return self.repo.create(hotel_id=hotel_id, **data)
 
-    def update_room(
+    async def update_room(
         self,
         hotel_id: uuid.UUID,
         room_id: uuid.UUID,
         payload: RoomUpdate,
     ) -> Room:
         room = self.get_room(hotel_id, room_id)
-        return self.repo.update(room, payload.model_dump(exclude_unset=True))
+        data = payload.model_dump(exclude_unset=True)
+        if "room_image" in data:
+            data["room_image"] = await _promote_room_images(data["room_image"])
+        return self.repo.update(room, data)
 
     def delete_room(self, hotel_id: uuid.UUID, room_id: uuid.UUID) -> None:
         room = self.get_room(hotel_id, room_id)

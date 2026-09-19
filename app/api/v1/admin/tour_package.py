@@ -32,6 +32,7 @@ def list_admin_tour_packages(
     page_size: int = Query(10, ge=1, le=100),
     is_active: bool | None = Query(None),
     is_featured: bool | None = Query(None),
+    destination_id: uuid.UUID | None = Query(None),
     type: TourType | None = Query(None, description="Filter by tour type: DOMESTIC or INTERNATIONAL"),
     search: str | None = Query(None),
     current_user: Account = Depends(get_current_admin),
@@ -44,6 +45,7 @@ def list_admin_tour_packages(
         page_size=page_size,
         is_active=is_active,
         is_featured=is_featured,
+        destination_id=destination_id,
         type=type,
         search=search,
     )

@@ -8,6 +8,7 @@ from app.core.enums import AccountRole, LeadSource
 from app.models.account import Account
 from app.models.customer_profile import CustomerProfile
 from app.models.enquiry import Enquiry
+from app.models.financial_account import FinancialAccount
 from app.models.lead import Lead
 from app.models.quotation import Quotation
 from app.models.visitor import Visitor
@@ -90,6 +91,15 @@ class CustomerRepository:
             referral_code=referral_code,
         )
         self.db.add(profile)
+        self.db.add(
+            FinancialAccount(
+                account_code=f"WALLET-{account.id.hex[:12].upper()}",
+                name=f"{account.name} Wallet",
+                account_type="LIABILITY",
+                owner_type="CUSTOMER",
+                owner_id=account.id,
+            )
+        )
         self.db.commit()
         self.db.refresh(account)
         return account

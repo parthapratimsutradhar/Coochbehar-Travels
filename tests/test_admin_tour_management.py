@@ -415,6 +415,58 @@ def test_admin_tour_package_list_supports_type_filter(client, admin_user, db_ses
     assert items[0]["id"] == str(international_package.id)
     assert items[0]["type"] == "INTERNATIONAL"
     assert items[0]["destination"] == "Ladakh"
+    assert items[0]["destination_id"] == str(destination.id)
+
+
+def test_admin_tour_package_list_supports_destination_id_filter(client, admin_user, db_session):
+    matching_destination = Destination(
+        name="Goa",
+        slug="goa-admin-filter",
+        country="India",
+        is_domestic=True,
+    )
+    other_destination = Destination(
+        name="Jaipur",
+        slug="jaipur-admin-filter",
+        country="India",
+        is_domestic=True,
+    )
+    db_session.add_all([matching_destination, other_destination])
+    db_session.commit()
+    db_session.refresh(matching_destination)
+    db_session.refresh(other_destination)
+
+    matching_package = TourPackage(
+        tour_code="T-1005",
+        slug="goa-filter-package",
+        title="Goa Filter Package",
+        destination_id=matching_destination.id,
+        type=TourType.DOMESTIC,
+        is_featured=False,
+        is_active=True,
+    )
+    other_package = TourPackage(
+        tour_code="T-1006",
+        slug="jaipur-filter-package",
+        title="Jaipur Filter Package",
+        destination_id=other_destination.id,
+        type=TourType.DOMESTIC,
+        is_featured=False,
+        is_active=True,
+    )
+    db_session.add_all([matching_package, other_package])
+    db_session.commit()
+
+    response = client.get(
+        f"/api/v1/admin/tour-packages?destination_id={matching_destination.id}",
+        headers={"Authorization": f"Bearer {make_token(admin_user)}"},
+    )
+
+    assert response.status_code == 200
+    items = response.json()["data"]
+    assert len(items) == 1
+    assert items[0]["id"] == str(matching_package.id)
+    assert items[0]["destination_id"] == str(matching_destination.id)
 
 
 def test_admin_tour_package_list_supports_is_featured_filter(client, admin_user, db_session):

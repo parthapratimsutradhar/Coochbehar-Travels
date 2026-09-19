@@ -3,6 +3,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 from app.models.account import Account
+from app.models.audit_log import AuditLog
 from app.models.financial_transaction import FinancialTransaction
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate
 from app.services.financial_service import FinancialService
@@ -13,7 +14,7 @@ class ExpenseService:
         self.db = db
 
     def create_expense(self, payload: ExpenseCreate, staff_user: Account) -> FinancialTransaction:
-        return FinancialService(self.db).record_expense(
+        transaction = FinancialService(self.db).record_expense(
             amount=payload.amount,
             currency="INR",
             payment_method=payload.payment_method,
@@ -22,9 +23,19 @@ class ExpenseService:
             vendor_id=payload.vendor_id,
             reference=payload.reference,
             attachments=payload.attachments,
+            financial_account_id=payload.financial_account_id,
             created_by_account_id=staff_user.id,
             transaction_date=payload.date,
         )
+        self.db.add(AuditLog(
+            account_id=staff_user.id,
+            action="EXPENSE_CREATED",
+            entity_type="FinancialTransaction",
+            entity_id=transaction.id,
+            new_values={"amount": str(transaction.amount), "category": transaction.category},
+        ))
+        self.db.commit()
+        return transaction
 
     def get_expense(self, expense_id: uuid.UUID) -> FinancialTransaction:
         exp = self.db.query(FinancialTransaction).filter(
@@ -64,16 +75,30 @@ class ExpenseService:
             "total_pages": total_pages,
         }
 
-    def update_expense(self, expense_id: uuid.UUID, payload: ExpenseUpdate) -> FinancialTransaction:
-        self.get_expense(expense_id)
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Posted expenses cannot be edited; create a correcting transaction instead.",
+    def update_expense(self, expense_id: uuid.UUID, payload: ExpenseUpdate, staff_user: Account) -> FinancialTransaction:
+        existing = self.get_expense(expense_id)
+        data = {
+            "amount": payload.amount if payload.amount is not None else existing.amount,
+            "description": payload.description if payload.description is not None else existing.description,
+            "date": payload.date if payload.date is not None else existing.transaction_date,
+            "expense_category": payload.expense_category if payload.expense_category is not None else existing.category,
+            "payment_method": payload.payment_method if payload.payment_method is not None else existing.payment_method,
+            "vendor_id": payload.vendor_id if payload.vendor_id is not None else existing.vendor_id,
+            "reference": payload.reference if payload.reference is not None else existing.reference,
+            "attachments": payload.attachments if payload.attachments is not None else (existing.metadata_ or {}).get("attachments"),
+            "financial_account_id": payload.financial_account_id or (existing.metadata_ or {}).get("financial_account_id"),
+        }
+        FinancialService(self.db).reverse_transaction(
+            transaction_id=existing.id,
+            actor_id=staff_user.id,
+            reason="Expense corrected by update",
         )
+        return self.create_expense(ExpenseCreate.model_validate(data), staff_user)
 
-    def delete_expense(self, expense_id: uuid.UUID) -> None:
-        self.get_expense(expense_id)
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Posted expenses cannot be deleted; create a correcting transaction instead.",
+    def delete_expense(self, expense_id: uuid.UUID, staff_user: Account) -> None:
+        expense = self.get_expense(expense_id)
+        FinancialService(self.db).reverse_transaction(
+            transaction_id=expense.id,
+            actor_id=staff_user.id,
+            reason="Expense reversed by administrator",
         )

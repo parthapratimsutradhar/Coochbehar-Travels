@@ -2,6 +2,7 @@ from decimal import Decimal
 
 import uuid
 from sqlalchemy import (
+    CheckConstraint,
     ForeignKey,
     Numeric,
     String,
@@ -17,6 +18,13 @@ class BookingCost(UUIDEntity):
     Contains details about the various costs involved in the booking process.
     """
     __tablename__ = "booking_costs"
+    __table_args__ = (
+        CheckConstraint("estimated_amount >= 0", name="ck_booking_cost_estimated_nonnegative"),
+        CheckConstraint("actual_amount >= 0", name="ck_booking_cost_actual_nonnegative"),
+        CheckConstraint("paid_amount >= 0", name="ck_booking_cost_paid_nonnegative"),
+        CheckConstraint("due_amount >= 0", name="ck_booking_cost_due_nonnegative"),
+        CheckConstraint("paid_amount <= actual_amount", name="ck_booking_cost_paid_not_over_actual"),
+    )
 
     booking_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("bookings.id", ondelete="RESTRICT"),

@@ -133,7 +133,7 @@ def add_booking_cost(
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
     service = BookingService(db)
-    cost = service.add_booking_cost(booking_id, payload)
+    cost = service.add_booking_cost(booking_id, payload, recorded_by_account_id=current_user.id)
     return SuccessResponse(
         message="Booking cost added successfully",
         data=BookingCostResponse.model_validate(cost),

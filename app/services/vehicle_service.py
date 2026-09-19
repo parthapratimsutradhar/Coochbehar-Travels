@@ -1,5 +1,6 @@
 import uuid
 from decimal import Decimal
+from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -8,6 +9,23 @@ from app.core.messages.error import VehicleError
 from app.models.vehicle import Vehicle
 from app.repository.vehicle_repo import VehicleRepository
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate
+from app.services.cloudinary_service import promote_cloudinary_asset
+
+
+async def _promote_vehicle_images(image_items: list[Any]) -> list[dict[str, Any]]:
+    promoted_items: list[dict[str, Any]] = []
+    for item in image_items:
+        item_dict = item.model_dump() if hasattr(item, "model_dump") else dict(item)
+        item_dict.setdefault("id", str(uuid.uuid4()))
+        if item_dict.get("url"):
+            promoted = await promote_cloudinary_asset(
+                item_dict["url"],
+                "vehicle-images",
+                resource_type=item_dict.get("type") or "image",
+            )
+            item_dict["url"] = promoted["url"]
+        promoted_items.append(item_dict)
+    return promoted_items
 
 
 class VehicleService:
@@ -20,12 +38,17 @@ class VehicleService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=VehicleError.VEHICLE_NOT_FOUND)
         return vehicle
 
-    def create_vehicle(self, payload: VehicleCreate) -> Vehicle:
-        return self.repo.create(**payload.model_dump())
+    async def create_vehicle(self, payload: VehicleCreate) -> Vehicle:
+        data = payload.model_dump()
+        data["vehicle_image"] = await _promote_vehicle_images(data["vehicle_image"])
+        return self.repo.create(**data)
 
-    def update_vehicle(self, vehicle_id: uuid.UUID, payload: VehicleUpdate) -> Vehicle:
+    async def update_vehicle(self, vehicle_id: uuid.UUID, payload: VehicleUpdate) -> Vehicle:
         vehicle = self.get_vehicle(vehicle_id)
-        return self.repo.update(vehicle, payload.model_dump(exclude_unset=True))
+        data = payload.model_dump(exclude_unset=True)
+        if "vehicle_image" in data:
+            data["vehicle_image"] = await _promote_vehicle_images(data["vehicle_image"])
+        return self.repo.update(vehicle, data)
 
     def delete_vehicle(self, vehicle_id: uuid.UUID) -> None:
         vehicle = self.get_vehicle(vehicle_id)

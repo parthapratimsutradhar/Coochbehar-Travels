@@ -92,6 +92,7 @@ class BookingService:
                 payment_status=PaymentStatus.SUCCESS,
                 gateway=None,
                 gateway_transaction_id=None,
+                external_reference=f"offline-booking-advance:{booking.id}",
                 description=f"Initial advance payment for offline booking {booking_code}",
                 recorded_by_account_id=staff_user.id,
                 transaction_date=None,
@@ -221,9 +222,24 @@ class BookingService:
         booking = self.get_booking(booking_id)
         return self.booking_repo.update_status(booking, new_status, reason=reason)
 
-    def add_booking_cost(self, booking_id: uuid.UUID, payload: BookingCostCreate) -> dict:
+    def add_booking_cost(
+        self,
+        booking_id: uuid.UUID,
+        payload: BookingCostCreate,
+        recorded_by_account_id: uuid.UUID | None = None,
+    ) -> dict:
         booking = self.get_booking(booking_id)
         cost = self.booking_repo.add_cost(booking.id, payload.model_dump())
+        if recorded_by_account_id is not None:
+            from app.models.audit_log import AuditLog
+            self.db.add(AuditLog(
+                account_id=recorded_by_account_id,
+                action="BOOKING_COST_CREATED",
+                entity_type="BookingCost",
+                entity_id=cost.id,
+                new_values={"booking_id": str(booking.id), "amount": str(cost.actual_amount), "cost_type": cost.cost_type},
+            ))
+            self.db.commit()
         return cost
 
     def add_traveller(self, booking_id: uuid.UUID, payload: BookingTravelerCreate) -> dict:

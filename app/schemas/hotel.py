@@ -1,4 +1,5 @@
 from datetime import datetime
+import uuid
 from uuid import UUID
 
 from pydantic import ConfigDict, Field
@@ -8,7 +9,7 @@ from app.schemas.base import SchemaBase
 
 
 class GalleryItem(SchemaBase):
-    id: str
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     alt: str | None = None
     url: str
     type: str | None = None

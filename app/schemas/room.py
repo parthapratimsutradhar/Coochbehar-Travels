@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
@@ -6,12 +7,21 @@ from pydantic import ConfigDict, Field
 
 from app.core.enums import RoomType
 from app.schemas.base import SchemaBase
-from app.schemas.hotel import GalleryItem
+
+
+class RoomGalleryItem(SchemaBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    alt: str | None = None
+    url: str
+    type: str | None = None
+    display_order: int | None = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class RoomBase(SchemaBase):
     room_number: str = Field(..., min_length=1, max_length=20)
-    room_image: list[GalleryItem] = Field(..., min_length=1)
+    room_image: list[RoomGalleryItem] = Field(..., min_length=1)
     room_type: RoomType
     capacity: int = Field(..., gt=0)
     price_per_night: Decimal = Field(..., ge=0, decimal_places=2)
@@ -24,7 +34,7 @@ class RoomCreate(RoomBase):
 
 class RoomUpdate(SchemaBase):
     room_number: str | None = Field(default=None, min_length=1, max_length=20)
-    room_image: list[GalleryItem] | None = Field(default=None, min_length=1)
+    room_image: list[RoomGalleryItem] | None = Field(default=None, min_length=1)
     room_type: RoomType | None = None
     capacity: int | None = Field(default=None, gt=0)
     price_per_night: Decimal | None = Field(default=None, ge=0, decimal_places=2)
@@ -35,7 +45,7 @@ class RoomUpdate(SchemaBase):
 class RoomResponse(RoomBase):
     model_config = ConfigDict(from_attributes=True, extra="allow")
 
-    room_image: list[GalleryItem] = Field(default_factory=list)
+    room_image: list[RoomGalleryItem] = Field(default_factory=list)
     id: UUID
     hotel_id: UUID | None
     is_active: bool
