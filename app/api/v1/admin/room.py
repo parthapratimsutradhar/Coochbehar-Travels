@@ -53,7 +53,7 @@ def list_rooms(
 	max_price: Decimal | None = Query(None, ge=0),
 	min_capacity: int | None = Query(None, ge=1),
 	max_capacity: int | None = Query(None, ge=1),
-	is_active: bool | None = Query(True),
+	is_active: bool | None = Query(None),
 	db: Session = Depends(get_db),
 	current_user: Account = Depends(get_current_admin_or_staff),
 ):
