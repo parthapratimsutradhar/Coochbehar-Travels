@@ -3,7 +3,6 @@ from app.models.audit_log import AuditLog
 from app.models.auth_session import AuthSession
 from app.models.base import ActiveEntity, Base, BaseEntity, UUIDEntity
 from app.models.booking import Booking
-from app.models.booking_costs import BookingCost
 from app.models.booking_status_history import BookingStatusHistory
 from app.models.booking_traveler import BookingTraveler
 from app.models.customer_profile import CustomerProfile
@@ -22,7 +21,6 @@ from app.models.otp_challenge import OtpChallenge
 from app.models.quotation import Quotation
 from app.models.trip_items import TripItem
 from app.models.trip_itinerary import TripItinerary
-from app.models.trip_itinerary_item import TripItineraryItem
 from app.models.trip_hotel import TripHotel
 from app.models.trip_vehicle import TripVehicle
 from app.models.referral import Referral
@@ -39,7 +37,6 @@ from app.models.tour_variant import TourVariant
 from app.models.tour_wishlist import TourWishlist
 from app.models.vehicle import Vehicle
 from app.models.vendor import Vendor
-from app.models.vendor_booking import VendorBooking
 from app.models.visitor import Visitor
 from app.models.visitor_event import VisitorEvent
 from app.models.visitor_session import VisitorSession
@@ -54,7 +51,6 @@ __all__ = [
     "AuditLog",
     "AuthSession",
     "Booking",
-    "BookingCost",
     "BookingStatusHistory",
     "BookingTraveler",
     "Destination",
@@ -72,7 +68,6 @@ __all__ = [
     "Quotation",
     "TripItem",
     "TripItinerary",
-    "TripItineraryItem",
     "TripHotel",
     "TripVehicle",
     "Referral",
@@ -89,7 +84,6 @@ __all__ = [
     "TourWishlist",
     "Vehicle",
     "Vendor",
-    "VendorBooking",
     "Visitor",
     "VisitorEvent",
     "VisitorSession",

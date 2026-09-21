@@ -1,12 +1,17 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseEntity
 from app.core.enums import RoomType
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.trip_items import TripItem
 
 
 class TripHotel(BaseEntity):
@@ -71,5 +76,11 @@ class TripHotel(BaseEntity):
     room_type: Mapped[RoomType | None] = mapped_column(
         Enum(RoomType, name="room_type"),
         nullable=True,
+    )
+
+# ── Relationships ───────────────────────────────────────────────────────    
+
+    trip_item: Mapped["TripItem"] = relationship(
+        back_populates="hotel",
     )
 

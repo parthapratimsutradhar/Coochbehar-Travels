@@ -2,12 +2,12 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 from pydantic import ConfigDict, Field
-from app.core.enums import QuotationItemType, QuotationStatus
+from app.core.enums import CostItemType, QuotationStatus
 from app.schemas.base import SchemaBase
 
 
 class QuotationItemBase(SchemaBase):
-    item_type: QuotationItemType = QuotationItemType.OTHER
+    item_type: CostItemType = CostItemType.OTHER
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     quantity: int = Field(default=1, ge=1)

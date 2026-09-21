@@ -184,7 +184,10 @@ class Booking(BaseEntity):
         back_populates="booking"
     )
     
-    quotation = relationship("Quotation")
+    quotation = relationship(
+        "Quotation",
+        back_populates="bookings",
+    )
     
     offer = relationship(
         "TourOffer",
@@ -202,4 +205,18 @@ class Booking(BaseEntity):
         "BookingStatusHistory",
         back_populates="booking",
         cascade="all, delete-orphan",
+    )
+
+    trip_items = relationship(
+        "TripItem",
+        back_populates="booking",
+        cascade="all, delete-orphan",
+        order_by="TripItem.sort_order",
+    )
+
+    trip_itinerary = relationship(
+        "TripItinerary",
+        back_populates="booking",
+        cascade="all, delete-orphan",
+        order_by="TripItinerary.day_number",
     )

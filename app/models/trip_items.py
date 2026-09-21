@@ -20,6 +20,9 @@ from app.core.enums import CostItemType
 from app.models.base import BaseEntity
 
 if TYPE_CHECKING:
+    from app.models.booking import Booking
+    from app.models.trip_hotel import TripHotel
+    from app.models.trip_vehicle import TripVehicle
     from app.models.quotation import Quotation
 
 class TripItem(BaseEntity):
@@ -37,6 +40,10 @@ class TripItem(BaseEntity):
         CheckConstraint(
             "total_price >= 0",
             name="ck_trip_item_total_price_non_negative",
+        ),
+        CheckConstraint(
+            "(quotation_id IS NOT NULL) <> (booking_id IS NOT NULL)",
+            name="ck_trip_item_single_owner",
         ),
     )
 
@@ -94,9 +101,26 @@ class TripItem(BaseEntity):
         default=0,
     )
 
+# ── Relationships ───────────────────────────────────────────────────────    
 
-    quotation: Mapped["Quotation"] = relationship(
+    quotation: Mapped["Quotation | None"] = relationship(
         back_populates="items",
+    )
+
+    booking: Mapped["Booking"] = relationship(
+        back_populates="trip_items",
+    )
+
+    hotel: Mapped["TripHotel | None"] = relationship(
+        back_populates="trip_item",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    vehicle: Mapped["TripVehicle | None"] = relationship(
+        back_populates="trip_item",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
 
     

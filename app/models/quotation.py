@@ -17,7 +17,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseEntity
-from app.core.enums import QuotationStatus, QuotationItemType
+from app.core.enums import QuotationStatus
 
 
 class Quotation(BaseEntity):
@@ -220,4 +220,14 @@ class Quotation(BaseEntity):
         back_populates="quotation",
         cascade="all, delete-orphan",
         order_by="TripItinerary.day_number",
+    )
+
+    bookings = relationship(
+        "Booking",
+        back_populates="quotation",
+    )
+
+    offer_usages = relationship(
+        "TourOfferUsage",
+        back_populates="quotation",
     )

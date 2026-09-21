@@ -2,12 +2,17 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseEntity
 from app.core.enums import VehicleType
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.trip_items import TripItem
 
 
 class TripVehicle(BaseEntity):
@@ -19,8 +24,8 @@ class TripVehicle(BaseEntity):
                 name="ck_trip_vehicle_end_after_start",
             ),
             CheckConstraint(
-                "days > 0",
-                name="ck_trip_vehicle_days_positive",
+                "rental_minutes > 0",
+                name="ck_trip_vehicle_rental_minutes_positive",
             ),
             CheckConstraint(
                 "quantity > 0",
@@ -72,5 +77,11 @@ class TripVehicle(BaseEntity):
         Integer,
         nullable=False,
         default=1,
+    )
+    
+# ── Relationships ───────────────────────────────────────────────────────    
+
+    trip_item: Mapped["TripItem"] = relationship(
+        back_populates="vehicle",
     )
 

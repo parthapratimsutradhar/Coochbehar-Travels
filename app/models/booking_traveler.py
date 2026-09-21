@@ -2,6 +2,7 @@
 import uuid
 from datetime import  date
 from sqlalchemy import (
+    Enum,
     ForeignKey,
     String,
     Date,

@@ -1,12 +1,18 @@
 from datetime import datetime
 import uuid
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseEntity
 from app.core.enums import MealPlan
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.booking import Booking
+    from app.models.quotation import Quotation
 
 class TripItinerary(BaseEntity):
     __tablename__ = "trip_itinerary"
@@ -17,9 +23,18 @@ class TripItinerary(BaseEntity):
             "day_number",
             name="uq_quotation_itinerary_day",
         ),
+        UniqueConstraint(
+            "booking_id",
+            "day_number",
+            name="uq_booking_itinerary_day",
+        ),
         CheckConstraint(
             "day_number > 0",
             name="ck_trip_itinerary_day_positive",
+        ),
+        CheckConstraint(
+            "(quotation_id IS NOT NULL) <> (booking_id IS NOT NULL)",
+            name="ck_trip_itinerary_single_owner",
         ),
     )
 
@@ -73,6 +88,12 @@ class TripItinerary(BaseEntity):
         default=0,
     )
 
-    quotation: Mapped["Quotation"] = relationship(
+# ── Relationships ───────────────────────────────────────────────────────    
+
+    quotation: Mapped["Quotation | None"] = relationship(
         back_populates="itinerary",
+    )
+
+    booking: Mapped["Booking | None"] = relationship(
+        back_populates="trip_itinerary",
     )
