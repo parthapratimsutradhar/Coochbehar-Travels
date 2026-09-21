@@ -125,11 +125,6 @@ class TourOffer(ActiveEntity):
         back_populates="offer",
     )
 
-    quotations = relationship(
-        "Quotation",
-        back_populates="offer",
-    )
-
     @property
     def variant_ids(self) -> list[uuid.UUID]:
         return [link.variant_id for link in self.package_links]

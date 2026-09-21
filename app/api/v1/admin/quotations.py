@@ -138,6 +138,9 @@ def apply_offer_to_quotation(
     del current_user
     service = QuotationService(db)
     quotation = service.get_quotation(quotation_id)
+    if not hasattr(quotation, "variant_id"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This quotation type does not support offers.")
+
     offer_service = TourOfferService(db)
     result = offer_service.apply_offer(
         offer_id=payload.offer_id,

@@ -92,11 +92,6 @@ class TourVariant(ActiveEntity):
         back_populates="variant",
     )
 
-    quotations = relationship(
-        "Quotation", 
-        back_populates="variant"
-    )
-    
     departures = relationship(
         "TourDeparture",
         back_populates="variant",

@@ -49,7 +49,7 @@ class Notification(BaseEntity):
     )
 
     recipient_ids: Mapped[list[uuid.UUID] | None] = mapped_column(
-        ARRAY(UUID(as_uuid=True)),
+        JSON().with_variant(ARRAY(UUID(as_uuid=True)), "postgresql"),
         nullable=True,
     )
 

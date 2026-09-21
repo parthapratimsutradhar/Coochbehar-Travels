@@ -10,7 +10,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import UUIDEntity
-
+from app.core.enums import Gender
 
 class BookingTraveler(UUIDEntity):
     __tablename__ = "booking_travelers"
@@ -25,14 +25,9 @@ class BookingTraveler(UUIDEntity):
         String(100),
         nullable=False,
     )
-
-    traveler_type: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-    )
-
-    gender: Mapped[str | None] = mapped_column(
-        String(20),
+    
+    gender: Mapped[Gender | None] = mapped_column(
+        Enum(Gender, name="gender"),
         nullable=True,
     )
 

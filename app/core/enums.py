@@ -247,7 +247,7 @@ class QuotationStatus(AppEnum):
     CANCELLED = "CANCELLED" 
     
         
-class QuotationItemType(AppEnum):
+class CostItemType(AppEnum):
     HOTEL = "hotel"
     TRANSPORT = "transport"
     FLIGHT = "flight"
@@ -275,6 +275,11 @@ class RoomType(AppEnum):
     DELUXE = "DELUXE"
     EXECUTIVE = "EXECUTIVE"
     PRESIDENTIAL = "PRESIDENTIAL"    
+    
+class Gender(AppEnum):
+    MALE = "MALE"
+    FEMALE = "FEMALE"
+    OTHER = "OTHER"    
 
 
 ALLOWED_ENUM_GROUPS = (
@@ -303,4 +308,5 @@ ALLOWED_ENUM_GROUPS = (
     "TransactionType",
     "FinancialTransactionType",
     "VehicleType",
+    "Gender",
 )

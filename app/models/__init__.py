@@ -20,13 +20,15 @@ from app.models.notification import Notification
 from app.models.notification_campaign import NotificationCampaign
 from app.models.otp_challenge import OtpChallenge
 from app.models.quotation import Quotation
-from app.models.quotation_item import QuotationItem
+from app.models.trip_items import TripItem
+from app.models.trip_itinerary import TripItinerary
+from app.models.trip_itinerary_item import TripItineraryItem
+from app.models.trip_hotel import TripHotel
+from app.models.trip_vehicle import TripVehicle
 from app.models.referral import Referral
 from app.models.referral_config import ReferralRewardConfig
 from app.models.referral_reward_history import ReferralRewardHistory
 from app.models.review import Review
-from app.models.room import Room
-from app.models.room_allocation import RoomAllocation
 from app.models.tour_departure import TourDeparture
 from app.models.tour_detail import TourDetail
 from app.models.tour_offer import TourOffer
@@ -36,7 +38,6 @@ from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
 from app.models.tour_wishlist import TourWishlist
 from app.models.vehicle import Vehicle
-from app.models.vehicle_allocation import VehicleAllocation
 from app.models.vendor import Vendor
 from app.models.vendor_booking import VendorBooking
 from app.models.visitor import Visitor
@@ -69,13 +70,15 @@ __all__ = [
     "NotificationCampaign",
     "OtpChallenge",
     "Quotation",
-    "QuotationItem",
+    "TripItem",
+    "TripItinerary",
+    "TripItineraryItem",
+    "TripHotel",
+    "TripVehicle",
     "Referral",
     "ReferralRewardConfig",
     "ReferralRewardHistory",
     "Review",
-    "Room",
-    "RoomAllocation",
     "TourDeparture",
     "TourDetail",
     "TourOffer",
@@ -85,7 +88,6 @@ __all__ = [
     "TourVariant",
     "TourWishlist",
     "Vehicle",
-    "VehicleAllocation",
     "Vendor",
     "VendorBooking",
     "Visitor",

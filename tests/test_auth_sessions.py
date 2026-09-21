@@ -20,7 +20,6 @@ from app.repository.auth_session_repo import AuthSessionRepository
 from app.models.base import Base
 from app.models.account import Account
 from app.models.customer_profile import CustomerProfile
-from app.models.room import Room
 from app.models.vehicle import Vehicle
 from app.models.visitor import Visitor
 from app.utils.security import (
@@ -751,15 +750,11 @@ def test_existing_customer_google_login_adds_missing_profile_pic(
     )
 
 
-def test_21_room_and_vehicle_float_types(db_session):
-    """21. Test that Room and Vehicle models use float/Decimal for prices."""
-    room = Room(room_number="101", price_per_night=Decimal("2500.50"), is_active=True)
+def test_vehicle_price_uses_decimal(db_session):
+    """Vehicle prices remain represented accurately after room removal."""
     vehicle = Vehicle(name="Innova Crysta", registration_number="WB-64-1234", capacity=7, price_per_day=Decimal("3200.75"), is_active=True)
-    db_session.add(room)
     db_session.add(vehicle)
     db_session.commit()
-    db_session.refresh(room)
     db_session.refresh(vehicle)
 
-    assert float(room.price_per_night) == 2500.50
     assert float(vehicle.price_per_day) == 3200.75

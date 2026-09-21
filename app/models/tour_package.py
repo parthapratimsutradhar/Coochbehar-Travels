@@ -78,12 +78,7 @@ class TourPackage(ActiveEntity):
         back_populates="package",
         cascade="all, delete-orphan",
     )
-    
-    quotations = relationship(
-        "Quotation", 
-        back_populates="package"
-    )
-    
+
     destination = relationship(
         "Destination",
         foreign_keys=[destination_id],

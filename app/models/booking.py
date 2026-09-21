@@ -12,7 +12,7 @@ from sqlalchemy import (
 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.enums import BookingSource, BookingStatus
+from app.core.enums import BookingSource, BookingStatus, TourType
 from app.models.base import BaseEntity
 
 class Booking(BaseEntity):
@@ -52,8 +52,8 @@ class Booking(BaseEntity):
         nullable=True,
     )
 
-    booking_type: Mapped[str] = mapped_column(
-        String(30),
+    booking_type: Mapped[TourType] = mapped_column(
+        Enum(TourType, name="tour_type"),
         nullable=False,
     )
     

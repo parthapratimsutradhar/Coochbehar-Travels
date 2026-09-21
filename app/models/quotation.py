@@ -1,10 +1,8 @@
 import uuid
-
 from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
-    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
@@ -13,41 +11,18 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    CheckConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.enums import QuotationStatus
-from app.models.account import Account
 from app.models.base import BaseEntity
-from app.models.enquiry import Enquiry
-from app.models.hotel import Hotel
-from app.models.quotation_item import QuotationItem
-from app.models.room import Room
-from app.models.tour_package import TourPackage
-from app.models.tour_variant import TourVariant
-from app.models.vehicle import Vehicle
+from app.core.enums import QuotationStatus, QuotationItemType
 
 
 class Quotation(BaseEntity):
-    """
-    Commercial quotation generated for an enquiry.
-
-    Each quotation record represents one commercial version of the
-    quotation for that enquiry.
-
-    Example:
-
-        ENQ-1001
-            ├── QT-1001-V1
-            ├── QT-1001-V2
-            └── QT-1001-V3  <- Accepted
-
-    A quotation is separate from the final booking.
-    """
-
     __tablename__ = "quotations"
-
+    
     __table_args__ = (
         UniqueConstraint(
             "enquiry_id",
@@ -57,22 +32,6 @@ class Quotation(BaseEntity):
         CheckConstraint(
             "version > 0",
             name="ck_quotation_version_positive",
-        ),
-        CheckConstraint(
-            "adult_count >= 0",
-            name="ck_quotation_adult_count_non_negative",
-        ),
-        CheckConstraint(
-            "child_count >= 0",
-            name="ck_quotation_child_count_non_negative",
-        ),
-        CheckConstraint(
-            "senior_count >= 0",
-            name="ck_quotation_senior_count_non_negative",
-        ),
-        CheckConstraint(
-            "adult_count + child_count + senior_count > 0",
-            name="ck_quotation_has_traveller",
         ),
         CheckConstraint(
             "subtotal >= 0",
@@ -104,69 +63,41 @@ class Quotation(BaseEntity):
         nullable=False,
     )
 
-    customer_id: Mapped[uuid.UUID | None] = mapped_column(
+    enquiry_id: Mapped[uuid.UUID ] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            "accounts.id",
-            ondelete="SET NULL",
-        ),
-        nullable=True,
+        ForeignKey("enquiries.id", ondelete="SET NULL"),
+        nullable=False,
         index=True,
     )
 
-    enquiry_id: Mapped[uuid.UUID] = mapped_column(
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            "enquiries.id",
-            ondelete="SET NULL",
-        ),
-        nullable=False,
+        ForeignKey("accounts.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
 
     package_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            "tour_packages.id",
-            ondelete="SET NULL",
-        ),
+        ForeignKey("tour_packages.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     variant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            "tour_variants.id",
-            ondelete="SET NULL",
-        ),
+        ForeignKey("tour_variants.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
-
-    offer_id: Mapped[uuid.UUID | None] = mapped_column(
+    
+    destination_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            "tour_offers.id",
-            ondelete="SET NULL",
-        ),
+        ForeignKey("destinations.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     tour_name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
-    )
-
-    destination_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey(
-            "destinations.id",
-            ondelete="SET NULL",
-        ),
-        nullable=True,
-        index=True,
     )
 
     travel_date: Mapped[datetime | None] = mapped_column(
@@ -177,24 +108,6 @@ class Quotation(BaseEntity):
     return_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
-    )
-    
-    adult_count: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=1,
-    )
-
-    child_count: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=0,
-    )
-
-    senior_count: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=0,
     )
 
     subtotal: Mapped[Decimal] = mapped_column(
@@ -225,60 +138,10 @@ class Quotation(BaseEntity):
         DateTime(timezone=True),
         nullable=True,
     )
-    
-    hotel_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey(
-            "hotels.id",
-            ondelete="SET NULL",
-        ),
-        nullable=True,
-        index=True,
-    )
-
-    room_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey(
-            "rooms.id",
-            ondelete="SET NULL",
-        ),
-        nullable=True,
-        index=True,
-    )
-
-    vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey(
-            "vehicles.id",
-            ondelete="SET NULL",
-        ),
-        nullable=True,
-        index=True,
-    )
-
-    room_count: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=1,
-    )
-
-    vehicle_count: Mapped[int | None] = mapped_column(
-        Integer,
-        nullable=True
-    )
-    meal_plan: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True
-    )
 
     status: Mapped[QuotationStatus] = mapped_column(
-        Enum(
-            QuotationStatus,
-            name="quotation_status",
-        ),
+        Enum(QuotationStatus, name="quotation_status"),
         nullable=False,
-        default=QuotationStatus.DRAFT,
-        index=True,
     )
 
     terms_and_conditions: Mapped[str | None] = mapped_column(
@@ -286,17 +149,33 @@ class Quotation(BaseEntity):
         nullable=True,
     )
 
+    important_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    
+    inclusion: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    
+    exclusion: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     created_by_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            "accounts.id",
-            ondelete="SET NULL",
-        ),
+        ForeignKey("accounts.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    viewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -318,68 +197,27 @@ class Quotation(BaseEntity):
 
 # ── Relationships ───────────────────────────────────────────────────────
 
-    customer: Mapped["Account | None"] = relationship(
+    customer = relationship(
         "Account",
         foreign_keys=[customer_id],
         back_populates="quotations",
     )
 
-    enquiry: Mapped["Enquiry | None"] = relationship(
+    enquiry = relationship(
         "Enquiry",
         back_populates="quotations",
     )
 
-    package: Mapped["TourPackage | None"] = relationship(
-        "TourPackage",
-        back_populates="quotations",
-    )
-
-    variant: Mapped["TourVariant | None"] = relationship(
-        "TourVariant",
-        back_populates="quotations",
-    )
-
-    offer = relationship(
-        "TourOffer",
-        foreign_keys=[offer_id],
-        back_populates="quotations",
-    )
-
-    offer_usages = relationship(
-        "TourOfferUsage",
+    items: Mapped[list["TripItem"]] = relationship(
+        "TripItem",
         back_populates="quotation",
         cascade="all, delete-orphan",
+        order_by="TripItem.sort_order",
     )
 
-    destination_ref = relationship(
-        "Destination",
-        foreign_keys=[destination_id],
-        back_populates="quotations",
-    )
-
-    hotel = relationship(
-        "Hotel",
-        foreign_keys=[hotel_id],
-    )
-
-    room = relationship(
-        "Room",
-        foreign_keys=[room_id],
-    )
-
-    vehicle = relationship(
-        "Vehicle",
-        foreign_keys=[vehicle_id],
-    )
-
-    created_by: Mapped["Account | None"] = relationship(
-        "Account",
-        foreign_keys=[created_by_account_id],
-    )
-
-    items: Mapped[list["QuotationItem"]] = relationship(
-        "QuotationItem",
+    itinerary: Mapped[list["TripItinerary"]] = relationship(
+        "TripItinerary",
         back_populates="quotation",
         cascade="all, delete-orphan",
-        order_by="QuotationItem.created_at",
+        order_by="TripItinerary.day_number",
     )

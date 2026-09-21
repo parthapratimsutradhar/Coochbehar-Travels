@@ -56,12 +56,7 @@ class Destination(ActiveEntity):
         "Enquiry",
         back_populates="destination_ref"
     )
-    
-    quotations = relationship(
-        "Quotation",
-        back_populates="destination_ref"
-    )
-    
+
     hotels = relationship(
         "Hotel",
         back_populates="destination_ref"

@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 from app.core.enums import QuotationStatus
 from app.models.quotation import Quotation
-from app.models.quotation_item import QuotationItem
+from app.models.trip_items import TripItem
 
 
 class QuotationRepository:
@@ -92,7 +92,7 @@ class QuotationRepository:
 
         if items:
             for it in items:
-                q_item = QuotationItem(quotation_id=quotation.id, **it)
+                q_item = TripItem(quotation_id=quotation.id, **it)
                 self.db.add(q_item)
 
         self.db.commit()
@@ -110,7 +110,7 @@ class QuotationRepository:
                 self.db.delete(old_it)
             self.db.flush()
             for it in items:
-                q_item = QuotationItem(quotation_id=quotation.id, **it)
+                q_item = TripItem(quotation_id=quotation.id, **it)
                 self.db.add(q_item)
 
         self.db.commit()

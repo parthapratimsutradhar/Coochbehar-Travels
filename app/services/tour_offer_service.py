@@ -167,6 +167,8 @@ class TourOfferService:
         return result
 
     def apply_offer_to_quotation(self, *, quotation: Quotation, offer_id: uuid.UUID) -> Quotation:
+        if not hasattr(quotation, "variant_id"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This quotation type does not support offers.")
         if quotation.variant_id is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quotation must reference a tour variant before applying an offer.")
         if quotation.customer_id is None:
@@ -179,7 +181,8 @@ class TourOfferService:
             customer_id=quotation.customer_id,
         )
 
-        quotation.offer_id = offer_id
+        if hasattr(quotation, "offer_id"):
+            quotation.offer_id = offer_id
         quotation.discount_amount = result.applied_discount
         quotation.total_amount = result.final_amount
         self.db.add(quotation)
@@ -247,6 +250,8 @@ class TourOfferService:
         return booking
 
     def attach_offer_to_quotation(self, *, quotation: Quotation, offer_id: uuid.UUID, discount_amount: Decimal) -> Quotation:
+        if not hasattr(quotation, "offer_id"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This quotation type does not support offers.")
         quotation.offer_id = offer_id
         quotation.discount_amount = discount_amount
         quotation.total_amount = max(Decimal("0"), quotation.subtotal - discount_amount)
