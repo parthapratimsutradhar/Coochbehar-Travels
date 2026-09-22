@@ -56,7 +56,6 @@ def create_vendor_payment(
         amount=payload.amount,
         vendor_id=payload.vendor_id,
         booking_id=payload.booking_id,
-        cost_id=payload.cost_id,
         currency="INR",
         payment_method=payload.payment_method,
         reference=payload.reference,

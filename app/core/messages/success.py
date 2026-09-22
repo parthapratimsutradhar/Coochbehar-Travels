@@ -45,6 +45,16 @@ class EnquirySuccess(StrEnum):
     UPDATED = "Enquiry updated successfully."
 
 
+class QuotationSuccess(StrEnum):
+    RETRIEVED = "Quotations fetched successfully."
+    CREATED = "Quotation created successfully."
+    VERSION_CREATED = "New quotation version created successfully."
+    UPDATED = "Quotation updated successfully."
+    DELETED = "Quotation deleted successfully."
+    PDF_GENERATED = "Quotation PDF generated successfully."
+    SENT = "Quotation sent successfully."
+
+
 class RoomSuccess(StrEnum):
     RETRIEVED = "Rooms fetched successfully."
     CREATED = "Room created successfully."
@@ -57,3 +67,9 @@ class VehicleSuccess(StrEnum):
     CREATED = "Vehicle created successfully."
     UPDATED = "Vehicle updated successfully."
     DELETED = "Vehicle deleted successfully."
+    
+class VendorSuccess(StrEnum):
+    RETRIEVED = "Vendors fetched successfully."
+    CREATED = "Vendor created successfully."
+    UPDATED = "Vendor updated successfully."
+    DELETED = "Vendor deleted successfully."

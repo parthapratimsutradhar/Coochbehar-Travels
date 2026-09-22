@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 import uuid
 from fastapi import HTTPException, status
@@ -9,11 +10,13 @@ from app.models.booking import Booking
 from app.repository.booking_repo import BookingRepository
 from app.repository.customer_repo import CustomerRepository
 from app.services.financial_service import FinancialService
+from app.services.email_service import EmailService
+from app.services.booking_pdf_service import build_booking_pdf, generate_and_upload_booking_pdf
 from app.schemas.booking import (
-    BookingCostCreate,
     BookingDetailResponse,
     BookingResponse,
     BookingTravelerCreate,
+    BookingTravelerUpdate,
     OfflineBookingCreate,
     OnlineBookingCreate,
 )
@@ -78,7 +81,15 @@ class BookingService:
         }
 
         travellers_data = [t.model_dump() for t in payload.travellers]
-        booking = self.booking_repo.create(booking_data, travellers=travellers_data)
+        cost_items = payload.costs if payload.costs is not None else payload.items
+        booking = self.booking_repo.create(
+            booking_data,
+            travellers=travellers_data,
+            items=[item.model_dump() for item in cost_items],
+            hotels=[hotel.model_dump() for hotel in payload.hotels],
+            vehicles=[vehicle.model_dump() for vehicle in payload.vehicles],
+            itinerary=[day.model_dump() for day in payload.itinerary],
+        )
 
         # 2. Record advance payment if present
         if advance > Decimal(0):
@@ -135,8 +146,8 @@ class BookingService:
 
     def get_booking_detail(self, booking_id: uuid.UUID) -> BookingDetailResponse:
         booking = self.get_booking(booking_id)
-        costs = self.booking_repo.get_costs_for_booking(booking.id)
-        total_costs = sum((c.actual_amount for c in costs), Decimal(0))
+        costs = list(booking.trip_items)
+        total_costs = sum((c.total_price for c in costs), Decimal(0))
         gross_profit = booking.total_amount - total_costs
         margin = (
             round(float((gross_profit / booking.total_amount) * 100), 2)
@@ -176,7 +187,8 @@ class BookingService:
             gross_profit=gross_profit,
             profit_margin=margin,
             travellers=[t for t in booking.travellers],
-            costs=[c for c in costs],
+            items=list(booking.trip_items),
+            itinerary=list(booking.trip_itinerary),
             status_history=[h for h in booking.status_history],
         )
 
@@ -184,12 +196,22 @@ class BookingService:
         self,
         page: int = 1,
         page_size: int = 20,
+        customer_id: uuid.UUID | None = None,
+        month: int | None = None,
+        year: int | None = None,
         status: BookingStatus | None = None,
         source: BookingSource | None = None,
         search: str | None = None,
     ) -> dict:
         items, total = self.booking_repo.list_all(
-            page=page, page_size=page_size, status=status, source=source, search=search
+            page=page,
+            page_size=page_size,
+            customer_id=customer_id,
+            month=month,
+            year=year,
+            status=status,
+            source=source,
+            search=search,
         )
         total_pages = (total + page_size - 1) // page_size if total else 0
         return {
@@ -200,47 +222,47 @@ class BookingService:
             "total_pages": total_pages,
         }
 
-    def list_my_bookings(
-        self,
-        customer_id: uuid.UUID,
-        month: int | None = None,
-        year: int | None = None,
-        status: BookingStatus | None = None,
-        skip: int = 0,
-        limit: int = 50,
-    ) -> list[Booking]:
-        return self.booking_repo.list_for_customer(
-            customer_id=customer_id, month=month, year=year, status=status, skip=skip, limit=limit
-        )
-
     def update_booking_status(
         self,
         booking_id: uuid.UUID,
         new_status: BookingStatus,
         reason: str | None = None,
+        changed_by_id: uuid.UUID | None = None,
     ) -> Booking:
         booking = self.get_booking(booking_id)
-        return self.booking_repo.update_status(booking, new_status, reason=reason)
+        return self.booking_repo.update_status(
+            booking,
+            new_status,
+            reason=reason,
+            changed_by_id=changed_by_id,
+        )
 
-    def add_booking_cost(
-        self,
-        booking_id: uuid.UUID,
-        payload: BookingCostCreate,
-        recorded_by_account_id: uuid.UUID | None = None,
-    ) -> dict:
+    def delete_booking(self, booking_id: uuid.UUID) -> None:
+        self.booking_repo.delete(self.get_booking(booking_id))
+
+    def list_bookings_for_day(self, travel_day: date) -> list[Booking]:
+        return self.booking_repo.list_for_day(travel_day)
+
+    async def generate_booking_pdf(self, booking_id: uuid.UUID) -> dict:
+        return await generate_and_upload_booking_pdf(self.get_booking(booking_id))
+
+    def render_booking_pdf(self, booking_id: uuid.UUID) -> tuple[str, bytes]:
         booking = self.get_booking(booking_id)
-        cost = self.booking_repo.add_cost(booking.id, payload.model_dump())
-        if recorded_by_account_id is not None:
-            from app.models.audit_log import AuditLog
-            self.db.add(AuditLog(
-                account_id=recorded_by_account_id,
-                action="BOOKING_COST_CREATED",
-                entity_type="BookingCost",
-                entity_id=cost.id,
-                new_values={"booking_id": str(booking.id), "amount": str(cost.actual_amount), "cost_type": cost.cost_type},
-            ))
-            self.db.commit()
-        return cost
+        return booking.booking_code, build_booking_pdf(booking)
+
+    async def email_booking(self, booking_id: uuid.UUID, recipient_email: str) -> str:
+        booking = self.get_booking(booking_id)
+        uploaded = await generate_and_upload_booking_pdf(booking)
+        pdf_url = uploaded.get("secure_url") or uploaded.get("url")
+        if not pdf_url:
+            raise HTTPException(status_code=502, detail="Booking PDF upload did not return a download URL.")
+        customer_name = booking.customer.name if booking.customer else "Customer"
+        EmailService().send_email(
+            recipient_email,
+            f"Booking {booking.booking_code} - {booking.package.title if booking.package else 'Travel booking'}",
+            f"Dear {customer_name},\n\nYour booking PDF is available here:\n{pdf_url}\n\nRegards,\nCoochbehar Travels",
+        )
+        return pdf_url
 
     def add_traveller(self, booking_id: uuid.UUID, payload: BookingTravelerCreate) -> dict:
         booking = self.get_booking(booking_id)
@@ -250,3 +272,17 @@ class BookingService:
         self.db.commit()
         self.db.refresh(traveler)
         return traveler
+
+    def update_traveller(self, booking_id: uuid.UUID, traveller_id: uuid.UUID, payload: BookingTravelerUpdate):
+        booking = self.get_booking(booking_id)
+        traveller = next((item for item in booking.travellers if item.id == traveller_id), None)
+        if traveller is None:
+            raise HTTPException(status_code=404, detail="Traveller not found.")
+        return self.booking_repo.update_traveller(traveller, payload.model_dump(exclude_unset=True))
+
+    def delete_traveller(self, booking_id: uuid.UUID, traveller_id: uuid.UUID) -> None:
+        booking = self.get_booking(booking_id)
+        traveller = next((item for item in booking.travellers if item.id == traveller_id), None)
+        if traveller is None:
+            raise HTTPException(status_code=404, detail="Traveller not found.")
+        self.booking_repo.delete_traveller(traveller)

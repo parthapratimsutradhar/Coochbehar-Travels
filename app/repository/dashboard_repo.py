@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session
 from app.core.enums import AccountRole, BookingStatus, QuotationStatus
 from app.models.account import Account
 from app.models.booking import Booking
-from app.models.booking_costs import BookingCost
 from app.models.financial_transaction import FinancialTransaction
 from app.models.enquiry import Enquiry
 from app.models.quotation import Quotation
+from app.models.trip_items import TripItem
 
 
 class DashboardRepository:
@@ -67,8 +67,9 @@ class DashboardRepository:
         )
         pending_collection = Decimal(self.db.execute(stmt_pending).scalar_one())
 
-        # Projected direct costs from booking costs
-        stmt_cost = select(func.coalesce(func.sum(BookingCost.estimated_amount), 0))
+        stmt_cost = select(func.coalesce(func.sum(TripItem.total_price), 0)).where(
+            TripItem.booking_id.is_not(None)
+        )
         projected_cost = Decimal(self.db.execute(stmt_cost).scalar_one())
 
         projected_profit = max(Decimal(0), confirmed_revenue - projected_cost)
@@ -118,8 +119,8 @@ class DashboardRepository:
         # Direct costs
         booking_ids = [b.id for b in bookings]
         if booking_ids:
-            stmt_cost = select(func.coalesce(func.sum(BookingCost.actual_amount), 0)).where(
-                BookingCost.booking_id.in_(booking_ids)
+            stmt_cost = select(func.coalesce(func.sum(TripItem.total_price), 0)).where(
+                TripItem.booking_id.in_(booking_ids)
             )
             direct_cost = Decimal(self.db.execute(stmt_cost).scalar_one())
         else:

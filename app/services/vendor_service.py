@@ -40,3 +40,6 @@ class VendorService:
     def update_vendor(self, vendor_id: uuid.UUID, payload: VendorUpdate) -> Vendor:
         vendor = self.get_vendor(vendor_id)
         return self.repo.update(vendor, payload.model_dump(exclude_unset=True))
+
+    def delete_vendor(self, vendor_id: uuid.UUID) -> None:
+        self.repo.delete(self.get_vendor(vendor_id))

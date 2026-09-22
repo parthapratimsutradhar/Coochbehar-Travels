@@ -10,12 +10,10 @@ class VendorBase(SchemaBase):
     contact: str | None = Field(default=None, max_length=100)
     email: str | None = Field(default=None, max_length=100)
     address: str | None = Field(default=None, max_length=255)
-    payment_terms: str | None = Field(default=None, max_length=100)
-    status: str = Field(default="ACTIVE", max_length=30)
 
 
 class VendorCreate(VendorBase):
-    vendor_code: str | None = None
+    pass
 
 
 class VendorUpdate(SchemaBase):
@@ -24,14 +22,11 @@ class VendorUpdate(SchemaBase):
     contact: str | None = Field(default=None, max_length=100)
     email: str | None = Field(default=None, max_length=100)
     address: str | None = Field(default=None, max_length=255)
-    payment_terms: str | None = Field(default=None, max_length=100)
-    status: str | None = Field(default=None, max_length=30)
 
 
 class VendorResponse(VendorBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    vendor_code: str
     created_at: datetime | None = None
     updated_at: datetime | None = None

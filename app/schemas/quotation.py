@@ -1,8 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
-from pydantic import ConfigDict, Field
-from app.core.enums import CostItemType, QuotationStatus
+from pydantic import ConfigDict, EmailStr, Field, model_validator
+from app.core.enums import CostItemType, QuotationStatus, RoomType, VehicleType
 from app.schemas.base import SchemaBase
 
 
@@ -13,6 +13,63 @@ class QuotationItemBase(SchemaBase):
     quantity: int = Field(default=1, ge=1)
     unit_price: Decimal = Field(default=Decimal(0), ge=0)
     total_price: Decimal = Field(default=Decimal(0), ge=0)
+
+
+class QuotationHotelCreate(SchemaBase):
+    hotel_id: UUID | None = None
+    hotel_name: str = Field(..., min_length=1, max_length=255)
+    check_in: datetime
+    check_out: datetime
+    nights: int = Field(..., ge=1)
+    room_count: int = Field(default=1, ge=1)
+    room_type: RoomType | None = None
+
+
+class QuotationHotelResponse(QuotationHotelCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    trip_item_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class QuotationVehicleCreate(SchemaBase):
+    vehicle_id: UUID | None = None
+    vehicle_name: str = Field(..., min_length=1, max_length=255)
+    vehicle_type: VehicleType | None = None
+    start_date: datetime
+    end_date: datetime
+    rental_minutes: int = Field(..., ge=1)
+    quantity: int = Field(default=1, ge=1)
+
+
+class QuotationVehicleResponse(QuotationVehicleCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    trip_item_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class QuotationItineraryCreate(SchemaBase):
+    day_number: int = Field(..., ge=1)
+    date: datetime | None = None
+    title: str = Field(..., min_length=1, max_length=255)
+    description: str | None = None
+    overnight_location: str | None = Field(default=None, max_length=255)
+    meal_plan: str | None = Field(default=None, max_length=50)
+    sort_order: int = Field(default=0, ge=0)
+
+
+class QuotationItineraryResponse(QuotationItineraryCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    quotation_id: UUID
+    created_at: datetime
+    updated_at: datetime
 
 
 class QuotationItemCreate(QuotationItemBase):
@@ -33,60 +90,56 @@ class QuotationBase(SchemaBase):
     enquiry_id: UUID
     package_id: UUID | None = None
     variant_id: UUID | None = None
-    offer_id: UUID | None = None
     destination_id: UUID | None = None
-    hotel_id: UUID | None = None
-    room_id: UUID | None = None
-    vehicle_id: UUID | None = None
     tour_name: str = Field(..., min_length=1, max_length=255)
     travel_date: datetime | None = None
     return_date: datetime | None = None
-    adult_count: int = Field(default=1, ge=0)
-    child_count: int = Field(default=0, ge=0)
-    senior_count: int = Field(default=0, ge=0)
-    room_count: int = Field(default=1, ge=1)
-    vehicle_count: int | None = Field(default=None, ge=1)
-    meal_plan: str | None = Field(default=None, max_length=255)
     subtotal: Decimal = Field(default=Decimal(0), ge=0)
     discount_amount: Decimal = Field(default=Decimal(0), ge=0)
     tax_amount: Decimal = Field(default=Decimal(0), ge=0)
     total_amount: Decimal = Field(default=Decimal(0), ge=0)
     valid_until: datetime | None = None
     terms_and_conditions: str | None = None
+    important_notes: str | None = None
+    inclusion: str | None = None
+    exclusion: str | None = None
 
 
 class QuotationCreate(QuotationBase):
-    items: list[QuotationItemCreate] = []
+    items: list[QuotationItemCreate] = Field(default_factory=list)
+    hotels: list[QuotationHotelCreate] = Field(default_factory=list)
+    vehicles: list[QuotationVehicleCreate] = Field(default_factory=list)
+    itinerary: list[QuotationItineraryCreate] = Field(default_factory=list)
 
 
-class QuotationUpdate(SchemaBase):
+class QuotationVersionCreate(SchemaBase):
+    package_id: UUID | None = None
+    variant_id: UUID | None = None
     destination_id: UUID | None = None
-    hotel_id: UUID | None = None
-    room_id: UUID | None = None
-    vehicle_id: UUID | None = None
     tour_name: str | None = Field(default=None, min_length=1, max_length=255)
     travel_date: datetime | None = None
     return_date: datetime | None = None
-    adult_count: int | None = Field(default=None, ge=0)
-    child_count: int | None = Field(default=None, ge=0)
-    senior_count: int | None = Field(default=None, ge=0)
-    room_count: int | None = Field(default=None, ge=1)
-    vehicle_count: int | None = Field(default=None, ge=1)
-    meal_plan: str | None = Field(default=None, max_length=255)
     subtotal: Decimal | None = Field(default=None, ge=0)
     discount_amount: Decimal | None = Field(default=None, ge=0)
     tax_amount: Decimal | None = Field(default=None, ge=0)
     total_amount: Decimal | None = Field(default=None, ge=0)
-    offer_id: UUID | None = None
     valid_until: datetime | None = None
     terms_and_conditions: str | None = None
-    rejected_reason: str | None = None
-    status: QuotationStatus | None = None
+    important_notes: str | None = None
+    inclusion: str | None = None
+    exclusion: str | None = None
     items: list[QuotationItemCreate] | None = None
+    hotels: list[QuotationHotelCreate] | None = None
+    vehicles: list[QuotationVehicleCreate] | None = None
+    itinerary: list[QuotationItineraryCreate] | None = None
 
 
 class QuotationStatusUpdate(SchemaBase):
     status: QuotationStatus
+
+
+class QuotationEmailRequest(SchemaBase):
+    recipient_email: EmailStr
 
 
 class QuotationResponse(QuotationBase):
@@ -103,7 +156,27 @@ class QuotationResponse(QuotationBase):
     rejected_reason: str | None
     created_at: datetime
     updated_at: datetime
-    items: list[QuotationItemResponse] = []
+    items: list[QuotationItemResponse] = Field(default_factory=list)
+    hotels: list[QuotationHotelResponse] = Field(default_factory=list)
+    vehicles: list[QuotationVehicleResponse] = Field(default_factory=list)
+    itinerary: list[QuotationItineraryResponse] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def flatten_trip_details(cls, value):
+        if isinstance(value, dict):
+            return value
+        data = {
+            field: getattr(value, field, None)
+            for field in cls.model_fields
+            if field not in {"items", "hotels", "vehicles", "itinerary"}
+        }
+        items = list(getattr(value, "items", []) or [])
+        data["items"] = items
+        data["hotels"] = [item.hotel for item in items if getattr(item, "hotel", None)]
+        data["vehicles"] = [item.vehicle for item in items if getattr(item, "vehicle", None)]
+        data["itinerary"] = list(getattr(value, "itinerary", []) or [])
+        return data
 
 
 class QuotationConvertToBookingRequest(SchemaBase):

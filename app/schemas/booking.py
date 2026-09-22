@@ -1,14 +1,23 @@
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
-from pydantic import ConfigDict, Field, AliasChoices
+from pydantic import ConfigDict, EmailStr, Field, AliasChoices
 from app.core.enums import BookingSource, BookingStatus, PaymentMethod
 from app.schemas.base import SchemaBase
+from app.schemas.quotation import (
+    QuotationHotelCreate,
+    QuotationHotelResponse,
+    QuotationItineraryCreate,
+    QuotationItineraryResponse,
+    QuotationItemCreate,
+    QuotationVehicleCreate,
+    QuotationVehicleResponse,
+)
 
 
 class BookingTravelerBase(SchemaBase):
     full_name: str = Field(..., min_length=1, max_length=100)
-    traveler_type: str = Field(default="ADULT", max_length=20)
+    traveler_type: str | None = Field(default=None, max_length=20)
     gender: str | None = Field(default=None, max_length=20)
     date_of_birth: date | None = None
     mobile: str | None = Field(default=None, max_length=20)
@@ -21,29 +30,17 @@ class BookingTravelerCreate(BookingTravelerBase):
     pass
 
 
+class BookingTravelerUpdate(SchemaBase):
+    full_name: str | None = Field(default=None, min_length=1, max_length=100)
+    gender: str | None = Field(default=None, max_length=20)
+    date_of_birth: date | None = None
+    mobile: str | None = Field(default=None, max_length=20)
+    email: str | None = Field(default=None, max_length=255)
+    relationship_to_customer: str | None = Field(default=None, max_length=30)
+    is_primary: bool | None = None
+
+
 class BookingTravelerResponse(BookingTravelerBase):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    booking_id: UUID
-
-
-class BookingCostBase(SchemaBase):
-    cost_type: str = Field(..., max_length=50)
-    description: str | None = Field(default=None, max_length=200)
-    vendor_id: UUID | None = None
-    estimated_amount: Decimal = Field(default=Decimal(0), ge=0)
-    actual_amount: Decimal = Field(default=Decimal(0), ge=0)
-    paid_amount: Decimal = Field(default=Decimal(0), ge=0)
-    due_amount: Decimal = Field(default=Decimal(0), ge=0)
-    status: str = Field(default="PENDING", max_length=30)
-
-
-class BookingCostCreate(BookingCostBase):
-    pass
-
-
-class BookingCostResponse(BookingCostBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -56,7 +53,7 @@ class BookingStatusHistoryResponse(SchemaBase):
     id: UUID
     booking_id: UUID
     from_status: str | None = Field(default=None, validation_alias=AliasChoices("from_status", "previous_status"))
-    to_status: str = Field(validation_alias=AliasChoices("to_status", "status"))
+    to_status: str = Field(validation_alias=AliasChoices("to_status", "new_status", "status"))
     reason: str | None = Field(default=None, validation_alias=AliasChoices("reason", "notes"))
     changed_at: datetime | None = None
     created_at: datetime | None = Field(default=None, validation_alias=AliasChoices("created_at", "changed_at"))
@@ -86,7 +83,12 @@ class OfflineBookingCreate(SchemaBase):
     sales_account_id: UUID | None = None
     source: BookingSource = BookingSource.OFFLINE
     special_notes: str | None = None
-    travellers: list[BookingTravelerCreate] = []
+    travellers: list[BookingTravelerCreate] = Field(default_factory=list)
+    items: list[QuotationItemCreate] = Field(default_factory=list)
+    costs: list[QuotationItemCreate] | None = None
+    hotels: list[QuotationHotelCreate] = Field(default_factory=list)
+    vehicles: list[QuotationVehicleCreate] = Field(default_factory=list)
+    itinerary: list[QuotationItineraryCreate] = Field(default_factory=list)
 
 
 class OnlineBookingCreate(SchemaBase):
@@ -100,7 +102,7 @@ class OnlineBookingCreate(SchemaBase):
     senior_count: int = Field(default=0, ge=0)
     notes: str | None = None
     source: BookingSource = BookingSource.WEBSITE
-    travellers: list[BookingTravelerCreate] = []
+    travellers: list[BookingTravelerCreate] = Field(default_factory=list)
 
 
 class BookingUpdate(SchemaBase):
@@ -118,6 +120,10 @@ class BookingUpdate(SchemaBase):
 class BookingStatusUpdate(SchemaBase):
     status: BookingStatus
     reason: str | None = None
+
+
+class BookingEmailRequest(SchemaBase):
+    recipient_email: EmailStr
 
 
 class BookingResponse(SchemaBase):
@@ -150,10 +156,26 @@ class BookingResponse(SchemaBase):
     updated_at: datetime
 
 
+class BookingTripItemResponse(SchemaBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    booking_id: UUID
+    item_type: str
+    name: str
+    description: str | None
+    quantity: int
+    unit_price: Decimal
+    total_price: Decimal
+    hotel: QuotationHotelResponse | None = None
+    vehicle: QuotationVehicleResponse | None = None
+
+
 class BookingDetailResponse(BookingResponse):
-    travellers: list[BookingTravelerResponse] = []
-    costs: list[BookingCostResponse] = []
-    status_history: list[BookingStatusHistoryResponse] = []
+    travellers: list[BookingTravelerResponse] = Field(default_factory=list)
+    items: list[BookingTripItemResponse] = Field(default_factory=list)
+    itinerary: list[QuotationItineraryResponse] = Field(default_factory=list)
+    status_history: list[BookingStatusHistoryResponse] = Field(default_factory=list)
     customer_name: str | None = None
     customer_mobile: str | None = None
     gross_profit: Decimal | None = None

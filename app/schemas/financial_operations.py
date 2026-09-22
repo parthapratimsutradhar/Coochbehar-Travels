@@ -12,7 +12,6 @@ class VendorPaymentCreate(SchemaBase):
     amount: Decimal = Field(..., gt=0)
     vendor_id: UUID
     booking_id: UUID | None = None
-    cost_id: UUID | None = None
     payment_method: PaymentMethod = PaymentMethod.BANK_TRANSFER
     reference: str | None = Field(default=None, max_length=255)
     description: str | None = None

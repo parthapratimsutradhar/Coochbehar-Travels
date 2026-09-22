@@ -12,7 +12,6 @@ from app.core.enums import (
     PaymentMethod,
 )
 from app.models.audit_log import AuditLog
-from app.models.booking_costs import BookingCost
 from app.models.financial_account import FinancialAccount
 from app.models.financial_transaction import FinancialTransaction
 from app.models.financial_transaction_entry import FinancialTransactionEntry
@@ -279,7 +278,6 @@ class FinancialService:
         amount: Decimal,
         vendor_id: uuid.UUID,
         booking_id: uuid.UUID | None,
-        cost_id: uuid.UUID | None,
         currency: str,
         payment_method: PaymentMethod,
         reference: str | None,
@@ -314,18 +312,6 @@ class FinancialService:
                 created_by_account_id=recorded_by_account_id,
                 transaction_date=transaction_date,
             )
-            if cost_id is not None:
-                cost = self.db.query(BookingCost).filter(BookingCost.id == cost_id).one_or_none()
-                if cost is None:
-                    raise HTTPException(status_code=404, detail="Booking cost not found.")
-                if cost.vendor_id != vendor_id:
-                    raise HTTPException(status_code=422, detail="Vendor payment does not match booking cost vendor.")
-                new_paid = cost.paid_amount + amount
-                if new_paid > cost.actual_amount:
-                    raise HTTPException(status_code=422, detail="Vendor payment exceeds booking cost.")
-                cost.paid_amount = new_paid
-                cost.due_amount = max(Decimal("0"), cost.actual_amount - new_paid)
-                cost.status = "PAID" if cost.due_amount == 0 else "PARTIALLY_PAID"
             self.db.add(AuditLog(
                 account_id=recorded_by_account_id,
                 action="VENDOR_PAYMENT_CREATED",

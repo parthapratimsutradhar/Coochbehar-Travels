@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import BookingStatus, FinancialTransactionStatus, FinancialTransactionType, FinancialAccountOwnerType, FinancialAccountType
 from app.models.booking import Booking
-from app.models.booking_costs import BookingCost
 from app.models.financial_account import FinancialAccount
 from app.models.financial_transaction import FinancialTransaction
 from app.models.financial_transaction_entry import FinancialTransactionEntry
+from app.models.trip_items import TripItem
 from app.schemas.financial_reports import FinancialDashboardResponse, FinancialReportResponse
 
 
@@ -41,16 +41,16 @@ class FinancialReportingService:
         ).scalar() or 0)
         collections = self._sum_transactions(FinancialTransactionType.BOOKING_PAYMENT)
         expenses = self._sum_transactions(FinancialTransactionType.EXPENSE)
-        direct_cost = Decimal(self.db.query(func.coalesce(func.sum(BookingCost.actual_amount), 0)).scalar() or 0)
+        direct_cost = Decimal(self.db.query(func.coalesce(func.sum(TripItem.total_price), 0)).filter(TripItem.booking_id.is_not(None)).scalar() or 0)
         customer_outstanding = Decimal(self.db.query(func.coalesce(func.sum(Booking.due_amount), 0)).filter(
             Booking.status != BookingStatus.CANCELLED
         ).scalar() or 0)
-        vendor_payables = Decimal(self.db.query(func.coalesce(func.sum(BookingCost.due_amount), 0)).scalar() or 0)
+        vendor_payables = Decimal(0)
         future_revenue = Decimal(self.db.query(func.coalesce(func.sum(Booking.total_amount), 0)).filter(
             Booking.status.in_(CONFIRMED_STATUSES)
         ).scalar() or 0)
-        future_cost = Decimal(self.db.query(func.coalesce(func.sum(BookingCost.estimated_amount), 0)).join(
-            Booking, Booking.id == BookingCost.booking_id
+        future_cost = Decimal(self.db.query(func.coalesce(func.sum(TripItem.total_price), 0)).join(
+            Booking, Booking.id == TripItem.booking_id
         ).filter(Booking.status.in_(CONFIRMED_STATUSES)).scalar() or 0)
         future_collections = Decimal(self.db.query(func.coalesce(func.sum(Booking.paid_amount), 0)).filter(
             Booking.status.in_(CONFIRMED_STATUSES)
@@ -58,9 +58,7 @@ class FinancialReportingService:
         future_outstanding = Decimal(self.db.query(func.coalesce(func.sum(Booking.due_amount), 0)).filter(
             Booking.status.in_(CONFIRMED_STATUSES)
         ).scalar() or 0)
-        expected_vendor = Decimal(self.db.query(func.coalesce(func.sum(BookingCost.due_amount), 0)).join(
-            Booking, Booking.id == BookingCost.booking_id
-        ).filter(Booking.status.in_(CONFIRMED_STATUSES)).scalar() or 0)
+        expected_vendor = Decimal(0)
         wallet_credits = self._wallet_entry_sum("credit")
         wallet_debits = self._wallet_entry_sum("debit")
         return FinancialDashboardResponse(
@@ -126,7 +124,7 @@ class FinancialReportingService:
         totals: dict[str, Decimal] = {}
         if normalized in {"revenue", "booking-profitability", "destination-profitability", "tour-profitability"}:
             for booking in bookings.all():
-                costs = Decimal(self.db.query(func.coalesce(func.sum(BookingCost.actual_amount), 0)).filter(BookingCost.booking_id == booking.id).scalar() or 0)
+                costs = Decimal(self.db.query(func.coalesce(func.sum(TripItem.total_price), 0)).filter(TripItem.booking_id == booking.id).scalar() or 0)
                 rows.append({
                     "booking_id": str(booking.id),
                     "booking_code": booking.booking_code,

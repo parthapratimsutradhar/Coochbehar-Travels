@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin_or_staff
+from app.core.messages.success import VendorSuccess
 from app.db.database import get_db
 from app.models.account import Account
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
-from app.schemas.response import ErrorResponse, SuccessResponse
+from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.schemas.vendor import VendorCreate, VendorResponse, VendorUpdate
 from app.services.vendor_service import VendorService
 
@@ -19,7 +20,7 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=SuccessResponse[VendorResponse],
+    response_model=ActionResponse,
     status_code=status.HTTP_201_CREATED,
     responses={422: {"model": ErrorResponse}},
     summary="Create a new vendor",
@@ -29,12 +30,9 @@ def create_vendor(
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
-    service = VendorService(db)
-    vendor = service.create_vendor(payload)
-    return SuccessResponse(
-        message="Vendor created successfully",
-        data=VendorResponse.model_validate(vendor),
-    )
+    del current_user
+    VendorService(db).create_vendor(payload)
+    return ActionResponse(message=VendorSuccess.CREATED)
 
 
 @router.get(
@@ -50,10 +48,11 @@ def list_vendors(
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
+    del current_user
     service = VendorService(db)
     result = service.list_vendors(page=page, page_size=page_size, type=type, search=search)
     return PaginatedResponse(
-        message="Vendors fetched successfully",
+        message=VendorSuccess.RETRIEVED,
         data=[VendorResponse.model_validate(v) for v in result["items"]],
         pagination=PaginationMeta(
             current_page=result["page"],
@@ -66,28 +65,9 @@ def list_vendors(
     )
 
 
-@router.get(
-    "/{vendor_id}",
-    response_model=SuccessResponse[VendorResponse],
-    responses={404: {"model": ErrorResponse}},
-    summary="Get vendor detail",
-)
-def get_vendor(
-    vendor_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: Account = Depends(get_current_admin_or_staff),
-):
-    service = VendorService(db)
-    vendor = service.get_vendor(vendor_id)
-    return SuccessResponse(
-        message="Vendor fetched successfully",
-        data=VendorResponse.model_validate(vendor),
-    )
-
-
 @router.patch(
     "/{vendor_id}",
-    response_model=SuccessResponse[VendorResponse],
+    response_model=ActionResponse,
     responses={404: {"model": ErrorResponse}},
     summary="Update a vendor",
 )
@@ -97,9 +77,22 @@ def update_vendor(
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
-    service = VendorService(db)
-    vendor = service.update_vendor(vendor_id, payload)
-    return SuccessResponse(
-        message="Vendor updated successfully",
-        data=VendorResponse.model_validate(vendor),
-    )
+    del current_user
+    VendorService(db).update_vendor(vendor_id, payload)
+    return ActionResponse(message=VendorSuccess.UPDATED)
+
+
+@router.delete(
+    "/{vendor_id}",
+    response_model=ActionResponse,
+    responses={404: {"model": ErrorResponse}},
+    summary="Delete a vendor",
+)
+def delete_vendor(
+    vendor_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Account = Depends(get_current_admin_or_staff),
+) -> ActionResponse:
+    del current_user
+    VendorService(db).delete_vendor(vendor_id)
+    return ActionResponse(message=VendorSuccess.DELETED)

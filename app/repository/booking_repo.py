@@ -1,12 +1,16 @@
 from decimal import Decimal
 import uuid
-from sqlalchemy import extract, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 from app.core.enums import BookingSource, BookingStatus
 from app.models.booking import Booking
-from app.models.booking_costs import BookingCost
 from app.models.booking_status_history import BookingStatusHistory
 from app.models.booking_traveler import BookingTraveler
+from app.models.enquiry import Enquiry
+from app.models.trip_items import TripItem
+from app.models.trip_itinerary import TripItinerary
+from app.models.trip_hotel import TripHotel
+from app.models.trip_vehicle import TripVehicle
 
 
 class BookingRepository:
@@ -23,6 +27,9 @@ class BookingRepository:
                 joinedload(Booking.departure),
                 joinedload(Booking.customer),
                 joinedload(Booking.status_history),
+                joinedload(Booking.trip_items).joinedload(TripItem.hotel),
+                joinedload(Booking.trip_items).joinedload(TripItem.vehicle),
+                joinedload(Booking.trip_itinerary),
             )
             .where(Booking.id == booking_id)
         )
@@ -35,6 +42,9 @@ class BookingRepository:
                 joinedload(Booking.travellers),
                 joinedload(Booking.package),
                 joinedload(Booking.customer),
+                joinedload(Booking.trip_items).joinedload(TripItem.hotel),
+                joinedload(Booking.trip_items).joinedload(TripItem.vehicle),
+                joinedload(Booking.trip_itinerary),
             )
             .where(Booking.booking_code == booking_code)
         )
@@ -44,6 +54,9 @@ class BookingRepository:
         self,
         page: int = 1,
         page_size: int = 20,
+        customer_id: uuid.UUID | None = None,
+        month: int | None = None,
+        year: int | None = None,
         status: BookingStatus | None = None,
         source: BookingSource | None = None,
         search: str | None = None,
@@ -51,9 +64,18 @@ class BookingRepository:
         stmt = select(Booking).options(
             joinedload(Booking.customer),
             joinedload(Booking.package),
+            joinedload(Booking.trip_items).joinedload(TripItem.hotel),
+            joinedload(Booking.trip_items).joinedload(TripItem.vehicle),
+            joinedload(Booking.trip_itinerary),
         )
         if status is not None:
             stmt = stmt.where(Booking.status == status)
+        if customer_id is not None:
+            stmt = stmt.where(Booking.customer_id == customer_id)
+        if month is not None:
+            stmt = stmt.where(func.extract("month", Booking.created_at) == month)
+        if year is not None:
+            stmt = stmt.where(func.extract("year", Booking.created_at) == year)
         if source is not None:
             stmt = stmt.where(Booking.source == source)
         if search:
@@ -66,28 +88,26 @@ class BookingRepository:
         ).unique().scalars().all()
         return list(bookings), total
 
-    def list_for_customer(
-        self,
-        customer_id: uuid.UUID,
-        month: int | None = None,
-        year: int | None = None,
-        status: BookingStatus | None = None,
-        skip: int = 0,
-        limit: int = 50,
-    ) -> list[Booking]:
+    def list_for_day(self, travel_day) -> list[Booking]:
         stmt = (
             select(Booking)
-            .options(joinedload(Booking.package), joinedload(Booking.variant), joinedload(Booking.departure))
-            .where(Booking.customer_id == customer_id)
+            .outerjoin(Enquiry, Enquiry.id == Booking.enquiry_id)
+            .outerjoin(TripItinerary, TripItinerary.booking_id == Booking.id)
+            .options(
+                joinedload(Booking.customer),
+                joinedload(Booking.package),
+                joinedload(Booking.variant),
+                joinedload(Booking.travellers),
+                joinedload(Booking.trip_items).joinedload(TripItem.hotel),
+                joinedload(Booking.trip_items).joinedload(TripItem.vehicle),
+                joinedload(Booking.trip_itinerary),
+            )
+            .where(
+                (Enquiry.travel_date == travel_day)
+                | (func.date(TripItinerary.date) == travel_day)
+            )
+            .order_by(Booking.created_at.desc())
         )
-        if status is not None:
-            stmt = stmt.where(Booking.status == status)
-        if month is not None:
-            stmt = stmt.where(extract("month", Booking.created_at) == month)
-        if year is not None:
-            stmt = stmt.where(extract("year", Booking.created_at) == year)
-
-        stmt = stmt.order_by(Booking.created_at.desc()).offset(skip).limit(limit)
         return list(self.db.execute(stmt).unique().scalars().all())
 
     def list_for_offer(self, offer_id: uuid.UUID) -> list[Booking]:
@@ -110,7 +130,10 @@ class BookingRepository:
         self,
         booking_data: dict,
         travellers: list[dict] | None = None,
-        costs: list[dict] | None = None,
+        items: list[dict] | None = None,
+        hotels: list[dict] | None = None,
+        vehicles: list[dict] | None = None,
+        itinerary: list[dict] | None = None,
     ) -> Booking:
         booking = Booking(**booking_data)
         self.db.add(booking)
@@ -121,15 +144,30 @@ class BookingRepository:
                 traveler = BookingTraveler(booking_id=booking.id, **tr)
                 self.db.add(traveler)
 
-        if costs:
-            for c in costs:
-                cost = BookingCost(booking_id=booking.id, **c)
-                self.db.add(cost)
+        created_items = []
+        for index, item_data in enumerate(items or []):
+            item = TripItem(booking_id=booking.id, **item_data)
+            item.sort_order = index
+            self.db.add(item)
+            self.db.flush()
+            created_items.append(item)
+        for item, hotel_data in zip(
+            [item for item in created_items if item.item_type.value == "hotel"],
+            hotels or [],
+        ):
+            self.db.add(TripHotel(trip_item_id=item.id, **hotel_data))
+        for item, vehicle_data in zip(
+            [item for item in created_items if item.item_type.value in {"transport", "transfer"}],
+            vehicles or [],
+        ):
+            self.db.add(TripVehicle(trip_item_id=item.id, **vehicle_data))
+        for day in itinerary or []:
+            self.db.add(TripItinerary(booking_id=booking.id, **day))
 
         history = BookingStatusHistory(
             booking_id=booking.id,
             previous_status=None,
-            status=booking.status,
+            new_status=booking.status,
             notes="Initial booking creation",
         )
         self.db.add(history)
@@ -151,6 +189,7 @@ class BookingRepository:
         booking: Booking,
         new_status: BookingStatus,
         reason: str | None = None,
+        changed_by_id: uuid.UUID | None = None,
     ) -> Booking:
         old_status = booking.status
         booking.status = new_status
@@ -158,7 +197,8 @@ class BookingRepository:
         history = BookingStatusHistory(
             booking_id=booking.id,
             previous_status=old_status,
-            status=new_status,
+            new_status=new_status,
+            changed_by_id=changed_by_id,
             notes=reason,
         )
         self.db.add(history)
@@ -166,16 +206,21 @@ class BookingRepository:
         self.db.refresh(booking)
         return booking
 
-    def add_cost(self, booking_id: uuid.UUID, cost_data: dict) -> BookingCost:
-        cost = BookingCost(booking_id=booking_id, **cost_data)
-        self.db.add(cost)
+    def delete(self, booking: Booking) -> None:
+        self.db.delete(booking)
         self.db.commit()
-        self.db.refresh(cost)
-        return cost
 
-    def get_costs_for_booking(self, booking_id: uuid.UUID) -> list[BookingCost]:
-        stmt = select(BookingCost).where(BookingCost.booking_id == booking_id)
-        return list(self.db.execute(stmt).scalars().all())
+    def update_traveller(self, traveller: BookingTraveler, data: dict) -> BookingTraveler:
+        for key, value in data.items():
+            if value is not None:
+                setattr(traveller, key, value)
+        self.db.commit()
+        self.db.refresh(traveller)
+        return traveller
+
+    def delete_traveller(self, traveller: BookingTraveler) -> None:
+        self.db.delete(traveller)
+        self.db.commit()
 
     def update_financials(self, booking: Booking, payment_amount: Decimal) -> Booking:
         booking.paid_amount += payment_amount

@@ -1,17 +1,23 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from decimal import Decimal
 import uuid
+from typing import TYPE_CHECKING
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.enums import BookingSource, BookingStatus, EnquiryStatus, QuotationStatus
 from app.models.account import Account
-from app.models.booking import Booking
 from app.models.quotation import Quotation
-from app.repository.booking_repo import BookingRepository
 from app.repository.enquiry_repo import EnquiryRepository
 from app.repository.quotation_repo import QuotationRepository
-from app.schemas.quotation import QuotationCreate, QuotationUpdate
+from app.schemas.quotation import QuotationCreate, QuotationVersionCreate
+from app.services.email_service import EmailService
+from app.services.quotation_pdf_service import generate_and_upload_quotation_pdf
+
+if TYPE_CHECKING:
+    from app.models.booking import Booking
 
 
 class QuotationService:
@@ -19,7 +25,6 @@ class QuotationService:
         self.db = db
         self.quotation_repo = QuotationRepository(db)
         self.enquiry_repo = EnquiryRepository(db)
-        self.booking_repo = BookingRepository(db)
 
     def create_quotation(self, payload: QuotationCreate, staff_user: Account) -> Quotation:
         enquiry = self.enquiry_repo.get_by_id(payload.enquiry_id)
@@ -33,6 +38,8 @@ class QuotationService:
 
         # Calculate totals from items if provided
         items_data = [item.model_dump() for item in payload.items]
+        for item in items_data:
+            item["total_price"] = item["unit_price"] * item["quantity"]
         subtotal = payload.subtotal
         if items_data and subtotal == Decimal(0):
             subtotal = sum((it["unit_price"] * it["quantity"] for it in items_data), Decimal(0))
@@ -46,18 +53,9 @@ class QuotationService:
             "package_id": payload.package_id,
             "variant_id": payload.variant_id,
             "destination_id": payload.destination_id,
-            "hotel_id": payload.hotel_id,
-            "room_id": payload.room_id,
-            "vehicle_id": payload.vehicle_id,
             "tour_name": payload.tour_name,
             "travel_date": payload.travel_date,
             "return_date": payload.return_date,
-            "adult_count": payload.adult_count,
-            "child_count": payload.child_count,
-            "senior_count": payload.senior_count,
-            "room_count": payload.room_count,
-            "vehicle_count": payload.vehicle_count,
-            "meal_plan": payload.meal_plan,
             "subtotal": subtotal,
             "discount_amount": payload.discount_amount,
             "tax_amount": payload.tax_amount,
@@ -65,10 +63,19 @@ class QuotationService:
             "valid_until": payload.valid_until,
             "status": QuotationStatus.DRAFT,
             "terms_and_conditions": payload.terms_and_conditions,
+            "important_notes": payload.important_notes,
+            "inclusion": payload.inclusion,
+            "exclusion": payload.exclusion,
             "created_by_account_id": staff_user.id,
         }
 
-        quotation = self.quotation_repo.create(quotation_data, items=items_data)
+        quotation = self.quotation_repo.create(
+            quotation_data,
+            items=items_data,
+            hotels=[hotel.model_dump() for hotel in payload.hotels],
+            vehicles=[vehicle.model_dump() for vehicle in payload.vehicles],
+            itinerary=[item.model_dump() for item in payload.itinerary],
+        )
 
         if enquiry:
             self.enquiry_repo.update_status(enquiry, EnquiryStatus.QUOTED)
@@ -104,20 +111,161 @@ class QuotationService:
     def list_customer_quotations(self, customer_id: uuid.UUID, skip: int = 0, limit: int = 50) -> list[Quotation]:
         return self.quotation_repo.list_for_customer(customer_id, skip=skip, limit=limit)
 
-    def update_quotation(self, quotation_id: uuid.UUID, payload: QuotationUpdate) -> Quotation:
+    def create_quotation_version(
+        self,
+        quotation_id: uuid.UUID,
+        payload: QuotationVersionCreate,
+        staff_user: Account,
+    ) -> Quotation:
+        previous = self.get_quotation(quotation_id)
+        if previous.status != QuotationStatus.REJECTED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only a rejected quotation can be revised into a new version.",
+            )
+        if not previous.enquiry:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Quotation is not linked to an enquiry.",
+            )
+
+        values = payload.model_dump(exclude_unset=True)
+        items_data = values.pop("items", None)
+        hotels_data = values.pop("hotels", None)
+        vehicles_data = values.pop("vehicles", None)
+        itinerary_data = values.pop("itinerary", None)
+
+        if items_data is None:
+            items_data = [
+                {
+                    "item_type": item.item_type,
+                    "name": item.name,
+                    "description": item.description,
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "total_price": item.total_price,
+                }
+                for item in previous.items
+            ]
+        else:
+            for item in items_data:
+                item["total_price"] = item["unit_price"] * item["quantity"]
+
+        if hotels_data is None:
+            hotels_data = [
+                {
+                    "hotel_id": item.hotel.hotel_id,
+                    "hotel_name": item.hotel.hotel_name,
+                    "check_in": item.hotel.check_in,
+                    "check_out": item.hotel.check_out,
+                    "nights": item.hotel.nights,
+                    "room_count": item.hotel.room_count,
+                    "room_type": item.hotel.room_type,
+                }
+                for item in previous.items
+                if item.hotel
+            ]
+        if vehicles_data is None:
+            vehicles_data = [
+                {
+                    "vehicle_id": item.vehicle.vehicle_id,
+                    "vehicle_name": item.vehicle.vehicle_name,
+                    "vehicle_type": item.vehicle.vehicle_type,
+                    "start_date": item.vehicle.start_date,
+                    "end_date": item.vehicle.end_date,
+                    "rental_minutes": item.vehicle.rental_minutes,
+                    "quantity": item.vehicle.quantity,
+                }
+                for item in previous.items
+                if item.vehicle
+            ]
+
+        if itinerary_data is None:
+            itinerary_data = [
+                {
+                    "day_number": day.day_number,
+                    "date": day.date,
+                    "title": day.title,
+                    "description": day.description,
+                    "overnight_location": day.overnight_location,
+                    "meal_plan": day.meal_plan,
+                    "sort_order": day.sort_order,
+                }
+                for day in previous.itinerary
+            ]
+
+        if "subtotal" not in values and items_data:
+            values["subtotal"] = sum(
+                (item["unit_price"] * item["quantity"] for item in items_data),
+                Decimal(0),
+            )
+        subtotal = values.get("subtotal", previous.subtotal)
+        discount = values.get("discount_amount", previous.discount_amount)
+        tax = values.get("tax_amount", previous.tax_amount)
+        values["total_amount"] = max(Decimal(0), subtotal - discount + tax)
+
+        version = self.quotation_repo.get_latest_version(previous.enquiry_id) + 1
+        quotation_data = {
+            "quotation_code": f"QT-{previous.enquiry.enquiry_code}-V{version}",
+            "version": version,
+            "customer_id": previous.customer_id,
+            "enquiry_id": previous.enquiry_id,
+            "package_id": values.pop("package_id", previous.package_id),
+            "variant_id": values.pop("variant_id", previous.variant_id),
+            "destination_id": values.pop("destination_id", previous.destination_id),
+            "tour_name": values.pop("tour_name", previous.tour_name),
+            "travel_date": values.pop("travel_date", previous.travel_date),
+            "return_date": values.pop("return_date", previous.return_date),
+            "subtotal": subtotal,
+            "discount_amount": discount,
+            "tax_amount": tax,
+            "total_amount": values.pop("total_amount"),
+            "valid_until": values.pop("valid_until", previous.valid_until),
+            "status": QuotationStatus.DRAFT,
+            "terms_and_conditions": values.pop("terms_and_conditions", previous.terms_and_conditions),
+            "important_notes": values.pop("important_notes", previous.important_notes),
+            "inclusion": values.pop("inclusion", previous.inclusion),
+            "exclusion": values.pop("exclusion", previous.exclusion),
+            "created_by_account_id": staff_user.id,
+        }
+        return self.quotation_repo.create(
+            quotation_data,
+            items=items_data,
+            hotels=hotels_data,
+            vehicles=vehicles_data,
+            itinerary=itinerary_data,
+        )
+
+    def delete_quotation(self, quotation_id: uuid.UUID) -> None:
+        self.quotation_repo.delete(self.get_quotation(quotation_id))
+
+    async def generate_quotation_pdf(self, quotation_id: uuid.UUID) -> dict:
+        return await generate_and_upload_quotation_pdf(self.get_quotation(quotation_id))
+
+    async def email_quotation(self, quotation_id: uuid.UUID, recipient_email: str) -> str:
         quotation = self.get_quotation(quotation_id)
-        update_data = payload.model_dump(exclude_unset=True)
-        items_data = [it.model_dump() for it in payload.items] if payload.items is not None else None
 
-        # Recompute totals if items updated
-        if items_data is not None:
-            subtotal = sum((it["unit_price"] * it["quantity"] for it in items_data), Decimal(0))
-            disc = update_data.get("discount_amount", quotation.discount_amount)
-            tax = update_data.get("tax_amount", quotation.tax_amount)
-            update_data["subtotal"] = subtotal
-            update_data["total_amount"] = max(Decimal(0), subtotal - disc + tax)
+        uploaded = await generate_and_upload_quotation_pdf(quotation)
+        pdf_url = uploaded.get("secure_url") or uploaded.get("url")
+        if not pdf_url:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Quotation PDF upload did not return a download URL.",
+            )
 
-        return self.quotation_repo.update(quotation, update_data, items=items_data)
+        EmailService().send_email(
+            recipient_email,
+            f"Quotation {quotation.quotation_code} - {quotation.tour_name}",
+            (
+                f"Dear {quotation.customer.name},\n\n"
+                f"Please find your quotation for {quotation.tour_name} at the link below:\n"
+                f"{pdf_url}\n\n"
+                "This link is hosted in temporary storage and may expire.\n\n"
+                "Regards,\nCoochbehar Travels"
+            ),
+        )
+        self.send_quotation(quotation_id)
+        return pdf_url
 
     def send_quotation(self, quotation_id: uuid.UUID) -> Quotation:
         quotation = self.get_quotation(quotation_id)
@@ -145,6 +293,9 @@ class QuotationService:
         booking_type: str = "PACKAGE",
         notes: str | None = None,
     ) -> Booking:
+        from app.repository.booking_repo import BookingRepository
+
+        booking_repo = BookingRepository(self.db)
         quotation = self.get_quotation(quotation_id)
         if quotation.status != QuotationStatus.ACCEPTED:
             # Allow conversion with a note if admin chooses
@@ -168,9 +319,9 @@ class QuotationService:
             "source": BookingSource.OFFLINE,
             "sales_account_id": staff_user.id,
             "status": BookingStatus.CONFIRMED,
-            "adult_count": quotation.adult_count,
-            "child_count": quotation.child_count,
-            "senior_count": quotation.senior_count,
+            "adult_count": quotation.enquiry.adult_count or 1,
+            "child_count": quotation.enquiry.child_count or 0,
+            "senior_count": quotation.enquiry.senior_count or 0,
             "subtotal": quotation.subtotal,
             "discount_amount": quotation.discount_amount,
             "total_amount": quotation.total_amount,
@@ -180,18 +331,5 @@ class QuotationService:
             "created_by": staff_user.id,
         }
 
-        # Convert quotation items to booking costs
-        costs_data = []
-        for it in quotation.items:
-            costs_data.append({
-                "cost_type": it.item_type.value,
-                "description": f"{it.name}: {it.description}" if it.description else it.name,
-                "estimated_amount": it.total_price,
-                "actual_amount": it.total_price,
-                "paid_amount": Decimal(0),
-                "due_amount": it.total_price,
-                "status": "PENDING",
-            })
-
-        booking = self.booking_repo.create(booking_data, costs=costs_data)
+        booking = booking_repo.create(booking_data)
         return booking

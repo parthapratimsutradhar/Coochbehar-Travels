@@ -12,13 +12,7 @@ class VendorRepository:
         stmt = select(Vendor).where(Vendor.id == vendor_id)
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def get_by_code(self, vendor_code: str) -> Vendor | None:
-        stmt = select(Vendor).where(Vendor.vendor_code == vendor_code)
-        return self.db.execute(stmt).scalar_one_or_none()
-
     def create(self, **kwargs) -> Vendor:
-        code = kwargs.get("vendor_code") or f"VND-{uuid.uuid4().hex[:6].upper()}"
-        kwargs["vendor_code"] = code
         vendor = Vendor(**kwargs)
         self.db.add(vendor)
         self.db.commit()
@@ -39,7 +33,6 @@ class VendorRepository:
             term = f"%{search.strip()}%"
             stmt = stmt.where(
                 Vendor.name.ilike(term)
-                | Vendor.vendor_code.ilike(term)
                 | Vendor.contact.ilike(term)
             )
 
@@ -56,3 +49,7 @@ class VendorRepository:
         self.db.commit()
         self.db.refresh(vendor)
         return vendor
+
+    def delete(self, vendor: Vendor) -> None:
+        self.db.delete(vendor)
+        self.db.commit()
