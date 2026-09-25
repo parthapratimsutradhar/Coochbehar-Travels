@@ -209,6 +209,15 @@ class AdminTourService:
             .all()
         )
 
+    @staticmethod
+    def _normalize_departure_payload(payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload)
+        for field in ("departure_date", "return_date"):
+            value = normalized.get(field)
+            if isinstance(value, str):
+                normalized[field] = date.fromisoformat(value)
+        return normalized
+
     def _sync_departures(self, variant_id: uuid.UUID, departure_payloads: list[dict[str, Any]]) -> None:
         existing = {
             departure.id: departure
@@ -217,23 +226,32 @@ class AdminTourService:
         retained_ids: set[uuid.UUID] = set()
 
         for raw_payload in departure_payloads:
-            payload = dict(raw_payload)
+            payload = self._normalize_departure_payload(dict(raw_payload))
             departure_id = payload.pop("id", None)
+            normalized_departure_id = None
             if departure_id is not None:
-                departure = existing.get(departure_id)
+                try:
+                    normalized_departure_id = uuid.UUID(str(departure_id))
+                except (TypeError, ValueError, AttributeError):
+                    normalized_departure_id = None
+
+            if normalized_departure_id is not None:
+                departure = existing.get(normalized_departure_id)
                 if departure is None:
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail="Tour departure not found for this variant.",
                     )
-                retained_ids.add(departure_id)
+                retained_ids.add(normalized_departure_id)
                 for field, value in payload.items():
                     setattr(departure, field, value)
             else:
                 departure = TourDeparture(variant_id=variant_id, **payload)
                 self.db.add(departure)
 
-            if payload["available_seats"] > payload["total_seats"]:
+            available_seats = payload.get("available_seats", 0)
+            total_seats = payload.get("total_seats", 0)
+            if available_seats > total_seats:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="Available seats cannot exceed total seats.",

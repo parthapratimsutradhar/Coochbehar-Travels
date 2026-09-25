@@ -26,9 +26,9 @@ class PackageSuccess(StrEnum):
 
 
 class TourDetailSuccess(StrEnum):
-    CREATED = "Tour details created successfully."
-    UPDATED = "Tour details updated successfully."
-    DELETED = "Tour details deleted successfully."
+    CREATED = "Tour details created successfully"
+    UPDATED = "Tour details updated successfully"
+    DELETED = "Tour details deleted successfully"
 
 
 class ReviewSuccess(StrEnum):
@@ -67,9 +67,17 @@ class VehicleSuccess(StrEnum):
     CREATED = "Vehicle created successfully."
     UPDATED = "Vehicle updated successfully."
     DELETED = "Vehicle deleted successfully."
-    
+
+
 class VendorSuccess(StrEnum):
     RETRIEVED = "Vendors fetched successfully."
     CREATED = "Vendor created successfully."
     UPDATED = "Vendor updated successfully."
     DELETED = "Vendor deleted successfully."
+
+
+class FinancialAccountSuccess(StrEnum):
+    RETRIEVED = "Financial accounts fetched successfully."
+    CREATED = "Financial account created successfully."
+    UPDATED = "Financial account updated successfully."
+    DELETED = "Financial account deleted successfully."

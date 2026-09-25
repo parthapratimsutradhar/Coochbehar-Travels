@@ -50,7 +50,7 @@ class BannerPayload(SchemaBase):
 
 
 class GalleryItem(SchemaBase):
-    id: str
+    id: str | None = None
     alt: str | None = None
     url: str
     type: str | None = None
@@ -60,27 +60,27 @@ class GalleryItem(SchemaBase):
 
 
 class HighlightItem(SchemaBase):
-    id: str
+    id: str | None = None
     text: str
 
     model_config = ConfigDict(extra="allow")
 
 
 class DepartureDateItem(SchemaBase):
-    id: uuid.UUID | None = None
+    id: str | None = None
     departure_date: date = Field(
         validation_alias=AliasChoices("departure_date", "date"),
         serialization_alias="departure_date",
     )
     return_date: date | None = None
-    total_seats: int = Field(..., ge=0)
-    available_seats: int = Field(..., ge=0)
+    total_seats: int = Field(default=0, ge=0)
+    available_seats: int = Field(default=0, ge=0)
 
     model_config = ConfigDict(extra="allow")
 
 
 class ItineraryItem(SchemaBase):
-    id: str
+    id: str | None = None
     day: int
     title: str
     description: str | None = None
@@ -89,7 +89,7 @@ class ItineraryItem(SchemaBase):
 
 
 class RouteItem(SchemaBase):
-    id: str
+    id: str | None = None
     city: str
     nights: int
 

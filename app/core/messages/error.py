@@ -59,6 +59,14 @@ class TokenError(StrEnum):
     CUSTOMER_NOT_FOUND = "Customer not found."
 
 
+class FinancialAccountError(StrEnum):
+    ACCOUNT_NOT_FOUND = "Financial account not found."
+    ACCOUNT_CODE_EXISTS = "A financial account with this account_code already exists."
+    OWNER_REQUIRED = "owner_id is required for customer/vendor financial accounts."
+    INVALID_OWNER = "The owner_id does not match a valid customer or vendor record."
+    DUPLICATE_OWNER_ACCOUNT = "This owner already has a financial account for the selected account type."
+
+
 class SystemError(StrEnum):
     VALIDATION_FAILED = "Validation failed"
     UNEXPECTED = "An unexpected error occurred"

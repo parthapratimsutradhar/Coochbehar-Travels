@@ -1,238 +1,246 @@
 import uuid
-from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin_only, get_current_admin_or_staff
+from app.api.deps import get_current_admin_or_staff
+from app.core.enums import FinancialAccountOwnerType, FinancialAccountType
+from app.core.messages.error import FinancialAccountError
+from app.core.messages.success import FinancialAccountSuccess
 from app.db.database import get_db
 from app.models.account import Account
-from app.models.financial_account import FinancialAccount
-from app.models.financial_transaction import FinancialTransaction
-from app.models.audit_log import AuditLog
-from app.schemas.financial import FinancialAccountCreate, FinancialAccountResponse
-from app.schemas.financial_operations import FinancialReversalCreate, VendorPaymentCreate
-from app.schemas.financial_reports import FinancialDashboardResponse, FinancialReportResponse
-from app.schemas.response import SuccessResponse
-from app.schemas.wallet import WalletAdjustmentCreate, WalletRefundCreate, WalletResponse, WalletTransactionResponse
-from app.services.wallet_service import WalletService
-from app.services.financial_service import FinancialService
-from app.services.financial_reporting_service import FinancialReportingService
+from app.schemas.financial import FinancialAccountCreate, FinancialAccountResponse, FinancialAccountUpdate
+from app.schemas.pagination import PaginatedResponse, PaginationMeta
+from app.schemas.response import ActionResponse, ErrorResponse
+from app.services.financial_account_service import FinancialAccountService
 
-router = APIRouter(prefix="/admin/financial", tags=["Admin - Financial"])
+router = APIRouter(
+    prefix="/admin/financial-accounts",
+    tags=["Admin - Financial Accounts"],
+)
 
 
-@router.get("/dashboard", response_model=SuccessResponse[FinancialDashboardResponse], summary="Get financial dashboard")
-def get_financial_dashboard(
-    current_user: Account = Depends(get_current_admin_or_staff),
-    db: Session = Depends(get_db),
-):
-    del current_user
-    return SuccessResponse(message="Financial dashboard fetched successfully", data=FinancialReportingService(db).dashboard())
-
-
-@router.get("/reports/{report_type}", response_model=SuccessResponse[FinancialReportResponse], summary="Run a financial report")
-def get_financial_report(
-    report_type: str,
-    start_date: date | None = Query(None),
-    end_date: date | None = Query(None),
-    current_user: Account = Depends(get_current_admin_or_staff),
-    db: Session = Depends(get_db),
-):
-    del current_user
-    if start_date and end_date and start_date > end_date:
-        raise HTTPException(status_code=422, detail="start_date must not be after end_date.")
-    report = FinancialReportingService(db).report(report_type, start=start_date, end=end_date)
-    return SuccessResponse(message="Financial report generated successfully", data=report)
-
-
-@router.post("/vendor-payments", response_model=SuccessResponse[dict], status_code=status.HTTP_201_CREATED, summary="Record a vendor payment")
-def create_vendor_payment(
-    payload: VendorPaymentCreate,
-    current_user: Account = Depends(get_current_admin_or_staff),
-    db: Session = Depends(get_db),
-):
-    transaction = FinancialService(db).record_vendor_payment(
-        amount=payload.amount,
-        vendor_id=payload.vendor_id,
-        booking_id=payload.booking_id,
-        currency="INR",
-        payment_method=payload.payment_method,
-        reference=payload.reference,
-        description=payload.description,
-        recorded_by_account_id=current_user.id,
-        transaction_date=payload.paid_at,
-    )
-    return SuccessResponse(message="Vendor payment recorded successfully", data={"id": transaction.id, "transaction_code": transaction.transaction_code, "amount": transaction.amount})
-
-
-@router.post("/transactions/{transaction_id}/reverse", response_model=SuccessResponse[dict], summary="Reverse a posted financial transaction")
-def reverse_financial_transaction(
-    transaction_id: uuid.UUID,
-    payload: FinancialReversalCreate,
-    current_user: Account = Depends(get_current_admin_only),
-    db: Session = Depends(get_db),
-):
-    reversal = FinancialService(db).reverse_transaction(transaction_id=transaction_id, actor_id=current_user.id, reason=payload.reason)
-    return SuccessResponse(message="Financial transaction reversed successfully", data={"id": reversal.id, "transaction_code": reversal.transaction_code, "amount": reversal.amount})
-
-
-@router.get("/audit", response_model=SuccessResponse[list[dict]], summary="List financial audit activity")
-def list_financial_audit(
-    limit: int = Query(100, ge=1, le=500),
-    current_user: Account = Depends(get_current_admin_only),
-    db: Session = Depends(get_db),
-):
-    del current_user
-    logs = db.query(AuditLog).filter(
-        AuditLog.entity_type.in_(["FinancialTransaction", "FinancialAccount"])
-    ).order_by(AuditLog.created_at.desc()).limit(limit).all()
-    return SuccessResponse(message="Financial audit activity fetched successfully", data=[{
-        "id": log.id, "account_id": log.account_id, "action": log.action,
-        "entity_type": log.entity_type, "entity_id": log.entity_id,
-        "old_values": log.old_values, "new_values": log.new_values,
-        "created_at": log.created_at,
-    } for log in logs])
-
-
-@router.get("/accounts", response_model=SuccessResponse[list[FinancialAccountResponse]], summary="List financial accounts")
-def list_financial_accounts(
-    current_user: Account = Depends(get_current_admin_or_staff),
-    db: Session = Depends(get_db),
-):
-    del current_user
-    accounts = db.query(FinancialAccount).order_by(FinancialAccount.account_code).all()
-    return SuccessResponse(message="Financial accounts fetched successfully", data=accounts)
+def _raise_financial_account_error(exc: ValueError) -> None:
+    message = str(exc)
+    if "already" in message.lower() or "exists" in message.lower():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
+    if "required" in message.lower() or "does not match" in message.lower():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=message) from exc
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
 
 
 @router.post(
-    "/accounts",
-    response_model=SuccessResponse[FinancialAccountResponse],
+    "",
+    response_model=ActionResponse,
     status_code=status.HTTP_201_CREATED,
+    responses={400: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
     summary="Create a financial account",
 )
 def create_financial_account(
     payload: FinancialAccountCreate,
-    current_user: Account = Depends(get_current_admin_only),
+    current_user: Account = Depends(get_current_admin_or_staff),
     db: Session = Depends(get_db),
-):
-    if payload.owner_type.value == "CUSTOMER" and payload.owner_id is None:
-        raise HTTPException(status_code=422, detail="Customer-owned accounts require an owner_id.")
-    account = FinancialAccount(**payload.model_dump())
-    db.add(account)
-    db.commit()
-    db.refresh(account)
-    db.add(AuditLog(
-        account_id=current_user.id,
-        action="FINANCIAL_ACCOUNT_CREATED",
-        entity_type="FinancialAccount",
-        entity_id=account.id,
-        new_values={"account_code": account.account_code, "account_type": account.account_type.value},
-    ))
-    db.commit()
-    return SuccessResponse(message="Financial account created successfully", data=account)
-
-
-@router.patch(
-    "/accounts/{account_id}/status",
-    response_model=SuccessResponse[FinancialAccountResponse],
-    summary="Activate or deactivate a financial account",
-)
-def update_financial_account_status(
-    account_id: uuid.UUID,
-    is_active: bool,
-    current_user: Account = Depends(get_current_admin_only),
-    db: Session = Depends(get_db),
-):
-    account = db.query(FinancialAccount).filter(FinancialAccount.id == account_id).one_or_none()
-    if account is None:
-        raise HTTPException(status_code=404, detail="Financial account not found.")
-    account.is_active = is_active
-    db.commit()
-    db.refresh(account)
-    db.add(AuditLog(
-        account_id=current_user.id,
-        action="FINANCIAL_ACCOUNT_STATUS_CHANGED",
-        entity_type="FinancialAccount",
-        entity_id=account.id,
-        new_values={"is_active": is_active},
-    ))
-    db.commit()
-    return SuccessResponse(message="Financial account status updated successfully", data=account)
+) -> ActionResponse:
+    del current_user
+    try:
+        FinancialAccountService(db).create_account(payload)
+    except ValueError as exc:
+        _raise_financial_account_error(exc)
+    return ActionResponse(message=FinancialAccountSuccess.CREATED)
 
 
 @router.get(
-    "/customers/{customer_id}/wallet",
-    response_model=SuccessResponse[WalletResponse],
-    summary="View a customer wallet",
+    "",
+    response_model=PaginatedResponse[FinancialAccountResponse],
+    responses={403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    summary="List all financial accounts",
 )
-def get_customer_wallet(
-    customer_id: uuid.UUID,
+def list_financial_accounts(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    owner_type: FinancialAccountOwnerType | None = Query(None),
+    account_type: FinancialAccountType | None = Query(None),
+    owner_id: uuid.UUID | None = Query(None),
+    is_active: bool | None = Query(None),
+    search: str | None = Query(None),
     current_user: Account = Depends(get_current_admin_or_staff),
     db: Session = Depends(get_db),
-):
+) -> PaginatedResponse[FinancialAccountResponse]:
     del current_user
-    service = WalletService(db)
-    wallet = service.get_wallet_account(customer_id)
-    transactions = service.history(customer_id)
-    return SuccessResponse(
-        message="Customer wallet fetched successfully",
-        data=WalletResponse(
-            account_id=wallet.id,
-            customer_id=customer_id,
-            balance=service.balance(wallet),
-            currency=wallet.currency,
-            transactions=[WalletTransactionResponse.model_validate(item) for item in transactions],
+    items, total_items = FinancialAccountService(db).list_accounts(
+        page=page,
+        page_size=page_size,
+        owner_type=owner_type,
+        account_type=account_type,
+        owner_id=owner_id,
+        is_active=is_active,
+        search=search,
+    )
+    total_pages = (total_items + page_size - 1) // page_size if total_items else 0
+    return PaginatedResponse[
+        FinancialAccountResponse
+    ](
+        message=FinancialAccountSuccess.RETRIEVED,
+        data=[FinancialAccountResponse.model_validate(item) for item in items],
+        pagination=PaginationMeta(
+            current_page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            has_next=page < total_pages,
+            has_previous=page > 1,
         ),
     )
 
 
-@router.post(
-    "/customers/{customer_id}/wallet/adjustments",
-    response_model=SuccessResponse[WalletTransactionResponse],
-    summary="Make an audited customer wallet adjustment",
+@router.get(
+    "/customer-vendor",
+    response_model=PaginatedResponse[FinancialAccountResponse],
+    responses={403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    summary="List customer/vendor financial accounts by account type",
 )
-def adjust_customer_wallet(
-    customer_id: uuid.UUID,
-    payload: WalletAdjustmentCreate,
-    current_user: Account = Depends(get_current_admin_only),
+def list_customer_vendor_financial_accounts(
+    owner_type: FinancialAccountOwnerType = Query(..., description="Filter by CUSTOMER or VENDOR"),
+    account_type: FinancialAccountType | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    is_active: bool | None = Query(None),
+    current_user: Account = Depends(get_current_admin_or_staff),
     db: Session = Depends(get_db),
-):
-    transaction = WalletService(db).adjust(
-        customer_id=customer_id,
-        amount=payload.amount,
-        direction=payload.direction,
-        reason=payload.reason,
-        actor=current_user,
-        reference=payload.reference,
+) -> PaginatedResponse[FinancialAccountResponse]:
+    del current_user
+    if owner_type not in (FinancialAccountOwnerType.CUSTOMER, FinancialAccountOwnerType.VENDOR):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="owner_type must be CUSTOMER or VENDOR.")
+
+    items, total_items = FinancialAccountService(db).list_accounts(
+        page=page,
+        page_size=page_size,
+        owner_type=owner_type,
+        account_type=account_type,
+        is_active=is_active,
     )
-    return SuccessResponse(
-        message="Wallet adjustment recorded successfully",
-        data=WalletTransactionResponse.model_validate(transaction),
+    total_pages = (total_items + page_size - 1) // page_size if total_items else 0
+    return PaginatedResponse[
+        FinancialAccountResponse
+    ](
+        message=FinancialAccountSuccess.RETRIEVED,
+        data=[FinancialAccountResponse.model_validate(item) for item in items],
+        pagination=PaginationMeta(
+            current_page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            has_next=page < total_pages,
+            has_previous=page > 1,
+        ),
     )
 
 
-@router.post(
-    "/customers/{customer_id}/wallet/refunds",
-    response_model=SuccessResponse[WalletTransactionResponse],
-    status_code=status.HTTP_201_CREATED,
-    summary="Credit a policy-approved refund to a customer wallet",
+@router.patch(
+    "/{account_id}",
+    response_model=ActionResponse,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    summary="Update a financial account",
 )
-def refund_customer_wallet(
-    customer_id: uuid.UUID,
-    payload: WalletRefundCreate,
-    current_user: Account = Depends(get_current_admin_only),
+def update_financial_account(
+    account_id: uuid.UUID,
+    payload: FinancialAccountUpdate,
+    current_user: Account = Depends(get_current_admin_or_staff),
     db: Session = Depends(get_db),
-):
-    transaction = WalletService(db).refund_to_wallet(
-        customer_id=customer_id,
-        amount=payload.amount,
-        booking_id=payload.booking_id,
-        reason=payload.reason,
-        reference=payload.reference,
-        actor=current_user,
-    )
-    return SuccessResponse(
-        message="Wallet refund credited successfully",
-        data=WalletTransactionResponse.model_validate(transaction),
-    )
+) -> ActionResponse:
+    del current_user
+    try:
+        FinancialAccountService(db).update_account(account_id, payload)
+    except ValueError as exc:
+        message = str(exc)
+        if message == FinancialAccountError.ACCOUNT_NOT_FOUND:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message) from exc
+        _raise_financial_account_error(exc)
+    return ActionResponse(message=FinancialAccountSuccess.UPDATED)
+
+
+@router.patch(
+    "/customer-vendor/{account_id}",
+    response_model=ActionResponse,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    summary="Update a customer/vendor financial account",
+)
+def update_customer_vendor_financial_account(
+    account_id: uuid.UUID,
+    payload: FinancialAccountUpdate,
+    current_user: Account = Depends(get_current_admin_or_staff),
+    db: Session = Depends(get_db),
+) -> ActionResponse:
+    del current_user
+    try:
+        account = FinancialAccountService(db).get_account(account_id)
+    except ValueError as exc:
+        if str(exc) == FinancialAccountError.ACCOUNT_NOT_FOUND:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if account.owner_type not in (FinancialAccountOwnerType.CUSTOMER, FinancialAccountOwnerType.VENDOR):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This endpoint only supports customer/vendor financial accounts.")
+
+    try:
+        FinancialAccountService(db).update_account(account_id, payload)
+    except ValueError as exc:
+        message = str(exc)
+        if message == FinancialAccountError.ACCOUNT_NOT_FOUND:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message) from exc
+        _raise_financial_account_error(exc)
+    return ActionResponse(message=FinancialAccountSuccess.UPDATED)
+
+
+@router.delete(
+    "/{account_id}",
+    response_model=ActionResponse,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    summary="Delete a financial account",
+)
+def delete_financial_account(
+    account_id: uuid.UUID,
+    current_user: Account = Depends(get_current_admin_or_staff),
+    db: Session = Depends(get_db),
+) -> ActionResponse:
+    del current_user
+    try:
+        FinancialAccountService(db).delete_account(account_id)
+    except ValueError as exc:
+        message = str(exc)
+        if message == FinancialAccountError.ACCOUNT_NOT_FOUND:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message) from exc
+        _raise_financial_account_error(exc)
+    return ActionResponse(message=FinancialAccountSuccess.DELETED)
+
+
+@router.delete(
+    "/customer-vendor/{account_id}",
+    response_model=ActionResponse,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    summary="Delete a customer/vendor financial account",
+)
+def delete_customer_vendor_financial_account(
+    account_id: uuid.UUID,
+    current_user: Account = Depends(get_current_admin_or_staff),
+    db: Session = Depends(get_db),
+) -> ActionResponse:
+    del current_user
+    try:
+        account = FinancialAccountService(db).get_account(account_id)
+    except ValueError as exc:
+        if str(exc) == FinancialAccountError.ACCOUNT_NOT_FOUND:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if account.owner_type not in (FinancialAccountOwnerType.CUSTOMER, FinancialAccountOwnerType.VENDOR):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This endpoint only supports customer/vendor financial accounts.")
+
+    try:
+        FinancialAccountService(db).delete_account(account_id)
+    except ValueError as exc:
+        message = str(exc)
+        if message == FinancialAccountError.ACCOUNT_NOT_FOUND:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message) from exc
+        _raise_financial_account_error(exc)
+    return ActionResponse(message=FinancialAccountSuccess.DELETED)

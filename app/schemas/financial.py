@@ -15,6 +15,16 @@ class FinancialAccountCreate(SchemaBase):
     currency: str = Field(default="INR", min_length=3, max_length=3)
 
 
+class FinancialAccountUpdate(SchemaBase):
+    account_code: str | None = Field(None, min_length=1, max_length=30)
+    name: str | None = Field(None, min_length=1, max_length=150)
+    account_type: FinancialAccountType | None = None
+    owner_type: FinancialAccountOwnerType | None = None
+    owner_id: UUID | None = None
+    currency: str | None = Field(None, min_length=3, max_length=3)
+    is_active: bool | None = None
+
+
 class FinancialAccountResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 

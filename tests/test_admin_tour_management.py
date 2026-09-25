@@ -237,6 +237,34 @@ def test_admin_package_variant_detail_uses_tour_departures_for_departure_dates(c
     assert data[1]["available_seats"] == 8
 
 
+def test_admin_tour_detail_create_accepts_missing_nested_ids(client, admin_user, db_session):
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+
+    package = create_package(db_session)
+    variant = create_variant(db_session, package.id)
+
+    response = client.post(
+        "/api/v1/admin/tour-details",
+        json={
+            "variant_id": str(variant.id),
+            "banner": {"image": "https://example.com/banner.jpg", "video": None},
+            "gallery": [{"alt": "Admin image", "url": "https://example.com/admin-1.jpg", "type": "image", "display_order": 1}],
+            "highlights": [{"text": "Beautiful landscape"}],
+            "inclusions": ["Meals"],
+            "exclusions": ["Personal expenses"],
+            "departure_dates": [{"departure_date": "2026-09-03", "return_date": "2026-09-10", "total_seats": 20, "available_seats": 20}],
+            "itinerary": [{"day": 1, "title": "Arrival", "description": "Hotel check-in"}],
+            "route": [{"city": "Gangtok", "nights": 2}],
+        },
+        headers=auth_header,
+    )
+
+    assert response.status_code == 201, response.text
+    data = response.json()
+    assert data["message"] == "Tour details created successfully"
+    assert response.json()["success"] is True
+
+
 def test_admin_detail_banner_patch_replaces_only_supplied_media(client, admin_user, db_session):
     package = create_package(db_session)
     variant = create_variant(db_session, package.id)
