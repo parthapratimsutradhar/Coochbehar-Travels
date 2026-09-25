@@ -17,7 +17,7 @@ from app.schemas.referral import (
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.referral_service import ReferralService
 
-router = APIRouter(prefix="/admin/referrals", tags=["Admin Referrals"])
+router = APIRouter(prefix="/admin/referrals", tags=["Admin - Referrals"])
 
 
 @router.get(

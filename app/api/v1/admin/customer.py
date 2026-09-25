@@ -14,7 +14,7 @@ from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.customer_service import CustomerService
 
 
-router = APIRouter(prefix="/admin/customers", tags=["Admin Customers"])
+router = APIRouter(prefix="/admin/customers", tags=["Admin - Customers"])
 
 
 @router.get(

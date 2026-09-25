@@ -13,7 +13,7 @@ from app.schemas.review import AdminReviewCreate, AdminReviewUpdate, ReviewRespo
 from app.services.review_service import ReviewService
 
 
-router = APIRouter(prefix="/admin", tags=["Admin Reviews"])
+router = APIRouter(prefix="/admin", tags=["Admin - Reviews"])
 
 
 @router.get(

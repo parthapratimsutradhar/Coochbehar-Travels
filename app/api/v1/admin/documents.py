@@ -21,7 +21,7 @@ from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.admin_document_service import AdminDocumentService
 
 
-router = APIRouter(prefix="/admin/documents", tags=["Admin Documents"])
+router = APIRouter(prefix="/admin/documents", tags=["Admin - Documents"])
 
 
 @router.get(

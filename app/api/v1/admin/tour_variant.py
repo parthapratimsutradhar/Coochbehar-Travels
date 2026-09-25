@@ -16,7 +16,7 @@ from app.schemas.response import ActionResponse
 from app.services.admin_tour_service import AdminTourService
 
 
-router = APIRouter(prefix="/admin/tour-variants", tags=["Admin Tour Variants"])
+router = APIRouter(prefix="/admin/tour-variants", tags=["Admin - Tour Variants"])
 
 
 @router.get(

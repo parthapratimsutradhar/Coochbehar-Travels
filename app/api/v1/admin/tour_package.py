@@ -19,7 +19,7 @@ from app.schemas.response import ActionResponse, SuccessResponse
 from app.services.admin_tour_service import AdminTourService
 
 
-router = APIRouter(prefix="/admin/tour-packages", tags=["Admin Tour Packages"])
+router = APIRouter(prefix="/admin/tour-packages", tags=["Admin - Tour Packages"])
 
 
 @router.get(

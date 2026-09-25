@@ -1,261 +1,235 @@
+import csv
+import io
 import uuid
+from datetime import date
+from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin_or_staff
-from app.core.enums import FinancialAccountOwnerType, FinancialAccountType
-from app.core.messages.error import FinancialAccountError
-from app.core.messages.success import FinancialAccountSuccess
 from app.db.database import get_db
 from app.models.account import Account
-from app.schemas.financial import FinancialAccountCreate, FinancialAccountResponse, FinancialAccountUpdate
+from app.schemas.financial_transaction import (
+    FinancialReportDownloadRequest,
+    FinancialTransactionCreate,
+    FinancialTransactionResponse,
+    FinancialTransactionUpdate,
+    financial_transaction_response,
+)
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
-from app.schemas.response import ActionResponse, ErrorResponse
-from app.services.financial_account_service import FinancialAccountService
+from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
+from app.services.financial_transaction_service import FinancialTransactionService
 
 router = APIRouter(
-    prefix="/admin/financial-accounts",
-    tags=["Admin - Financial Accounts"],
+    prefix="/admin/financial",
+    tags=["Admin - Financial"],
 )
-
-
-def _raise_financial_account_error(exc: ValueError) -> None:
-    message = str(exc)
-    if "already" in message.lower() or "exists" in message.lower():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
-    if "required" in message.lower() or "does not match" in message.lower():
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=message) from exc
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
 
 
 @router.post(
-    "",
-    response_model=ActionResponse,
+    "/transactions",
+    response_model=SuccessResponse[FinancialTransactionResponse],
     status_code=status.HTTP_201_CREATED,
-    responses={400: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
-    summary="Create a financial account",
+    responses={422: {"model": ErrorResponse}},
+    summary="Create a transaction (income or expense)",
 )
-def create_financial_account(
-    payload: FinancialAccountCreate,
-    current_user: Account = Depends(get_current_admin_or_staff),
+def create_transaction(
+    payload: FinancialTransactionCreate,
     db: Session = Depends(get_db),
-) -> ActionResponse:
-    del current_user
-    try:
-        FinancialAccountService(db).create_account(payload)
-    except ValueError as exc:
-        _raise_financial_account_error(exc)
-    return ActionResponse(message=FinancialAccountSuccess.CREATED)
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    service = FinancialTransactionService(db)
+    transaction = service.create_transaction(payload, current_user)
+    return SuccessResponse(
+        message="Financial transaction created successfully",
+        data=financial_transaction_response(transaction),
+    )
 
 
 @router.get(
-    "",
-    response_model=PaginatedResponse[FinancialAccountResponse],
-    responses={403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
-    summary="List all financial accounts",
+    "/transactions",
+    response_model=PaginatedResponse[FinancialTransactionResponse],
+    summary="List financial transactions with filters and search",
 )
-def list_financial_accounts(
+def list_transactions(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    owner_type: FinancialAccountOwnerType | None = Query(None),
-    account_type: FinancialAccountType | None = Query(None),
-    owner_id: uuid.UUID | None = Query(None),
-    is_active: bool | None = Query(None),
-    search: str | None = Query(None),
-    current_user: Account = Depends(get_current_admin_or_staff),
+    transaction_type: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    booking_id: uuid.UUID | None = Query(default=None),
+    customer_id: uuid.UUID | None = Query(default=None),
+    vendor_id: uuid.UUID | None = Query(default=None),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    search: str | None = Query(default=None),
     db: Session = Depends(get_db),
-) -> PaginatedResponse[FinancialAccountResponse]:
-    del current_user
-    items, total_items = FinancialAccountService(db).list_accounts(
-        page=page,
-        page_size=page_size,
-        owner_type=owner_type,
-        account_type=account_type,
-        owner_id=owner_id,
-        is_active=is_active,
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    service = FinancialTransactionService(db)
+    result = service.list_transactions(
+        transaction_type=transaction_type,
+        category=category,
+        status=status,
+        booking_id=booking_id,
+        customer_id=customer_id,
+        vendor_id=vendor_id,
+        start_date=start_date,
+        end_date=end_date,
         search=search,
+        page=page,
+        page_size=page_size,
     )
-    total_pages = (total_items + page_size - 1) // page_size if total_items else 0
-    return PaginatedResponse[
-        FinancialAccountResponse
-    ](
-        message=FinancialAccountSuccess.RETRIEVED,
-        data=[FinancialAccountResponse.model_validate(item) for item in items],
+    return PaginatedResponse(
+        message="Financial transactions fetched successfully",
+        data=[financial_transaction_response(item) for item in result["items"]],
         pagination=PaginationMeta(
-            current_page=page,
-            page_size=page_size,
-            total_items=total_items,
-            total_pages=total_pages,
-            has_next=page < total_pages,
-            has_previous=page > 1,
+            current_page=result["page"],
+            page_size=result["page_size"],
+            total_items=result["total_items"],
+            total_pages=result["total_pages"],
+            has_next=result["page"] < result["total_pages"],
+            has_previous=result["page"] > 1,
         ),
     )
 
 
 @router.get(
-    "/customer-vendor",
-    response_model=PaginatedResponse[FinancialAccountResponse],
-    responses={403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
-    summary="List customer/vendor financial accounts by account type",
+    "/reports",
+    response_model=SuccessResponse[dict],
+    summary="Generate financial reports including income, expenses, and referral income",
 )
-def list_customer_vendor_financial_accounts(
-    owner_type: FinancialAccountOwnerType = Query(..., description="Filter by VENDOR only"),
-    account_type: FinancialAccountType | None = Query(None),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    is_active: bool | None = Query(None),
-    current_user: Account = Depends(get_current_admin_or_staff),
+def generate_reports(
+    report_type: str = Query(default="income", description="income, expenses, referral_income, all"),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
-) -> PaginatedResponse[FinancialAccountResponse]:
-    del current_user
-    if owner_type == FinancialAccountOwnerType.CUSTOMER:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Customer financial accounts are not supported in this system. Customers use wallet accounts instead.",
-        )
-    if owner_type != FinancialAccountOwnerType.VENDOR:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="owner_type must be VENDOR.")
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    service = FinancialTransactionService(db)
+    report = service.build_report(report_type, start_date=start_date, end_date=end_date)
+    return SuccessResponse(message="Financial report generated successfully", data=report)
 
-    items, total_items = FinancialAccountService(db).list_accounts(
-        page=page,
-        page_size=page_size,
-        owner_type=owner_type,
-        account_type=account_type,
-        is_active=is_active,
+
+@router.get(
+    "/statistics",
+    response_model=SuccessResponse[dict],
+    summary="View total income, total expenses, and net profit or loss for a selected period",
+)
+def financial_statistics(
+    period: str = Query(default="monthly", description="daily, weekly, monthly, yearly"),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    service = FinancialTransactionService(db)
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="start_date cannot be after end_date.")
+    summary = service.get_summary(start_date=start_date, end_date=end_date)
+    period_summary = {
+        "period": period,
+        "start_date": start_date.isoformat() if start_date else None,
+        "end_date": end_date.isoformat() if end_date else None,
+        "total_income": str(summary["total_income"]),
+        "total_expenses": str(summary["total_expenses"]),
+        "referral_income": str(summary["referral_income"]),
+        "net_profit_loss": str(summary["net_profit_loss"]),
+    }
+    return SuccessResponse(message="Financial statistics fetched successfully", data=period_summary)
+
+
+@router.put(
+    "/transactions/{transaction_id}",
+    response_model=SuccessResponse[FinancialTransactionResponse],
+    responses={404: {"model": ErrorResponse}},
+    summary="Update an existing financial transaction",
+)
+def update_transaction(
+    transaction_id: uuid.UUID,
+    payload: FinancialTransactionUpdate,
+    db: Session = Depends(get_db),
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    service = FinancialTransactionService(db)
+    transaction = service.update_transaction(transaction_id, payload, current_user)
+    return SuccessResponse(
+        message="Financial transaction updated successfully",
+        data=financial_transaction_response(transaction),
     )
-    total_pages = (total_items + page_size - 1) // page_size if total_items else 0
-    return PaginatedResponse[
-        FinancialAccountResponse
-    ](
-        message=FinancialAccountSuccess.RETRIEVED,
-        data=[FinancialAccountResponse.model_validate(item) for item in items],
-        pagination=PaginationMeta(
-            current_page=page,
-            page_size=page_size,
-            total_items=total_items,
-            total_pages=total_pages,
-            has_next=page < total_pages,
-            has_previous=page > 1,
-        ),
-    )
-
-
-@router.patch(
-    "/{account_id}",
-    response_model=ActionResponse,
-    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
-    summary="Update a financial account",
-)
-def update_financial_account(
-    account_id: uuid.UUID,
-    payload: FinancialAccountUpdate,
-    current_user: Account = Depends(get_current_admin_or_staff),
-    db: Session = Depends(get_db),
-) -> ActionResponse:
-    del current_user
-    try:
-        FinancialAccountService(db).update_account(account_id, payload)
-    except ValueError as exc:
-        message = str(exc)
-        if message == FinancialAccountError.ACCOUNT_NOT_FOUND:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message) from exc
-        _raise_financial_account_error(exc)
-    return ActionResponse(message=FinancialAccountSuccess.UPDATED)
-
-
-@router.patch(
-    "/customer-vendor/{account_id}",
-    response_model=ActionResponse,
-    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
-    summary="Update a customer/vendor financial account",
-)
-def update_customer_vendor_financial_account(
-    account_id: uuid.UUID,
-    payload: FinancialAccountUpdate,
-    current_user: Account = Depends(get_current_admin_or_staff),
-    db: Session = Depends(get_db),
-) -> ActionResponse:
-    del current_user
-    try:
-        account = FinancialAccountService(db).get_account(account_id)
-    except ValueError as exc:
-        if str(exc) == FinancialAccountError.ACCOUNT_NOT_FOUND:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-    if account.owner_type == FinancialAccountOwnerType.CUSTOMER:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Customer financial accounts are not supported in this system. Customers use wallet accounts instead.",
-        )
-    if account.owner_type != FinancialAccountOwnerType.VENDOR:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This endpoint only supports vendor financial accounts.")
-
-    try:
-        FinancialAccountService(db).update_account(account_id, payload)
-    except ValueError as exc:
-        message = str(exc)
-        if message == FinancialAccountError.ACCOUNT_NOT_FOUND:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message) from exc
-        _raise_financial_account_error(exc)
-    return ActionResponse(message=FinancialAccountSuccess.UPDATED)
 
 
 @router.delete(
-    "/{account_id}",
+    "/transactions/{transaction_id}",
     response_model=ActionResponse,
-    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
-    summary="Delete a financial account",
+    responses={404: {"model": ErrorResponse}},
+    summary="Delete a financial transaction",
 )
-def delete_financial_account(
-    account_id: uuid.UUID,
-    current_user: Account = Depends(get_current_admin_or_staff),
+def delete_transaction(
+    transaction_id: uuid.UUID,
     db: Session = Depends(get_db),
-) -> ActionResponse:
-    del current_user
-    try:
-        FinancialAccountService(db).delete_account(account_id)
-    except ValueError as exc:
-        message = str(exc)
-        if message == FinancialAccountError.ACCOUNT_NOT_FOUND:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message) from exc
-        _raise_financial_account_error(exc)
-    return ActionResponse(message=FinancialAccountSuccess.DELETED)
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    service = FinancialTransactionService(db)
+    service.delete_transaction(transaction_id)
+    return ActionResponse(message="Financial transaction deleted successfully")
 
 
-@router.delete(
-    "/customer-vendor/{account_id}",
-    response_model=ActionResponse,
-    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
-    summary="Delete a customer/vendor financial account",
+@router.post(
+    "/download",
+    summary="Download financial reports in CSV, Excel, or PDF",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Generated report file for download.",
+            "content": {
+                "text/csv": {"schema": {"type": "string", "format": "binary"}},
+                "application/pdf": {"schema": {"type": "string", "format": "binary"}},
+                "application/vnd.ms-excel": {"schema": {"type": "string", "format": "binary"}},
+            },
+        }
+    },
 )
-def delete_customer_vendor_financial_account(
-    account_id: uuid.UUID,
-    current_user: Account = Depends(get_current_admin_or_staff),
+def download_report(
+    payload: FinancialReportDownloadRequest = Body(...),
     db: Session = Depends(get_db),
-) -> ActionResponse:
-    del current_user
-    try:
-        account = FinancialAccountService(db).get_account(account_id)
-    except ValueError as exc:
-        if str(exc) == FinancialAccountError.ACCOUNT_NOT_FOUND:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    report_type = payload.report_type.lower()
+    report_format = payload.format.lower()
+    period = payload.period.lower()
 
-    if account.owner_type == FinancialAccountOwnerType.CUSTOMER:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Customer financial accounts are not supported in this system. Customers use wallet accounts instead.",
+    start_obj = payload.start_date
+    end_obj = payload.end_date
+
+    if start_obj and end_obj and start_obj > end_obj:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="start_date cannot be after end_date.")
+
+    service = FinancialTransactionService(db)
+    report = service.build_report(report_type, start_date=start_obj, end_date=end_obj)
+    rows = report["rows"]
+    filename = f"financial_{report_type}_{period}.{report_format}"
+
+    if report_format == "pdf":
+        pdf_bytes = service.export_pdf(rows, report_type)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
-    if account.owner_type != FinancialAccountOwnerType.VENDOR:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This endpoint only supports vendor financial accounts.")
 
-    try:
-        FinancialAccountService(db).delete_account(account_id)
-    except ValueError as exc:
-        message = str(exc)
-        if message == FinancialAccountError.ACCOUNT_NOT_FOUND:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message) from exc
-        _raise_financial_account_error(exc)
-    return ActionResponse(message=FinancialAccountSuccess.DELETED)
+    if report_format == "excel":
+        excel_bytes = service.export_excel(rows, report_type)
+        return Response(
+            content=excel_bytes,
+            media_type="application/vnd.ms-excel",
+            headers={"Content-Disposition": f'attachment; filename="{filename.rsplit(".", 1)[0] + ".csv"}"'},
+        )
+
+    csv_blob = service.export_csv(rows, report_type)
+    return Response(
+        content=csv_blob,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

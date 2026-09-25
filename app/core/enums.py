@@ -196,15 +196,37 @@ class FinancialAccountOwnerType(AppEnum):
 
 
 class FinancialTransactionType(AppEnum):
+    INCOME = "INCOME"
+    EXPENSE = "EXPENSE"
+    REFERRAL_INCOME = "REFERRAL_INCOME"
     BOOKING_PAYMENT = "BOOKING_PAYMENT"
     BOOKING_REFUND = "BOOKING_REFUND"
     WALLET_CREDIT = "WALLET_CREDIT"
     WALLET_DEBIT = "WALLET_DEBIT"
-    EXPENSE = "EXPENSE"
     VENDOR_PAYMENT = "VENDOR_PAYMENT"
     TRANSFER = "TRANSFER"
     ADJUSTMENT = "ADJUSTMENT"
     REFERRAL_REWARD = "REFERRAL_REWARD"
+
+
+class FinancialReportType(AppEnum):
+    INCOME = "income"
+    EXPENSES = "expenses"
+    REFERRAL_INCOME = "referral_income"
+    ALL = "all"
+
+
+class FinancialExportFormat(AppEnum):
+    CSV = "csv"
+    PDF = "pdf"
+    EXCEL = "excel"
+
+
+class FinancialPeriod(AppEnum):
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    YEARLY = "yearly"
 
 
 class FinancialTransactionStatus(AppEnum):
