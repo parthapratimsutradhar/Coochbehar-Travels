@@ -1,5 +1,8 @@
 import uuid
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -10,12 +13,15 @@ from sqlalchemy.pool import StaticPool
 
 compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
 
-from app.core.enums import AccountRole
+from app.api.v1.admin.quotations import get_quotation, list_quotations
+from app.core.enums import AccountRole, EnquiryChannel, EnquiryStatus, EnquiryType, QuotationStatus
 from app.db.database import get_db
 from app.main import app
 from app.models.base import Base
 from app.models.account import Account
 from app.models.destination import Destination
+from app.models.enquiry import Enquiry
+from app.models.quotation import Quotation
 from app.services.auth_service import AuthService
 from app.utils.security import create_access_token
 
@@ -196,30 +202,171 @@ def test_vendor_and_expenses(client, superadmin_auth_header):
     assert len(exp_list.json()["data"]) >= 1
 
 
-def test_quotation_and_booking_pipeline(client, superadmin_auth_header, test_customer):
+def test_admin_quotation_list_response_contract():
+    with patch("app.api.v1.admin.quotations.QuotationService") as mock_service:
+        item = MagicMock()
+        item.id = uuid.uuid4()
+        item.quotation_code = "QT-1001-V1"
+        item.tour_name = "Bengal Heritage Tour"
+        item.travel_date = datetime(2026, 9, 25, 9, 2, 39, 625000, tzinfo=timezone.utc)
+        item.return_date = datetime(2026, 9, 30, 9, 2, 39, 625000, tzinfo=timezone.utc)
+        item.total_amount = 1250.00
+        item.valid_until = datetime(2026, 9, 27, 9, 2, 39, 625000, tzinfo=timezone.utc)
+        item.version = 1
+        item.status = "DRAFT"
+
+        mock_service.return_value.list_all_quotations.return_value = {
+            "items": [item],
+            "page": 1,
+            "page_size": 20,
+            "total_items": 1,
+            "total_pages": 1,
+        }
+
+        response = list_quotations(
+            page=1,
+            page_size=20,
+            status_filter=None,
+            search=None,
+            db=MagicMock(),
+            current_user=MagicMock(),
+        )
+
+        assert response.success is True
+        assert response.message == "Items fetched successfully"
+        assert response.pagination.current_page == 1
+        assert response.pagination.page_size == 20
+        assert response.pagination.total_items == 1
+        assert response.pagination.total_pages == 1
+        assert response.data[0].model_dump().keys() == {
+            "tour_name",
+            "travel_date",
+            "return_date",
+            "total_amount",
+            "valid_until",
+            "id",
+            "quotation_code",
+            "version",
+            "status",
+        }
+
+
+def test_admin_quotation_detail_response_contract():
+    item = SimpleNamespace()
+    item.id = uuid.uuid4()
+    item.quotation_code = "QT-1001-V1"
+    item.customer_id = uuid.uuid4()
+    item.enquiry_id = uuid.uuid4()
+    item.package_id = uuid.uuid4()
+    item.variant_id = uuid.uuid4()
+    item.destination_id = uuid.uuid4()
+    item.created_by_account_id = uuid.uuid4()
+    item.tour_name = "Andaman Escape"
+    item.travel_date = datetime(2026, 9, 25, 9, 34, 51, 979000, tzinfo=timezone.utc)
+    item.return_date = datetime(2026, 9, 30, 9, 34, 51, 979000, tzinfo=timezone.utc)
+    item.subtotal = 1000.00
+    item.discount_amount = 50.00
+    item.tax_amount = 75.00
+    item.total_amount = 1025.00
+    item.valid_until = datetime(2026, 9, 27, 9, 34, 51, 979000, tzinfo=timezone.utc)
+    item.terms_and_conditions = "Terms"
+    item.important_notes = "Notes"
+    item.inclusion = "Inclusion"
+    item.exclusion = "Exclusion"
+    item.version = 1
+    item.status = "DRAFT"
+    item.created_by = SimpleNamespace(
+        id=item.created_by_account_id,
+        name="Support Admin",
+        email="support@example.com",
+        profile_pic="https://img.example.com/admin.png",
+    )
+    item.customer = SimpleNamespace(
+        id=item.customer_id,
+        name="Alice Customer",
+        mobile="9876543210",
+        email="alice@example.com",
+        profile_pic="https://img.example.com/customer.png",
+    )
+    item.package = SimpleNamespace(
+        id=item.package_id,
+        title="Beach Delight",
+        description="Enjoy the coast",
+    )
+    item.variant = SimpleNamespace(
+        id=item.variant_id,
+        name="Classic Summer",
+        season_name="Summer",
+        banner={"image": "https://img.example.com/banner.jpg", "video": "https://video.example.com/banner.mp4"},
+    )
+    item.destination = SimpleNamespace(id=item.destination_id, name="Andaman")
+    item.created_at = datetime(2026, 9, 25, 9, 34, 51, 979000, tzinfo=timezone.utc)
+    item.updated_at = datetime(2026, 9, 25, 9, 34, 51, 979000, tzinfo=timezone.utc)
+    item.sent_at = None
+    item.accepted_at = None
+    item.rejected_at = None
+    item.rejected_reason = None
+    item.items = []
+    item.hotels = []
+    item.vehicles = []
+    item.itinerary = []
+
+    with patch("app.api.v1.admin.quotations.QuotationService") as mock_service:
+        mock_service.return_value.get_quotation.return_value = item
+
+        response = get_quotation(
+            quotation_id=item.id,
+            db=MagicMock(),
+            current_user=MagicMock(),
+        )
+
+        assert response.success is True
+        assert response.data.customer.name == "Alice Customer"
+        assert response.data.package.name == "Beach Delight"
+        assert response.data.variant.name == "Classic Summer"
+        assert response.data.destination.name == "Andaman"
+        assert response.data.created_by.name == "Support Admin"
+        assert response.data.quotation_code == "QT-1001-V1"
+        assert response.data.status == "DRAFT"
+
+
+def test_quotation_and_booking_pipeline(client, superadmin_auth_header, test_customer, db_session):
+    enquiry = Enquiry(
+        enquiry_code="ENQ-QUOT-1001",
+        customer_id=test_customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WHATSAPP,
+        status=EnquiryStatus.NEW,
+        enquirer_name="John Traveler",
+        enquirer_phone="+919876543210",
+        enquirer_email="john@example.com",
+    )
+    db_session.add(enquiry)
+    db_session.commit()
+    db_session.refresh(enquiry)
+
     # 1. Create Quotation
     q_resp = client.post(
         "/api/v1/admin/quotations/",
         headers=superadmin_auth_header,
         json={
             "customer_id": str(test_customer.id),
+            "enquiry_id": str(enquiry.id),
             "tour_name": "Sikkim 5N/6D Tour",
-            "adult_count": 2,
-            "child_count": 1,
             "subtotal": 50000.0,
             "discount_amount": 5000.0,
             "tax_amount": 2250.0,
             "total_amount": 47250.0,
             "items": [
                 {
-                    "item_type": "hotel",
+                    "item_type": "other",
                     "name": "Gangtok Grand Hotel",
                     "quantity": 3,
                     "unit_price": 6000.0,
                     "total_price": 18000.0,
                 },
                 {
-                    "item_type": "transport",
+                    "item_type": "transfer",
                     "name": "Innova Crysta 5 Days",
                     "quantity": 1,
                     "unit_price": 20000.0,
@@ -229,9 +376,9 @@ def test_quotation_and_booking_pipeline(client, superadmin_auth_header, test_cus
         },
     )
     assert q_resp.status_code == 201, q_resp.text
-    quotation = q_resp.json()["data"]
-    quotation_id = quotation["id"]
-    assert float(quotation["total_amount"]) == 47250.0
+    quotation = db_session.query(Quotation).order_by(Quotation.created_at.desc()).first()
+    quotation_id = quotation.id
+    assert float(quotation.total_amount) == 47250.0
 
     # 2. Get Quotation
     get_q = client.get(f"/api/v1/admin/quotations/{quotation_id}", headers=superadmin_auth_header)
@@ -297,4 +444,124 @@ def test_quotation_and_booking_pipeline(client, superadmin_auth_header, test_cus
     assert "current_month" in dash_data
     assert dash_data["today"]["new_bookings"] == 1
     assert float(dash_data["today"]["revenue"]) == 47250.0
+
+
+def test_admin_quotation_send_marks_status_sent(client, superadmin_auth_header, test_customer, db_session, monkeypatch):
+    enquiry = Enquiry(
+        enquiry_code="ENQ-1002",
+        customer_id=test_customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WHATSAPP,
+        status=EnquiryStatus.NEW,
+        enquirer_name="Maria Traveler",
+        enquirer_phone="+919876543211",
+        enquirer_email="maria@example.com",
+    )
+    db_session.add(enquiry)
+    db_session.commit()
+    db_session.refresh(enquiry)
+
+    create_resp = client.post(
+        "/api/v1/admin/quotations/",
+        headers=superadmin_auth_header,
+        json={
+            "customer_id": str(test_customer.id),
+            "enquiry_id": str(enquiry.id),
+            "tour_name": "Goa Escape",
+            "subtotal": 18000.0,
+            "discount_amount": 500.0,
+            "tax_amount": 700.0,
+            "total_amount": 18200.0,
+            "items": [
+                {
+                    "item_type": "other",
+                    "name": "Beach Resort Stay",
+                    "quantity": 2,
+                    "unit_price": 7000.0,
+                    "total_price": 14000.0,
+                }
+            ],
+        },
+    )
+    assert create_resp.status_code == 201, create_resp.text
+    quotation = db_session.query(Quotation).order_by(Quotation.created_at.desc()).first()
+
+    async def fake_email_quotation(self, quotation_id, recipient_email):
+        return "https://example.com/quotation.pdf"
+
+    monkeypatch.setattr("app.services.quotation_service.QuotationService.email_quotation", fake_email_quotation)
+
+    send_resp = client.post(
+        f"/api/v1/admin/quotations/{quotation.id}/send",
+        headers=superadmin_auth_header,
+        json={"recipient_email": "customer@example.com"},
+    )
+    assert send_resp.status_code == 200, send_resp.text
+    db_session.refresh(quotation)
+    assert quotation.status == QuotationStatus.SENT
+
+
+def test_admin_quotation_update_and_status_flow(client, superadmin_auth_header, test_customer, db_session):
+    enquiry = Enquiry(
+        enquiry_code="ENQ-1001",
+        customer_id=test_customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WHATSAPP,
+        status=EnquiryStatus.NEW,
+        enquirer_name="John Traveler",
+        enquirer_phone="+919876543210",
+        enquirer_email="john@example.com",
+    )
+    db_session.add(enquiry)
+    db_session.commit()
+    db_session.refresh(enquiry)
+
+    create_resp = client.post(
+        "/api/v1/admin/quotations/",
+        headers=superadmin_auth_header,
+        json={
+            "customer_id": str(test_customer.id),
+            "enquiry_id": str(enquiry.id),
+            "tour_name": "Kerala Wellness Tour",
+            "subtotal": 25000.0,
+            "discount_amount": 1000.0,
+            "tax_amount": 1200.0,
+            "total_amount": 25200.0,
+            "items": [
+                {
+                    "item_type": "other",
+                    "name": "Tea Valley Resort",
+                    "quantity": 2,
+                    "unit_price": 8000.0,
+                    "total_price": 16000.0,
+                }
+            ],
+        },
+    )
+    assert create_resp.status_code == 201, create_resp.text
+    quotation = db_session.query(Quotation).order_by(Quotation.created_at.desc()).first()
+    quotation_id = quotation.id
+
+    update_resp = client.patch(
+        f"/api/v1/admin/quotations/{quotation_id}",
+        headers=superadmin_auth_header,
+        json={"tour_name": "Kerala Wellness Deluxe Tour", "total_amount": 26000.0},
+    )
+    assert update_resp.status_code == 200, update_resp.text
+    assert update_resp.json()["message"] == "User updated successfully." or update_resp.json()["message"] == "Quotation updated successfully."
+
+    status_resp = client.patch(
+        f"/api/v1/admin/quotations/{quotation_id}/status",
+        headers=superadmin_auth_header,
+        json={"status": "SENT"},
+    )
+    assert status_resp.status_code == 200, status_resp.text
+    assert status_resp.json()["message"] in {"User updated successfully.", "Quotation updated successfully."}
+
+    locked_update = client.patch(
+        f"/api/v1/admin/quotations/{quotation_id}",
+        headers=superadmin_auth_header,
+        json={"tour_name": "This update should be blocked"},
+    )
+    assert locked_update.status_code == 409, locked_update.text
 

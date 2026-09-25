@@ -1,9 +1,47 @@
+import httpx
 import pytest
 import cloudinary.uploader
+from app.core.config import settings
 from app.services.cloudinary_service import (
     extract_cloudinary_asset_info,
     promote_cloudinary_asset,
+    upload_content_to_cloudinary,
 )
+
+
+@pytest.mark.anyio
+async def test_upload_content_to_cloudinary_includes_signed_account_defaults(monkeypatch):
+    monkeypatch.setattr(settings, "CLOUDINARY_CLOUD_NAME", "demo-cloud")
+    monkeypatch.setattr(settings, "CLOUDINARY_API_KEY", "test-key")
+    monkeypatch.setattr(settings, "CLOUDINARY_API_SECRET", "test-secret")
+
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"secure_url": "https://res.cloudinary.com/demo-cloud/raw/upload/abc.pdf", "public_id": "abc"}
+
+    async def fake_post(self, url, data, files):
+        captured["url"] = url
+        captured["data"] = data
+        captured["files"] = files
+        return FakeResponse()
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    result = await upload_content_to_cloudinary(
+        content=b"%PDF-1.4\n",
+        filename="test.pdf",
+        content_type="application/pdf",
+        sub_folder="temporary-uploads/quotations",
+    )
+
+    assert result["secure_url"].startswith("https://res.cloudinary.com/demo-cloud/")
+    assert captured["data"]["access_mode"] == "public"
+    assert captured["data"]["public_id_prefix"] == "Coochbehar-travels/temporary-uploads/quotations"
+    assert captured["data"]["folder"] == "Coochbehar-travels/temporary-uploads/quotations"
 
 
 def test_extract_cloudinary_asset_info():

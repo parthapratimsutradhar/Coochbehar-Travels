@@ -143,6 +143,8 @@ class QuotationRepository:
         quotation: Quotation,
         update_data: dict,
         items: list[dict] | None = None,
+        hotels: list[dict] | None = None,
+        vehicles: list[dict] | None = None,
         itinerary: list[dict] | None = None,
     ) -> Quotation:
         for k, v in update_data.items():
@@ -150,15 +152,26 @@ class QuotationRepository:
                 setattr(quotation, k, v)
 
         if items is not None:
-            # remove old items and add new items
             for old_it in quotation.items:
                 self.db.delete(old_it)
             self.db.flush()
+
+            created_items = []
             for index, it in enumerate(items):
                 q_item = TripItem(quotation_id=quotation.id, **dict(it))
                 q_item.sort_order = index
                 self.db.add(q_item)
                 self.db.flush()
+                created_items.append(q_item)
+
+            hotel_items = [item for item in created_items if item.item_type.value == "hotel"]
+            for item, hotel_data in zip(hotel_items, hotels or []):
+                self.db.add(TripHotel(trip_item_id=item.id, **hotel_data))
+
+            vehicle_items = [item for item in created_items if item.item_type.value in {"transport", "transfer"}]
+            for item, vehicle_data in zip(vehicle_items, vehicles or []):
+                self.db.add(TripVehicle(trip_item_id=item.id, **vehicle_data))
+
         if itinerary is not None:
             for old_itinerary in quotation.itinerary:
                 self.db.delete(old_itinerary)

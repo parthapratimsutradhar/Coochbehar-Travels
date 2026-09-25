@@ -291,7 +291,10 @@ async def _upload_content_to_cloudinary(
     folder = _validate_upload(content, content_type, sub_folder)
     content, filename, content_type = await _compress_upload(content, filename, content_type)
     timestamp = int(time.time())
+    is_pdf = content_type == "application/pdf" or filename.lower().endswith(".pdf")
+    resource_type = "raw" if is_pdf else "auto"
     upload_params = {
+        "access_mode": "public",
         "folder": folder,
         "public_id_prefix": folder,
         "timestamp": timestamp,
@@ -311,7 +314,7 @@ async def _upload_content_to_cloudinary(
         )
     }
     upload_url = (
-        f"https://api.cloudinary.com/v1_1/{settings.CLOUDINARY_CLOUD_NAME}/auto/upload"
+        f"https://api.cloudinary.com/v1_1/{settings.CLOUDINARY_CLOUD_NAME}/{resource_type}/upload"
     )
 
     async with httpx.AsyncClient(timeout=60) as client:

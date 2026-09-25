@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
-from pydantic import ConfigDict, EmailStr, Field, model_validator
+from pydantic import AliasChoices, ConfigDict, EmailStr, Field, model_validator
 from app.core.enums import CostItemType, QuotationStatus, RoomType, VehicleType
 from app.schemas.base import SchemaBase
 
@@ -134,6 +134,92 @@ class QuotationVersionCreate(SchemaBase):
     itinerary: list[QuotationItineraryCreate] | None = None
 
 
+class QuotationUpdate(SchemaBase):
+    customer_id: UUID | None = None
+    package_id: UUID | None = None
+    variant_id: UUID | None = None
+    destination_id: UUID | None = None
+    tour_name: str | None = Field(default=None, min_length=1, max_length=255)
+    travel_date: datetime | None = None
+    return_date: datetime | None = None
+    subtotal: Decimal | None = Field(default=None, ge=0)
+    discount_amount: Decimal | None = Field(default=None, ge=0)
+    tax_amount: Decimal | None = Field(default=None, ge=0)
+    total_amount: Decimal | None = Field(default=None, ge=0)
+    valid_until: datetime | None = None
+    terms_and_conditions: str | None = None
+    important_notes: str | None = None
+    inclusion: str | None = None
+    exclusion: str | None = None
+    items: list[QuotationItemCreate] | None = None
+    hotels: list[QuotationHotelCreate] | None = None
+    vehicles: list[QuotationVehicleCreate] | None = None
+    itinerary: list[QuotationItineraryCreate] | None = None
+
+
+class QuotationListResponse(SchemaBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    quotation_code: str
+    tour_name: str
+    travel_date: datetime | None = None
+    return_date: datetime | None = None
+    total_amount: Decimal = Field(default=Decimal(0), ge=0)
+    valid_until: datetime | None = None
+    version: int
+    status: QuotationStatus
+
+
+class QuotationCustomerSummaryResponse(SchemaBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    mobile: str | None = None
+    email: str | None = None
+    profile_picture: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("profile_picture", "profile_pic"),
+    )
+
+
+class QuotationPackageSummaryResponse(SchemaBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str = Field(validation_alias=AliasChoices("name", "title"))
+    description: str | None = None
+
+
+class QuotationVariantSummaryResponse(SchemaBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    banner: dict[str, str | None] | None = None
+    season_name: str | None = None
+
+
+class QuotationDestinationSummaryResponse(SchemaBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+
+
+class QuotationCreatedBySummaryResponse(SchemaBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    account_id: UUID = Field(validation_alias=AliasChoices("account_id", "id"))
+    name: str
+    email: str | None = None
+    profile_picture: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("profile_picture", "profile_pic"),
+    )
+
+
 class QuotationStatusUpdate(SchemaBase):
     status: QuotationStatus
 
@@ -142,18 +228,35 @@ class QuotationEmailRequest(SchemaBase):
     recipient_email: EmailStr
 
 
-class QuotationResponse(QuotationBase):
+class QuotationResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 
+    customer: QuotationCustomerSummaryResponse | None = None
+    enquiry_id: UUID
+    package: QuotationPackageSummaryResponse | None = None
+    variant: QuotationVariantSummaryResponse | None = None
+    destination: QuotationDestinationSummaryResponse | None = None
+    tour_name: str
+    travel_date: datetime | None = None
+    return_date: datetime | None = None
+    subtotal: Decimal = Field(default=Decimal(0), ge=0)
+    discount_amount: Decimal = Field(default=Decimal(0), ge=0)
+    tax_amount: Decimal = Field(default=Decimal(0), ge=0)
+    total_amount: Decimal = Field(default=Decimal(0), ge=0)
+    valid_until: datetime | None = None
+    terms_and_conditions: str | None = None
+    important_notes: str | None = None
+    inclusion: str | None = None
+    exclusion: str | None = None
     id: UUID
     quotation_code: str
     version: int
     status: QuotationStatus
-    created_by_account_id: UUID | None
-    sent_at: datetime | None
-    accepted_at: datetime | None
-    rejected_at: datetime | None
-    rejected_reason: str | None
+    created_by: QuotationCreatedBySummaryResponse | None = None
+    sent_at: datetime | None = None
+    accepted_at: datetime | None = None
+    rejected_at: datetime | None = None
+    rejected_reason: str | None = None
     created_at: datetime
     updated_at: datetime
     items: list[QuotationItemResponse] = Field(default_factory=list)
@@ -169,8 +272,13 @@ class QuotationResponse(QuotationBase):
         data = {
             field: getattr(value, field, None)
             for field in cls.model_fields
-            if field not in {"items", "hotels", "vehicles", "itinerary"}
+            if field not in {"items", "hotels", "vehicles", "itinerary", "customer", "package", "variant", "destination", "created_by"}
         }
+        data["customer"] = getattr(value, "customer", None)
+        data["package"] = getattr(value, "package", None)
+        data["variant"] = getattr(value, "variant", None)
+        data["destination"] = getattr(value, "destination", None)
+        data["created_by"] = getattr(value, "created_by", None)
         items = list(getattr(value, "items", []) or [])
         data["items"] = items
         data["hotels"] = [item.hotel for item in items if getattr(item, "hotel", None)]

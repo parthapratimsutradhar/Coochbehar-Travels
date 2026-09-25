@@ -12,7 +12,7 @@ from app.models.account import Account
 from app.models.quotation import Quotation
 from app.repository.enquiry_repo import EnquiryRepository
 from app.repository.quotation_repo import QuotationRepository
-from app.schemas.quotation import QuotationCreate, QuotationVersionCreate
+from app.schemas.quotation import QuotationCreate, QuotationUpdate, QuotationVersionCreate
 from app.services.email_service import EmailService
 from app.services.quotation_pdf_service import generate_and_upload_quotation_pdf
 
@@ -236,6 +236,62 @@ class QuotationService:
             itinerary=itinerary_data,
         )
 
+    def update_quotation(
+        self,
+        quotation_id: uuid.UUID,
+        payload: QuotationUpdate,
+        staff_user: Account,
+    ) -> Quotation:
+        quotation = self.get_quotation(quotation_id)
+        if quotation.status not in {QuotationStatus.DRAFT, QuotationStatus.REJECTED}:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Quotation can only be updated before it is sent to the customer.",
+            )
+
+        values = payload.model_dump(exclude_unset=True)
+        items = values.pop("items", None)
+        hotels = values.pop("hotels", None)
+        vehicles = values.pop("vehicles", None)
+        itinerary = values.pop("itinerary", None)
+
+        if items is not None:
+            for item in items:
+                item["total_price"] = item.get("unit_price", Decimal(0)) * item.get("quantity", 1)
+            subtotal = values.get("subtotal")
+            if subtotal is None:
+                subtotal = sum((Decimal(str(item["unit_price"])) * item["quantity"] for item in items), Decimal(0))
+            values["subtotal"] = subtotal
+            current_discount = values.get("discount_amount", quotation.discount_amount)
+            current_tax = values.get("tax_amount", quotation.tax_amount)
+            values["total_amount"] = max(Decimal(0), Decimal(str(subtotal)) - Decimal(str(current_discount)) + Decimal(str(current_tax)))
+
+        if values.get("subtotal") is not None and "total_amount" not in values:
+            subtotal = Decimal(str(values["subtotal"]))
+            discount = Decimal(str(values.get("discount_amount", quotation.discount_amount)))
+            tax = Decimal(str(values.get("tax_amount", quotation.tax_amount)))
+            values["total_amount"] = max(Decimal(0), subtotal - discount + tax)
+
+        self.quotation_repo.update(
+            quotation,
+            values,
+            items=[dict(item) for item in items] if items is not None else None,
+            hotels=[dict(hotel) for hotel in hotels] if hotels is not None else None,
+            vehicles=[dict(vehicle) for vehicle in vehicles] if vehicles is not None else None,
+            itinerary=[dict(day) for day in itinerary] if itinerary is not None else None,
+        )
+        return self.get_quotation(quotation_id)
+
+    def update_quotation_status(self, quotation_id: uuid.UUID, status: QuotationStatus) -> Quotation:
+        quotation = self.get_quotation(quotation_id)
+        if status == QuotationStatus.SENT:
+            quotation.sent_at = datetime.now(timezone.utc)
+        elif status == QuotationStatus.ACCEPTED:
+            quotation.accepted_at = datetime.now(timezone.utc)
+        elif status == QuotationStatus.REJECTED:
+            quotation.rejected_at = datetime.now(timezone.utc)
+        return self.quotation_repo.update_status(quotation, status)
+
     def delete_quotation(self, quotation_id: uuid.UUID) -> None:
         self.quotation_repo.delete(self.get_quotation(quotation_id))
 
@@ -264,7 +320,6 @@ class QuotationService:
                 "Regards,\nCoochbehar Travels"
             ),
         )
-        self.send_quotation(quotation_id)
         return pdf_url
 
     def send_quotation(self, quotation_id: uuid.UUID) -> Quotation:
