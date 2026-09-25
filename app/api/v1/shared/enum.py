@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from app.api.deps import get_current_actor
 from app.core.messages.success import EnumSuccess
 from app.schemas.enum import EnumListResponse
 from app.schemas.response import SuccessResponse
@@ -16,6 +17,7 @@ router = APIRouter(prefix="/enums", tags=["Enums"])
     description="Returns all UI enum groups, with optional group and text filtering.",
 )
 def list_enums(
+    actor=Depends(get_current_actor),
     group: str | None = Query(
         default=None,
         description=(
@@ -25,6 +27,7 @@ def list_enums(
     ),
     search: str | None = Query(default=None, min_length=1),
 ):
+    _ = actor
     data = EnumService().list_enums(group=group, search=search)
     return SuccessResponse(
         message=EnumSuccess.RETRIEVED,

@@ -248,11 +248,9 @@ class QuotationStatus(AppEnum):
     
         
 class CostItemType(AppEnum):
-    HOTEL = "hotel"
     TRANSPORT = "transport"
     FLIGHT = "flight"
     TRAIN = "train"
-    MEAL = "meal"
     ACTIVITY = "activity"
     GUIDE = "guide"
     PERMIT = "permit"
@@ -309,4 +307,5 @@ ALLOWED_ENUM_GROUPS = (
     "FinancialTransactionType",
     "VehicleType",
     "Gender",
+    "CostItemType"
 )
