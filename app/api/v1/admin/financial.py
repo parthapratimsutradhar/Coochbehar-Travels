@@ -100,7 +100,7 @@ def list_financial_accounts(
     summary="List customer/vendor financial accounts by account type",
 )
 def list_customer_vendor_financial_accounts(
-    owner_type: FinancialAccountOwnerType = Query(..., description="Filter by CUSTOMER or VENDOR"),
+    owner_type: FinancialAccountOwnerType = Query(..., description="Filter by VENDOR only"),
     account_type: FinancialAccountType | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -109,8 +109,13 @@ def list_customer_vendor_financial_accounts(
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[FinancialAccountResponse]:
     del current_user
-    if owner_type not in (FinancialAccountOwnerType.CUSTOMER, FinancialAccountOwnerType.VENDOR):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="owner_type must be CUSTOMER or VENDOR.")
+    if owner_type == FinancialAccountOwnerType.CUSTOMER:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Customer financial accounts are not supported in this system. Customers use wallet accounts instead.",
+        )
+    if owner_type != FinancialAccountOwnerType.VENDOR:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="owner_type must be VENDOR.")
 
     items, total_items = FinancialAccountService(db).list_accounts(
         page=page,
@@ -179,8 +184,13 @@ def update_customer_vendor_financial_account(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    if account.owner_type not in (FinancialAccountOwnerType.CUSTOMER, FinancialAccountOwnerType.VENDOR):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This endpoint only supports customer/vendor financial accounts.")
+    if account.owner_type == FinancialAccountOwnerType.CUSTOMER:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Customer financial accounts are not supported in this system. Customers use wallet accounts instead.",
+        )
+    if account.owner_type != FinancialAccountOwnerType.VENDOR:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This endpoint only supports vendor financial accounts.")
 
     try:
         FinancialAccountService(db).update_account(account_id, payload)
@@ -233,8 +243,13 @@ def delete_customer_vendor_financial_account(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    if account.owner_type not in (FinancialAccountOwnerType.CUSTOMER, FinancialAccountOwnerType.VENDOR):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This endpoint only supports customer/vendor financial accounts.")
+    if account.owner_type == FinancialAccountOwnerType.CUSTOMER:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Customer financial accounts are not supported in this system. Customers use wallet accounts instead.",
+        )
+    if account.owner_type != FinancialAccountOwnerType.VENDOR:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This endpoint only supports vendor financial accounts.")
 
     try:
         FinancialAccountService(db).delete_account(account_id)

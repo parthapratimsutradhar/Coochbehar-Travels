@@ -237,13 +237,13 @@ def test_admin_package_variant_detail_uses_tour_departures_for_departure_dates(c
     assert data[1]["available_seats"] == 8
 
 
-def test_admin_tour_detail_create_accepts_missing_nested_ids(client, admin_user, db_session):
+def test_admin_tour_detail_put_accepts_missing_nested_ids(client, admin_user, db_session):
     auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
 
     package = create_package(db_session)
     variant = create_variant(db_session, package.id)
 
-    response = client.post(
+    response = client.put(
         "/api/v1/admin/tour-details",
         json={
             "variant_id": str(variant.id),
@@ -259,9 +259,9 @@ def test_admin_tour_detail_create_accepts_missing_nested_ids(client, admin_user,
         headers=auth_header,
     )
 
-    assert response.status_code == 201, response.text
+    assert response.status_code == 200, response.text
     data = response.json()
-    assert data["message"] == "Tour details created successfully"
+    assert data["message"] == "Tour details updated successfully"
     assert response.json()["success"] is True
 
 
@@ -323,15 +323,85 @@ def test_admin_tour_detail_upsert_updates_existing_nested_items_by_id(client, ad
     assert data["banner"]["image"] == "https://example.com/banner-updated.jpg"
 
 
-def test_admin_detail_banner_patch_replaces_only_supplied_media(client, admin_user, db_session):
+def test_admin_tour_detail_uses_only_get_put_and_delete_routes(client, admin_user, db_session):
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+    package = create_package(db_session)
+    variant = create_variant(db_session, package.id)
+    detail = create_detail(db_session, variant.id)
+
+    post_response = client.post(
+        "/api/v1/admin/tour-details",
+        json={
+            "variant_id": str(variant.id),
+            "banner": {"image": "https://example.com/banner.jpg"},
+            "gallery": [],
+            "highlights": [],
+            "inclusions": ["Meals"],
+            "exclusions": [],
+            "departure_dates": [],
+            "itinerary": [],
+            "route": [],
+        },
+        headers=auth_header,
+    )
+    assert post_response.status_code == 405, post_response.text
+
+    patch_response = client.patch(
+        f"/api/v1/admin/tour-details/{detail.id}",
+        json={"banner": {"image": "https://example.com/new-banner.jpg"}},
+        headers=auth_header,
+    )
+    assert patch_response.status_code == 405, patch_response.text
+
+    get_response = client.get(
+        f"/api/v1/admin/tour-details/{detail.id}",
+        headers=auth_header,
+    )
+    assert get_response.status_code == 200, get_response.text
+
+    put_response = client.put(
+        "/api/v1/admin/tour-details",
+        json={
+            "variant_id": str(variant.id),
+            "banner": {"image": "https://example.com/banner-updated.jpg"},
+            "gallery": [],
+            "highlights": [],
+            "inclusions": ["Updated Meals"],
+            "exclusions": [],
+            "departure_dates": [],
+            "itinerary": [],
+            "route": [],
+        },
+        headers=auth_header,
+    )
+    assert put_response.status_code == 200, put_response.text
+
+    delete_response = client.delete(
+        f"/api/v1/admin/tour-details/{detail.id}",
+        headers=auth_header,
+    )
+    assert delete_response.status_code == 200, delete_response.text
+
+
+def test_admin_detail_banner_put_replaces_only_supplied_media(client, admin_user, db_session):
     package = create_package(db_session)
     variant = create_variant(db_session, package.id)
     detail = create_detail(db_session, variant.id)
     auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
 
-    response = client.patch(
-        f"/api/v1/admin/tour-details/{detail.id}",
-        json={"banner": {"image": "https://example.com/new-banner.jpg"}},
+    response = client.put(
+        "/api/v1/admin/tour-details",
+        json={
+            "variant_id": str(variant.id),
+            "banner": {"image": "https://example.com/new-banner.jpg"},
+            "gallery": detail.gallery,
+            "highlights": detail.highlights,
+            "inclusions": detail.inclusions,
+            "exclusions": detail.exclusions,
+            "departure_dates": [],
+            "itinerary": detail.itinerary,
+            "route": detail.route_stops,
+        },
         headers=auth_header,
     )
 
@@ -341,15 +411,25 @@ def test_admin_detail_banner_patch_replaces_only_supplied_media(client, admin_us
         "video": None,
     }
 
-    response = client.patch(
-        f"/api/v1/admin/tour-details/{detail.id}",
-        json={"banner": {"video": "https://example.com/banner.mp4"}},
+    response = client.put(
+        "/api/v1/admin/tour-details",
+        json={
+            "variant_id": str(variant.id),
+            "banner": {"video": "https://example.com/banner.mp4"},
+            "gallery": detail.gallery,
+            "highlights": detail.highlights,
+            "inclusions": detail.inclusions,
+            "exclusions": detail.exclusions,
+            "departure_dates": [],
+            "itinerary": detail.itinerary,
+            "route": detail.route_stops,
+        },
         headers=auth_header,
     )
 
     assert response.status_code == 200
     assert response.json()["data"]["banner"] == {
-        "image": "https://example.com/new-banner.jpg",
+        "image": None,
         "video": "https://example.com/banner.mp4",
     }
 
@@ -359,9 +439,19 @@ def test_admin_detail_banner_ignores_extra_media_fields(client, admin_user, db_s
     variant = create_variant(db_session, package.id)
     detail = create_detail(db_session, variant.id)
 
-    response = client.patch(
-        f"/api/v1/admin/tour-details/{detail.id}",
-        json={"banner": {"image": "https://example.com/new-banner.jpg", "thumbnail": "extra"}},
+    response = client.put(
+        "/api/v1/admin/tour-details",
+        json={
+            "variant_id": str(variant.id),
+            "banner": {"image": "https://example.com/new-banner.jpg", "thumbnail": "extra"},
+            "gallery": detail.gallery,
+            "highlights": detail.highlights,
+            "inclusions": detail.inclusions,
+            "exclusions": detail.exclusions,
+            "departure_dates": [],
+            "itinerary": detail.itinerary,
+            "route": detail.route_stops,
+        },
         headers={"Authorization": f"Bearer {make_token(admin_user)}"},
     )
 
@@ -741,7 +831,7 @@ def test_admin_can_create_update_and_delete_tour_package_variant_and_detail(clie
     assert create_variant_response.status_code == 201
     variant_id = client.get(f"/api/v1/admin/tour-variants?tour_id={package_id}", headers=auth_header).json()["data"][0]["id"]
 
-    create_detail_response = client.post(
+    create_detail_response = client.put(
         "/api/v1/admin/tour-details",
         json={
             "variant_id": variant_id,
@@ -756,7 +846,7 @@ def test_admin_can_create_update_and_delete_tour_package_variant_and_detail(clie
         },
         headers=auth_header,
     )
-    assert create_detail_response.status_code == 201
+    assert create_detail_response.status_code == 200
 
     update_package_response = client.patch(
         f"/api/v1/admin/tour-packages/{package_id}",
@@ -778,13 +868,6 @@ def test_admin_can_create_update_and_delete_tour_package_variant_and_detail(clie
         f"/api/v1/admin/tour-packages/{package_id}/variants/{variant_id}",
         headers=auth_header,
     ).json()["data"]["id"]
-    update_detail_response = client.patch(
-        f"/api/v1/admin/tour-details/{detail_id}",
-        json={"highlights": [{"id": "h1", "text": "Updated highlight"}]},
-        headers=auth_header,
-    )
-    assert update_detail_response.status_code == 200
-    assert update_detail_response.json()["message"] == "Tour details updated successfully"
 
     delete_detail_response = client.delete(
         f"/api/v1/admin/tour-details/{detail_id}",

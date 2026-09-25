@@ -7,6 +7,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.enums import (
+    FinancialAccountOwnerType,
+    FinancialAccountType,
     FinancialTransactionStatus,
     FinancialTransactionType,
     PaymentMethod,
@@ -399,7 +401,11 @@ class FinancialService:
         with self.db.begin():
             existing = (
                 self.db.query(FinancialAccount)
-                .filter_by(owner_id=customer_id, account_type="LIABILITY", owner_type="CUSTOMER")
+                .filter_by(
+                    owner_id=customer_id,
+                    account_type=FinancialAccountType.LIABILITY,
+                    owner_type=FinancialAccountOwnerType.CUSTOMER,
+                )
                 .one_or_none()
             )
             if existing:
@@ -407,8 +413,8 @@ class FinancialService:
             wallet = FinancialAccount(
                 account_code=f"WALLET-{customer_id.hex[:12].upper()}",
                 name=f"{customer_name} Wallet",
-                account_type="LIABILITY",
-                owner_type="CUSTOMER",
+                account_type=FinancialAccountType.LIABILITY,
+                owner_type=FinancialAccountOwnerType.CUSTOMER,
                 owner_id=customer_id,
             )
             self.db.add(wallet)

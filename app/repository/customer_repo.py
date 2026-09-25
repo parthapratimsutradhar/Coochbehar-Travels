@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.enums import AccountRole, LeadSource
+from app.core.enums import AccountRole, FinancialAccountOwnerType, FinancialAccountType, LeadSource
 from app.models.account import Account
 from app.models.customer_profile import CustomerProfile
 from app.models.enquiry import Enquiry
@@ -95,8 +95,8 @@ class CustomerRepository:
             FinancialAccount(
                 account_code=f"WALLET-{account.id.hex[:12].upper()}",
                 name=f"{account.name} Wallet",
-                account_type="LIABILITY",
-                owner_type="CUSTOMER",
+                account_type=FinancialAccountType.LIABILITY,
+                owner_type=FinancialAccountOwnerType.CUSTOMER,
                 owner_id=account.id,
             )
         )

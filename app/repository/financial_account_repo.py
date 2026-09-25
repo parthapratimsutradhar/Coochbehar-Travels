@@ -36,15 +36,12 @@ class FinancialAccountRepository:
         )
 
     def validate_owner(self, owner_type: FinancialAccountOwnerType | None, owner_id: uuid.UUID | None) -> None:
-        if owner_type in (FinancialAccountOwnerType.CUSTOMER, FinancialAccountOwnerType.VENDOR):
-            if owner_id is None:
-                raise ValueError("owner_id is required for customer/vendor financial accounts.")
+        if owner_type == FinancialAccountOwnerType.CUSTOMER:
+            raise ValueError("Customer financial accounts are not supported in this system. Customers use wallet accounts instead.")
 
-            if owner_type == FinancialAccountOwnerType.CUSTOMER:
-                owner = self.db.get(Account, owner_id)
-                if owner is None or owner.role != AccountRole.CUSTOMER:
-                    raise ValueError("The owner_id does not match a valid customer account.")
-                return
+        if owner_type == FinancialAccountOwnerType.VENDOR:
+            if owner_id is None:
+                raise ValueError("owner_id is required for vendor financial accounts.")
 
             owner = self.db.get(Vendor, owner_id)
             if owner is None:

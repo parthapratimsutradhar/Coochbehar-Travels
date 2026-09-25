@@ -13,19 +13,22 @@ class FinancialAccountService:
 
     def create_account(self, payload: FinancialAccountCreate):
         data = payload.model_dump(exclude_unset=True)
-        self.repo.validate_owner(data.get("owner_type"), data.get("owner_id"))
+        owner_type = data.get("owner_type")
+        if owner_type == FinancialAccountOwnerType.CUSTOMER:
+            raise ValueError("Customer financial accounts are not supported in this system. Customers use wallet accounts instead.")
+
+        self.repo.validate_owner(owner_type, data.get("owner_id"))
 
         if self.repo.get_by_account_code(data["account_code"]):
             raise ValueError(FinancialAccountError.ACCOUNT_CODE_EXISTS)
 
-        owner_type = data.get("owner_type")
         owner_id = data.get("owner_id")
         account_type = data.get("account_type")
-        if owner_type in (FinancialAccountOwnerType.CUSTOMER, FinancialAccountOwnerType.VENDOR):
+        if owner_type == FinancialAccountOwnerType.VENDOR:
             if owner_id is None:
                 raise ValueError(FinancialAccountError.OWNER_REQUIRED)
             if account_type is None:
-                raise ValueError("account_type is required for customer/vendor financial accounts.")
+                raise ValueError("account_type is required for vendor financial accounts.")
             if self.repo.exists_for_owner(owner_type, owner_id, account_type):
                 raise ValueError(FinancialAccountError.DUPLICATE_OWNER_ACCOUNT)
 
@@ -48,6 +51,8 @@ class FinancialAccountService:
         is_active: bool | None = None,
         search: str | None = None,
     ) -> tuple[list, int]:
+        if owner_type == FinancialAccountOwnerType.CUSTOMER:
+            raise ValueError("Customer financial accounts are not supported in this system. Customers use wallet accounts instead.")
         return self.repo.list_accounts(
             page=page,
             page_size=page_size,
@@ -68,6 +73,9 @@ class FinancialAccountService:
         owner_id = data.get("owner_id", account.owner_id)
         account_type = data.get("account_type", account.account_type)
 
+        if owner_type == FinancialAccountOwnerType.CUSTOMER or account.owner_type == FinancialAccountOwnerType.CUSTOMER:
+            raise ValueError("Customer financial accounts are not supported in this system. Customers use wallet accounts instead.")
+
         self.repo.validate_owner(owner_type, owner_id)
 
         if "account_code" in data and data["account_code"] != account.account_code:
@@ -75,7 +83,7 @@ class FinancialAccountService:
             if existing is not None and existing.id != account.id:
                 raise ValueError(FinancialAccountError.ACCOUNT_CODE_EXISTS)
 
-        if owner_type in (FinancialAccountOwnerType.CUSTOMER, FinancialAccountOwnerType.VENDOR):
+        if owner_type == FinancialAccountOwnerType.VENDOR:
             if owner_id is None:
                 raise ValueError(FinancialAccountError.OWNER_REQUIRED)
             if self.repo.exists_for_owner(owner_type, owner_id, account_type) and (

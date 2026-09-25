@@ -26,37 +26,29 @@ def db_session() -> Session:
         db.close()
 
 
-def test_create_and_manage_customer_financial_accounts(db_session: Session):
-    customer = Account(
-        account_code="CUS-1001",
-        name="Test Customer",
-        email="customer@example.com",
-        mobile="9999999999",
-        role=AccountRole.CUSTOMER,
-        is_active=True,
-    )
+def test_create_and_manage_vendor_financial_accounts(db_session: Session):
     vendor = Vendor(name="Test Vendor", type="HOTEL")
-    db_session.add_all([customer, vendor])
+    db_session.add(vendor)
     db_session.commit()
 
     service = FinancialAccountService(db_session)
 
     created = service.create_account(
         FinancialAccountCreate(
-            account_code="WALLET-1001",
-            name="Customer wallet",
-            account_type=FinancialAccountType.CASH,
-            owner_type=FinancialAccountOwnerType.CUSTOMER,
-            owner_id=customer.id,
+            account_code="BANK-1001",
+            name="Vendor bank account",
+            account_type=FinancialAccountType.CURRENT,
+            owner_type=FinancialAccountOwnerType.VENDOR,
+            owner_id=vendor.id,
         )
     )
 
-    assert created.owner_id == customer.id
+    assert created.owner_id == vendor.id
     assert created.is_active is True
 
     items, total = service.list_accounts(
-        owner_type=FinancialAccountOwnerType.CUSTOMER,
-        account_type=FinancialAccountType.CASH,
+        owner_type=FinancialAccountOwnerType.VENDOR,
+        account_type=FinancialAccountType.CURRENT,
         page=1,
         page_size=20,
     )
@@ -65,9 +57,9 @@ def test_create_and_manage_customer_financial_accounts(db_session: Session):
 
     updated = service.update_account(
         created.id,
-        FinancialAccountUpdate(name="Updated wallet", is_active=False),
+        FinancialAccountUpdate(name="Updated vendor bank", is_active=False),
     )
-    assert updated.name == "Updated wallet"
+    assert updated.name == "Updated vendor bank"
     assert updated.is_active is False
 
     service.delete_account(created.id)
@@ -84,5 +76,30 @@ def test_create_customer_account_requires_valid_owner(db_session: Session):
                 account_type=FinancialAccountType.CURRENT,
                 owner_type=FinancialAccountOwnerType.CUSTOMER,
                 owner_id=uuid.uuid4(),
+            )
+        )
+
+
+def test_customer_financial_accounts_are_not_supported(db_session: Session):
+    customer = Account(
+        account_code="CUS-1002",
+        name="Customer without bank",
+        email="customer2@example.com",
+        mobile="8888888888",
+        role=AccountRole.CUSTOMER,
+        is_active=True,
+    )
+    db_session.add(customer)
+    db_session.commit()
+
+    service = FinancialAccountService(db_session)
+    with pytest.raises(ValueError, match="customer.*bank|customer.*not supported|not supported"):
+        service.create_account(
+            FinancialAccountCreate(
+                account_code="BANK-CUS-1002",
+                name="Customer bank",
+                account_type=FinancialAccountType.CURRENT,
+                owner_type=FinancialAccountOwnerType.CUSTOMER,
+                owner_id=customer.id,
             )
         )

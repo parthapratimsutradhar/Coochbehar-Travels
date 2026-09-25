@@ -179,6 +179,10 @@ class TransactionType(AppEnum):
 
 
 class FinancialAccountType(AppEnum):
+    ASSET = "ASSET"
+    LIABILITY = "LIABILITY"
+    REVENUE = "REVENUE"
+    EXPENSE = "EXPENSE"
     CASH = "CASH"
     SAVINGS = "SAVINGS"
     CURRENT = "CURRENT"

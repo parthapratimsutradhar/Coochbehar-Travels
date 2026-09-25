@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin, get_current_admin_only
@@ -10,29 +10,12 @@ from app.models.account import Account
 from app.schemas.admin_tour import (
     AdminTourDetailPayload,
     TourDetailCreateRequest,
-    TourDetailUpdateRequest,
 )
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.admin_tour_service import AdminTourService
 
 
 router = APIRouter(prefix="/admin/tour-details", tags=["Admin Tour Details"])
-
-
-@router.post(
-    "",
-    status_code=status.HTTP_201_CREATED,
-    response_model=ActionResponse,
-    summary="Create tour details for a variant",
-)
-async def create_admin_tour_detail(
-    payload: TourDetailCreateRequest,
-    current_user: Account = Depends(get_current_admin_only),
-    db: Session = Depends(get_db),
-):
-    del current_user
-    await AdminTourService(db).create_detail(payload.model_dump())
-    return ActionResponse(message=TourDetailSuccess.CREATED)
 
 
 @router.put(
@@ -75,28 +58,6 @@ def get_admin_tour_detail(
     return SuccessResponse(
         message="Item fetched successfully",
         data=AdminTourService._detail_to_response(detail, variant.package_id, returns),
-    )
-
-
-@router.patch(
-    "/{detail_id}",
-    response_model=SuccessResponse[AdminTourDetailPayload],
-    summary="Update an existing tour detail",
-)
-async def patch_admin_tour_detail(
-    detail_id: uuid.UUID,
-    payload: TourDetailUpdateRequest,
-    current_user: Account = Depends(get_current_admin_only),
-    db: Session = Depends(get_db),
-):
-    del current_user
-    service = AdminTourService(db)
-    detail = await service.update_detail(detail_id, payload.model_dump(exclude_unset=True))
-    variant = service.get_variant(detail.variant_id)
-    departures = service.get_variant_departures(detail.variant_id)
-    return SuccessResponse(
-        message=TourDetailSuccess.UPDATED,
-        data=AdminTourService._detail_to_response(detail, variant.package_id, departures),
     )
 
 
