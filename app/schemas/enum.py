@@ -14,4 +14,3 @@ class EnumGroup(BaseModel):
 
 class EnumListResponse(BaseModel):
     groups: list[EnumGroup]
-    options: list[dict[str, str]]
