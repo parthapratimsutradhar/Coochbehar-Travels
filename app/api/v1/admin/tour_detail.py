@@ -19,6 +19,43 @@ from app.services.admin_tour_service import AdminTourService
 router = APIRouter(prefix="/admin/tour-details", tags=["Admin Tour Details"])
 
 
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ActionResponse,
+    summary="Create tour details for a variant",
+)
+async def create_admin_tour_detail(
+    payload: TourDetailCreateRequest,
+    current_user: Account = Depends(get_current_admin_only),
+    db: Session = Depends(get_db),
+):
+    del current_user
+    await AdminTourService(db).create_detail(payload.model_dump())
+    return ActionResponse(message=TourDetailSuccess.CREATED)
+
+
+@router.put(
+    "",
+    response_model=SuccessResponse[AdminTourDetailPayload],
+    summary="Create or update tour details for a variant",
+)
+async def upsert_admin_tour_detail(
+    payload: TourDetailCreateRequest,
+    current_user: Account = Depends(get_current_admin_only),
+    db: Session = Depends(get_db),
+):
+    del current_user
+    service = AdminTourService(db)
+    detail = await service.upsert_detail(payload.model_dump())
+    variant = service.get_variant(detail.variant_id)
+    departures = service.get_variant_departures(detail.variant_id)
+    return SuccessResponse(
+        message=TourDetailSuccess.UPDATED,
+        data=AdminTourService._detail_to_response(detail, variant.package_id, departures),
+    )
+
+
 @router.get(
     "/{detail_id}",
     response_model=SuccessResponse[AdminTourDetailPayload],
@@ -41,62 +78,12 @@ def get_admin_tour_detail(
     )
 
 
-@router.put(
-    "",
-    response_model=SuccessResponse[AdminTourDetailPayload],
-    responses={
-        404: {"model": ErrorResponse},
-        409: {"model": ErrorResponse},
-        422: {"model": ErrorResponse},
-    },
-    summary="Create or update tour variant details",
-)
-async def upsert_admin_tour_detail(
-    payload: TourDetailCreateRequest,
-    current_user: Account = Depends(get_current_admin_only),
-    db: Session = Depends(get_db),
-):
-    del current_user
-    service = AdminTourService(db)
-    existing_detail = service.repo.get_detail_by_variant_id(payload.variant_id)
-    detail = await service.upsert_detail(payload.model_dump())
-    variant = service.get_variant(detail.variant_id)
-    departures = service.get_variant_departures(detail.variant_id)
-    message = TourDetailSuccess.CREATED if existing_detail is None else TourDetailSuccess.UPDATED
-    return SuccessResponse(
-        message=message,
-        data=AdminTourService._detail_to_response(detail, variant.package_id, departures),
-    )
-
-
-@router.post(
-    "",
-    status_code=status.HTTP_201_CREATED,
-    response_model=ActionResponse,
-    responses={
-        404: {"model": ErrorResponse},
-        409: {"model": ErrorResponse},
-        422: {"model": ErrorResponse},
-    },
-    summary="Create tour variant details",
-)
-async def create_admin_tour_detail(
-    payload: TourDetailCreateRequest,
-    current_user: Account = Depends(get_current_admin_only),
-    db: Session = Depends(get_db),
-):
-    del current_user
-    await AdminTourService(db).create_detail(payload.model_dump())
-    return ActionResponse(message=TourDetailSuccess.CREATED)
-
-
 @router.patch(
     "/{detail_id}",
     response_model=SuccessResponse[AdminTourDetailPayload],
-    responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
-    summary="Update tour variant details",
+    summary="Update an existing tour detail",
 )
-async def update_admin_tour_detail(
+async def patch_admin_tour_detail(
     detail_id: uuid.UUID,
     payload: TourDetailUpdateRequest,
     current_user: Account = Depends(get_current_admin_only),

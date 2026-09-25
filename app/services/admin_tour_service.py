@@ -252,36 +252,105 @@ class AdminTourService:
                 normalized_items.append(cls._ensure_item_id(item))
         return normalized_items
 
+    @staticmethod
+    def _coerce_item_id(value: Any) -> str | None:
+        if value is None:
+            return None
+        raw_id = str(value).strip()
+        return raw_id if raw_id else None
+
+    @classmethod
+    def _sync_nested_collection(
+        cls,
+        existing_items: list[Any],
+        submitted_items: list[Any] | None,
+        *,
+        field_name: str,
+    ) -> list[dict[str, Any]]:
+        if submitted_items is None:
+            return [dict(item) for item in existing_items if isinstance(item, dict)]
+
+        existing_by_id: dict[str, dict[str, Any]] = {}
+        for item in existing_items or []:
+            if not isinstance(item, dict):
+                continue
+            item_id = cls._coerce_item_id(item.get("id"))
+            if item_id is not None:
+                existing_by_id[item_id] = dict(item)
+
+        normalized_items: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        for item in submitted_items:
+            if not isinstance(item, dict):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"{field_name} entries must be JSON objects.",
+                )
+
+            submitted_id = cls._coerce_item_id(item.get("id"))
+            item_id = submitted_id
+            if item_id is None:
+                item_id = str(uuid.uuid4())
+                item = {**item, "id": item_id}
+
+            if item_id in seen_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Duplicate {field_name} id submitted: {item_id}",
+                )
+
+            if submitted_id is not None and existing_by_id and item_id not in existing_by_id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"{field_name} id '{item_id}' does not belong to this detail.",
+                )
+
+            seen_ids.add(item_id)
+            merged_item = {**existing_by_id.get(item_id, {}), **item}
+            merged_item["id"] = item_id
+            normalized_items.append(merged_item)
+
+        for existing_id in list(existing_by_id):
+            if existing_id not in seen_ids:
+                continue
+
+        return normalized_items
+
     def _sync_departures(self, variant_id: uuid.UUID, departure_payloads: list[dict[str, Any]]) -> None:
         existing = {
-            departure.id: departure
+            str(departure.id): departure
             for departure in self.get_variant_departures(variant_id)
         }
-        retained_ids: set[uuid.UUID] = set()
+        retained_ids: set[str] = set()
+        seen_payload_ids: set[str] = set()
 
         for raw_payload in departure_payloads:
             payload = self._normalize_departure_payload(dict(raw_payload))
             departure_id = payload.pop("id", None)
-            normalized_departure_id = None
-            if departure_id is not None:
-                try:
-                    normalized_departure_id = uuid.UUID(str(departure_id))
-                except (TypeError, ValueError, AttributeError):
-                    normalized_departure_id = None
-
-            if normalized_departure_id is not None:
-                departure = existing.get(normalized_departure_id)
-                if departure is None:
+            departure_key = None if departure_id is None else str(departure_id).strip()
+            if departure_key is not None:
+                if departure_key in seen_payload_ids:
                     raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Tour departure not found for this variant.",
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Duplicate departure id submitted: {departure_key}",
                     )
-                retained_ids.add(normalized_departure_id)
+                seen_payload_ids.add(departure_key)
+
+            if departure_key is not None and departure_key in existing:
+                departure = existing[departure_key]
+                retained_ids.add(departure_key)
                 for field, value in payload.items():
                     setattr(departure, field, value)
+            elif departure_key is not None and existing:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Tour departure id '{departure_key}' does not belong to this variant.",
+                )
             else:
                 departure = TourDeparture(variant_id=variant_id, **payload)
                 self.db.add(departure)
+                if departure_key is not None:
+                    retained_ids.add(departure_key)
 
             available_seats = payload.get("available_seats", 0)
             total_seats = payload.get("total_seats", 0)
@@ -291,8 +360,8 @@ class AdminTourService:
                     detail="Available seats cannot exceed total seats.",
                 )
 
-        for departure_id, departure in existing.items():
-            if departure_id not in retained_ids:
+        for departure_key, departure in existing.items():
+            if departure_key not in retained_ids:
                 self.db.delete(departure)
 
     @staticmethod
@@ -337,38 +406,47 @@ class AdminTourService:
         return promoted_gallery
 
     async def create_detail(self, payload: dict[str, Any]) -> TourDetail:
-        variant = self.db.get(TourVariant, payload["variant_id"])
+        variant_id = payload.get("variant_id")
+        if variant_id is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="variant_id is required.")
+
+        variant = self.db.get(TourVariant, variant_id)
         if variant is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour variant not found.")
 
-        if self.repo.get_detail_by_variant_id(payload["variant_id"]):
+        if self.repo.get_detail_by_variant_id(variant_id):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This variant already has details.")
 
-        departure_payloads = payload.pop("departure_dates", [])
-        normalized_banner = self._normalize_banner(payload.get("banner"))
-        promoted_banner = await self._promote_banner(normalized_banner)
-        gallery_payload = self._normalize_object_collection(normalize_json_payload(payload.get("gallery")) or [])
-        highlights_payload = self._normalize_highlight_collection(normalize_json_payload(payload.get("highlights")) or [])
-        itinerary_payload = self._normalize_object_collection(normalize_json_payload(payload.get("itinerary")) or [])
-        route_payload = self._normalize_object_collection(normalize_json_payload(payload.get("route")) or [])
-        promoted_gallery = await self._promote_gallery(gallery_payload)
+        departure_payloads = payload.get("departure_dates", [])
+        banner_payload = self._normalize_banner(payload.get("banner"))
+        gallery_payload = self._sync_nested_collection([], normalize_json_payload(payload.get("gallery")) or [], field_name="gallery")
+        highlights_payload = self._sync_nested_collection([], normalize_json_payload(payload.get("highlights")) or [], field_name="highlights")
+        itinerary_payload = self._sync_nested_collection([], normalize_json_payload(payload.get("itinerary")) or [], field_name="itinerary")
+        route_payload = self._sync_nested_collection([], normalize_json_payload(payload.get("route")) or [], field_name="route")
 
-        detail = TourDetail(
-            variant_id=payload["variant_id"],
-            banner=promoted_banner,
-            gallery=promoted_gallery,
-            highlights=highlights_payload,
-            inclusions=normalize_json_payload(payload.get("inclusions")) or [],
-            exclusions=normalize_json_payload(payload.get("exclusions")) or [],
-            itinerary=itinerary_payload,
-            route_stops=route_payload,
-        )
-        self.db.add(detail)
-        self._sync_departures(
-            payload["variant_id"],
-            [normalize_json_payload(item) for item in departure_payloads],
-        )
-        self.db.commit()
+        try:
+            promoted_banner = await self._promote_banner(banner_payload)
+            promoted_gallery = await self._promote_gallery(gallery_payload)
+            detail = TourDetail(
+                variant_id=variant_id,
+                banner=promoted_banner,
+                gallery=promoted_gallery,
+                highlights=highlights_payload,
+                inclusions=normalize_json_payload(payload.get("inclusions")) or [],
+                exclusions=normalize_json_payload(payload.get("exclusions")) or [],
+                itinerary=itinerary_payload,
+                route_stops=route_payload,
+            )
+            self.db.add(detail)
+            self._sync_departures(
+                variant_id,
+                [normalize_json_payload(item) for item in departure_payloads],
+            )
+            self.db.flush()
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
         self.db.refresh(detail)
         return detail
 
@@ -384,30 +462,67 @@ class AdminTourService:
 
     async def update_detail(self, detail_id: uuid.UUID, payload: dict[str, Any]) -> TourDetail:
         detail = self.get_detail_by_id(detail_id)
-        departure_payloads = payload.pop("departure_dates", None)
-        for key, value in payload.items():
-            if key == "banner":
-                updated_banner = self._update_banner(detail.banner, value)
-                detail.banner = await self._promote_banner(updated_banner)
-            elif key == "gallery":
-                raw_gallery = self._normalize_object_collection(normalize_json_payload(value) or [])
-                detail.gallery = await self._promote_gallery(raw_gallery)
-            elif key == "highlights":
-                detail.highlights = self._normalize_highlight_collection(normalize_json_payload(value) or [])
-            elif key == "inclusions":
-                detail.inclusions = normalize_json_payload(value) or []
-            elif key == "exclusions":
-                detail.exclusions = normalize_json_payload(value) or []
-            elif key == "itinerary":
-                detail.itinerary = self._normalize_object_collection(normalize_json_payload(value) or [])
-            elif key == "route":
-                detail.route_stops = self._normalize_object_collection(normalize_json_payload(value) or [])
-        if departure_payloads is not None:
-            self._sync_departures(
-                detail.variant_id,
-                [normalize_json_payload(item) for item in departure_payloads],
+
+        if "banner" in payload:
+            value = payload["banner"]
+            updated_banner = self._update_banner(detail.banner, value)
+            payload["banner"] = updated_banner
+
+        if "gallery" in payload:
+            payload["gallery"] = self._sync_nested_collection(
+                detail.gallery if isinstance(detail.gallery, list) else [],
+                normalize_json_payload(payload["gallery"]) or [],
+                field_name="gallery",
             )
-        self.db.commit()
+
+        if "highlights" in payload:
+            payload["highlights"] = self._sync_nested_collection(
+                detail.highlights if isinstance(detail.highlights, list) else [],
+                normalize_json_payload(payload["highlights"]) or [],
+                field_name="highlights",
+            )
+
+        if "itinerary" in payload:
+            payload["itinerary"] = self._sync_nested_collection(
+                detail.itinerary if isinstance(detail.itinerary, list) else [],
+                normalize_json_payload(payload["itinerary"]) or [],
+                field_name="itinerary",
+            )
+
+        if "route" in payload:
+            payload["route"] = self._sync_nested_collection(
+                detail.route_stops if isinstance(detail.route_stops, list) else [],
+                normalize_json_payload(payload["route"]) or [],
+                field_name="route",
+            )
+
+        departure_payloads = payload.get("departure_dates")
+        try:
+            for key, value in payload.items():
+                if key == "banner":
+                    detail.banner = await self._promote_banner(self._normalize_banner(value))
+                elif key == "gallery":
+                    detail.gallery = await self._promote_gallery(value)
+                elif key == "highlights":
+                    detail.highlights = value
+                elif key == "inclusions":
+                    detail.inclusions = normalize_json_payload(value) or []
+                elif key == "exclusions":
+                    detail.exclusions = normalize_json_payload(value) or []
+                elif key == "itinerary":
+                    detail.itinerary = value
+                elif key == "route":
+                    detail.route_stops = value
+            if departure_payloads is not None:
+                self._sync_departures(
+                    detail.variant_id,
+                    [normalize_json_payload(item) for item in departure_payloads],
+                )
+            self.db.flush()
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
         self.db.refresh(detail)
         return detail
 
