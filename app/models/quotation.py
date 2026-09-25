@@ -75,29 +75,32 @@ class Quotation(BaseEntity):
         index=True,
     )
 
-    customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("accounts.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-
     package_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("tour_packages.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
 
     variant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("tour_variants.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
-    
+
     destination_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("destinations.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
+    )
+
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     tour_name: Mapped[str] = mapped_column(

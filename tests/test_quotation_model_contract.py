@@ -2,6 +2,9 @@ from app.models.quotation import Quotation
 
 
 def test_quotation_model_uses_final_minimal_contract():
+    assert hasattr(Quotation, "package_id")
+    assert hasattr(Quotation, "variant_id")
+    assert hasattr(Quotation, "destination_id")
     assert not hasattr(Quotation, "package")
     assert not hasattr(Quotation, "variant")
     assert not hasattr(Quotation, "offer")
