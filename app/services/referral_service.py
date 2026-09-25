@@ -115,7 +115,6 @@ class ReferralService:
             id=config.id,
             default_reward_amount=config.default_reward_amount,
             booking_window_days=config.booking_window_days,
-            is_active=config.is_active,
             updated_by=config.updated_by_account_id,
             updated_by_name=updated_by.name if updated_by else None,
             updated_by_profile_image=updated_by.profile_pic if updated_by else None,

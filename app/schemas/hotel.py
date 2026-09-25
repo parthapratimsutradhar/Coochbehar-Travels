@@ -40,7 +40,6 @@ class HotelUpdate(SchemaBase):
     address: str | None = Field(default=None, max_length=255)
     contact: str | None = Field(default=None, max_length=100)
     description: str | None = None
-    is_active: bool | None = None
 
 
 class HotelResponse(HotelBase):

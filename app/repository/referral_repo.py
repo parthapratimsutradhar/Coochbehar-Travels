@@ -55,11 +55,10 @@ class ReferralRepository:
         referrals = query.offset((page - 1) * page_size).limit(page_size).all()
         return referrals, total_items
 
-    def get_active_config(self) -> ReferralRewardConfig | None:
+    def get_latest_config(self) -> ReferralRewardConfig | None:
         return (
             self.db.query(ReferralRewardConfig)
             .options(joinedload(ReferralRewardConfig.updated_by))
-            .filter_by(is_active=True)
             .order_by(ReferralRewardConfig.created_at.desc())
             .first()
         )
@@ -71,12 +70,11 @@ class ReferralRepository:
         booking_window_days: int | None = None,
         admin: Account | None = None,
     ) -> ReferralRewardConfig:
-        config = self.get_active_config()
+        config = self.get_latest_config()
         if config is None:
             config = ReferralRewardConfig(
                 default_reward_amount=Decimal(str(default_reward_amount or "500.00")),
                 booking_window_days=int(booking_window_days or 30),
-                is_active=True,
                 updated_by_account_id=admin.id if admin else None,
                 updated_at=datetime.now(timezone.utc),
             )

@@ -218,6 +218,40 @@ class AdminTourService:
                 normalized[field] = date.fromisoformat(value)
         return normalized
 
+    @staticmethod
+    def _ensure_item_id(item: dict[str, Any]) -> dict[str, Any]:
+        normalized_item = dict(item)
+        raw_id = normalized_item.get("id")
+        if raw_id in (None, ""):
+            normalized_item["id"] = str(uuid.uuid4())
+        else:
+            normalized_item["id"] = str(raw_id)
+        return normalized_item
+
+    @classmethod
+    def _normalize_object_collection(cls, items: list[Any] | None) -> list[dict[str, Any]]:
+        if items is None:
+            return []
+        normalized_items = []
+        for item in items:
+            if isinstance(item, dict):
+                normalized_items.append(cls._ensure_item_id(item))
+            elif item is not None:
+                normalized_items.append({"id": str(uuid.uuid4()), "text": str(item)})
+        return normalized_items
+
+    @classmethod
+    def _normalize_highlight_collection(cls, items: list[Any] | None) -> list[dict[str, Any]]:
+        if items is None:
+            return []
+        normalized_items = []
+        for item in items:
+            if isinstance(item, str):
+                normalized_items.append({"id": str(uuid.uuid4()), "text": item})
+            elif isinstance(item, dict):
+                normalized_items.append(cls._ensure_item_id(item))
+        return normalized_items
+
     def _sync_departures(self, variant_id: uuid.UUID, departure_payloads: list[dict[str, Any]]) -> None:
         existing = {
             departure.id: departure
@@ -313,18 +347,21 @@ class AdminTourService:
         departure_payloads = payload.pop("departure_dates", [])
         normalized_banner = self._normalize_banner(payload.get("banner"))
         promoted_banner = await self._promote_banner(normalized_banner)
-        raw_gallery = normalize_json_payload(payload.get("gallery")) or []
-        promoted_gallery = await self._promote_gallery(raw_gallery)
+        gallery_payload = self._normalize_object_collection(normalize_json_payload(payload.get("gallery")) or [])
+        highlights_payload = self._normalize_highlight_collection(normalize_json_payload(payload.get("highlights")) or [])
+        itinerary_payload = self._normalize_object_collection(normalize_json_payload(payload.get("itinerary")) or [])
+        route_payload = self._normalize_object_collection(normalize_json_payload(payload.get("route")) or [])
+        promoted_gallery = await self._promote_gallery(gallery_payload)
 
         detail = TourDetail(
             variant_id=payload["variant_id"],
             banner=promoted_banner,
             gallery=promoted_gallery,
-            highlights=normalize_json_payload(payload.get("highlights")) or [],
+            highlights=highlights_payload,
             inclusions=normalize_json_payload(payload.get("inclusions")) or [],
             exclusions=normalize_json_payload(payload.get("exclusions")) or [],
-            itinerary=normalize_json_payload(payload.get("itinerary")) or [],
-            route_stops=normalize_json_payload(payload.get("route")) or [],
+            itinerary=itinerary_payload,
+            route_stops=route_payload,
         )
         self.db.add(detail)
         self._sync_departures(
@@ -335,6 +372,16 @@ class AdminTourService:
         self.db.refresh(detail)
         return detail
 
+    async def upsert_detail(self, payload: dict[str, Any]) -> TourDetail:
+        variant_id = payload.get("variant_id")
+        if variant_id is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="variant_id is required.")
+
+        detail = self.repo.get_detail_by_variant_id(variant_id)
+        if detail is None:
+            return await self.create_detail(payload)
+        return await self.update_detail(detail.id, payload)
+
     async def update_detail(self, detail_id: uuid.UUID, payload: dict[str, Any]) -> TourDetail:
         detail = self.get_detail_by_id(detail_id)
         departure_payloads = payload.pop("departure_dates", None)
@@ -343,18 +390,18 @@ class AdminTourService:
                 updated_banner = self._update_banner(detail.banner, value)
                 detail.banner = await self._promote_banner(updated_banner)
             elif key == "gallery":
-                raw_gallery = normalize_json_payload(value) or []
+                raw_gallery = self._normalize_object_collection(normalize_json_payload(value) or [])
                 detail.gallery = await self._promote_gallery(raw_gallery)
             elif key == "highlights":
-                detail.highlights = normalize_json_payload(value) or []
+                detail.highlights = self._normalize_highlight_collection(normalize_json_payload(value) or [])
             elif key == "inclusions":
                 detail.inclusions = normalize_json_payload(value) or []
             elif key == "exclusions":
                 detail.exclusions = normalize_json_payload(value) or []
             elif key == "itinerary":
-                detail.itinerary = normalize_json_payload(value) or []
+                detail.itinerary = self._normalize_object_collection(normalize_json_payload(value) or [])
             elif key == "route":
-                detail.route_stops = normalize_json_payload(value) or []
+                detail.route_stops = self._normalize_object_collection(normalize_json_payload(value) or [])
         if departure_payloads is not None:
             self._sync_departures(
                 detail.variant_id,

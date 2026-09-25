@@ -63,3 +63,11 @@ async def test_hotel_create_and_update_promote_gallery_urls(monkeypatch):
     ]
     assert service.repo.created["image"][0]["url"] == "permanent/lobby.jpg"
     assert service.repo.updated["image"][0]["url"] == "permanent/room.jpg"
+
+
+def test_hotel_update_schema_excludes_is_active_flag():
+    from app.schemas.hotel import HotelUpdate
+
+    payload = HotelUpdate.model_validate({"name": "Updated Hotel"})
+    assert "is_active" not in HotelUpdate.model_fields
+    assert payload.model_dump(exclude_none=True) == {"name": "Updated Hotel"}

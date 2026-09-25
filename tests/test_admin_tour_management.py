@@ -265,6 +265,64 @@ def test_admin_tour_detail_create_accepts_missing_nested_ids(client, admin_user,
     assert response.json()["success"] is True
 
 
+def test_admin_tour_detail_upsert_updates_existing_nested_items_by_id(client, admin_user, db_session):
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+
+    package = create_package(db_session)
+    variant = create_variant(db_session, package.id)
+    detail = create_detail(db_session, variant.id)
+
+    gallery_id = detail.gallery[0]["id"]
+    highlight_id = detail.highlights[0]["id"]
+    itinerary_id = detail.itinerary[0]["id"]
+
+    response = client.put(
+        "/api/v1/admin/tour-details",
+        json={
+            "variant_id": str(variant.id),
+            "banner": {"image": "https://example.com/banner-updated.jpg", "video": "https://example.com/banner-updated.mp4"},
+            "gallery": [{
+                "id": gallery_id,
+                "alt": "Updated gallery",
+                "url": "https://example.com/updated-1.jpg",
+                "type": "image",
+                "display_order": 1,
+            }],
+            "highlights": [
+                {"id": highlight_id, "text": "Updated highlight"},
+                {"text": "New highlight"},
+            ],
+            "inclusions": ["Hotel stay", "Airport transfer"],
+            "exclusions": ["Airfare", "Visa"],
+            "departure_dates": [{
+                "departure_date": "2026-09-14",
+                "return_date": "2026-09-19",
+                "total_seats": 30,
+                "available_seats": 25,
+            }],
+            "itinerary": [{
+                "id": itinerary_id,
+                "day": 1,
+                "title": "Updated arrival",
+                "description": "Updated check-in notes",
+            }],
+            "route": [{"id": detail.route_stops[0]["id"], "city": "Kalimpong", "nights": 2}],
+        },
+        headers=auth_header,
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["gallery"][0]["id"] == gallery_id
+    assert data["gallery"][0]["alt"] == "Updated gallery"
+    assert data["highlights"][0]["id"] == highlight_id
+    assert data["highlights"][0]["text"] == "Updated highlight"
+    assert data["highlights"][1]["text"] == "New highlight"
+    assert data["itinerary"][0]["id"] == itinerary_id
+    assert data["route"][0]["city"] == "Kalimpong"
+    assert data["banner"]["image"] == "https://example.com/banner-updated.jpg"
+
+
 def test_admin_detail_banner_patch_replaces_only_supplied_media(client, admin_user, db_session):
     package = create_package(db_session)
     variant = create_variant(db_session, package.id)
