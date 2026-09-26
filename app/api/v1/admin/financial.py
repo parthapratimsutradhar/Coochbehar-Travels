@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin_or_staff
 from app.db.database import get_db
 from app.models.account import Account
+from app.schemas.financial_reports import FinancialReportResponse, FinancialStatisticsResponse
 from app.schemas.financial_transaction import (
     FinancialReportDownloadRequest,
     FinancialTransactionCreate,
@@ -28,8 +29,13 @@ router = APIRouter(
     "/transactions",
     response_model=ActionResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={422: {"model": ErrorResponse}},
+    responses={
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+    },
     summary="Create a transaction (income or expense)",
+    description="Create a booking, refund, payout, or vendor payment entry with the required debit/credit ledger records.",
 )
 def create_transaction(
     payload: FinancialTransactionCreate,
@@ -44,7 +50,10 @@ def create_transaction(
 @router.get(
     "/transactions",
     response_model=PaginatedResponse[FinancialTransactionResponse],
+    status_code=status.HTTP_200_OK,
+    responses={401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
     summary="List financial transactions with filters and search",
+    description="Returns paginated financial transactions filtered by type, status, category, related entity, and date range with optional text search.",
 )
 def list_transactions(
     page: int = Query(1, ge=1),
@@ -91,8 +100,11 @@ def list_transactions(
 
 @router.get(
     "/reports",
-    response_model=SuccessResponse[dict],
+    response_model=SuccessResponse[FinancialReportResponse],
+    status_code=status.HTTP_200_OK,
+    responses={401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
     summary="Generate financial reports including income, expenses, and referral income",
+    description="Builds an aggregate report for income, expenses, or referral income within the selected period and returns the normalized totals and rows.",
 )
 def generate_reports(
     report_type: str = Query(default="income", description="income, expenses, referral_income, all"),
@@ -108,8 +120,11 @@ def generate_reports(
 
 @router.get(
     "/statistics",
-    response_model=SuccessResponse[dict],
+    response_model=SuccessResponse[FinancialStatisticsResponse],
+    status_code=status.HTTP_200_OK,
+    responses={401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
     summary="View total income, total expenses, and net profit or loss for a selected period",
+    description="Returns summary totals for the chosen reporting window, including income, expenses, referral income, and net profit or loss.",
 )
 def financial_statistics(
     period: str = Query(default="monthly", description="daily, weekly, monthly, yearly"),
@@ -137,8 +152,15 @@ def financial_statistics(
 @router.put(
     "/transactions/{transaction_id}",
     response_model=ActionResponse,
-    responses={404: {"model": ErrorResponse}},
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+    },
     summary="Update an existing financial transaction",
+    description="Updates selected fields on a transaction while preserving the double-entry accounting constraints and validation rules.",
 )
 def update_transaction(
     transaction_id: uuid.UUID,
@@ -154,8 +176,14 @@ def update_transaction(
 @router.delete(
     "/transactions/{transaction_id}",
     response_model=ActionResponse,
-    responses={404: {"model": ErrorResponse}},
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+    },
     summary="Delete a financial transaction",
+    description="Deletes a financial transaction record and its associated ledger entries when permitted by the current system rules.",
 )
 def delete_transaction(
     transaction_id: uuid.UUID,
@@ -170,17 +198,9 @@ def delete_transaction(
 @router.post(
     "/download",
     summary="Download financial reports in CSV, Excel, or PDF",
+    description="Exports the selected financial report in CSV, Excel, or PDF format and returns it as a downloadable file attachment.",
     response_class=Response,
-    responses={
-        200: {
-            "description": "Generated report file for download.",
-            "content": {
-                "text/csv": {"schema": {"type": "string", "format": "binary"}},
-                "application/pdf": {"schema": {"type": "string", "format": "binary"}},
-                "application/vnd.ms-excel": {"schema": {"type": "string", "format": "binary"}},
-            },
-        }
-    },
+    responses={401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
 )
 def download_report(
     payload: FinancialReportDownloadRequest = Body(...),

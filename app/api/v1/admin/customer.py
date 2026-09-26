@@ -63,7 +63,7 @@ def list_customers(
 )
 def get_customer(
     customer_id: uuid.UUID,
-    tab: Literal["tours", "leads", "enquery", "documents", "review", "referral"] | None = Query(
+    tab: Literal["tours", "leads", "enquiry", "enquery", "documents", "review", "referral", "wishlist"] | None = Query(
         None,
         description="Customer detail tab to load",
     ),

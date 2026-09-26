@@ -14,7 +14,7 @@ from sqlalchemy.pool import StaticPool
 compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
 
 from app.api.v1.admin.quotations import get_quotation, list_quotations
-from app.core.enums import AccountRole, EnquiryChannel, EnquiryStatus, EnquiryType, QuotationStatus
+from app.core.enums import AccountRole, BookingSource, EnquiryChannel, EnquiryStatus, EnquiryType, PaymentMethod, QuotationStatus
 from app.db.database import get_db
 from app.main import app
 from app.models.base import Base
@@ -22,7 +22,9 @@ from app.models.account import Account
 from app.models.destination import Destination
 from app.models.enquiry import Enquiry
 from app.models.quotation import Quotation
+from app.schemas.booking import OfflineBookingCreate
 from app.services.auth_service import AuthService
+from app.services.booking_service import BookingService
 from app.utils.security import create_access_token
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -106,6 +108,100 @@ def test_customer(db_session):
     db_session.commit()
     db_session.refresh(customer)
     return customer
+
+
+def test_offline_booking_service_accepts_actual_schema_contract(db_session, test_customer, superadmin_user):
+    payload = OfflineBookingCreate(
+        customer_id=test_customer.id,
+        travel_date=date(2026, 10, 15),
+        adult_count=2,
+        child_count=1,
+        senior_count=0,
+        total_selling_price=25000,
+        advance_received=5000,
+        payment_mode=PaymentMethod.CASH,
+        source=BookingSource.OFFLINE,
+        special_notes="Walk-in booking",
+        travellers=[
+            {
+                "full_name": "Jane Traveler",
+                "traveler_type": "ADULT",
+                "gender": "FEMALE",
+                "mobile": "+919876543210",
+                "email": "jane@example.com",
+                "is_primary": True,
+            }
+        ],
+        items=[
+            {
+                "item_type": "other",
+                "name": "Tour package",
+                "quantity": 1,
+                "unit_price": 25000,
+                "total_price": 25000,
+            }
+        ],
+    )
+
+    booking = BookingService(db_session).create_offline_booking(payload, superadmin_user)
+
+    assert booking.customer_id == test_customer.id
+    assert booking.total_amount == 25000
+    assert booking.paid_amount == 5000
+    assert booking.due_amount == 20000
+    assert booking.notes == "Walk-in booking"
+    assert booking.source == BookingSource.OFFLINE
+    assert booking.travellers[0].full_name == "Jane Traveler"
+
+
+def test_offline_booking_service_uses_package_id_schema_contract(db_session, test_customer, superadmin_user):
+    package_id = uuid.uuid4()
+    payload = OfflineBookingCreate(
+        customer_id=test_customer.id,
+        package_id=package_id,
+        travel_date=date(2026, 10, 15),
+        total_selling_price=25000,
+        advance_received=5000,
+        payment_mode=PaymentMethod.CASH,
+        source=BookingSource.OFFLINE,
+        travellers=[
+            {
+                "full_name": "Tour Guest",
+                "mobile": "+919876543211",
+                "email": "guest@example.com",
+                "is_primary": True,
+            }
+        ],
+    )
+
+    booking = BookingService(db_session).create_offline_booking(payload, superadmin_user)
+
+    assert booking.package_id == package_id
+
+
+def test_offline_booking_service_uses_tour_offer_id_schema_contract(db_session, test_customer, superadmin_user):
+    offer_id = uuid.uuid4()
+    payload = OfflineBookingCreate(
+        customer_id=test_customer.id,
+        tour_offer_id=offer_id,
+        travel_date=date(2026, 10, 15),
+        total_selling_price=25000,
+        advance_received=5000,
+        payment_mode=PaymentMethod.CASH,
+        source=BookingSource.OFFLINE,
+        travellers=[
+            {
+                "full_name": "Offer Traveler",
+                "mobile": "+919876543212",
+                "email": "offer@example.com",
+                "is_primary": True,
+            }
+        ],
+    )
+
+    booking = BookingService(db_session).create_offline_booking(payload, superadmin_user)
+
+    assert booking.offer_id == offer_id
 
 
 def test_destination_crud(client, superadmin_auth_header):

@@ -13,6 +13,7 @@ from app.models.enquiry import Enquiry
 from app.models.lead import Lead
 from app.models.referral import Referral
 from app.models.review import Review
+from app.models.tour_wishlist import TourWishlist
 from app.repository.booking_repo import BookingRepository
 from app.repository.customer_repo import CustomerRepository
 from app.repository.enquiry_repo import EnquiryRepository
@@ -179,10 +180,10 @@ class CustomerService:
         page_size: int,
     ) -> dict[str, Any]:
         if tab == "tours":
-            bookings = self.booking_repo.list_for_customer(
+            bookings, total_items = self.booking_repo.list_all(
+                page=page,
+                page_size=page_size,
                 customer_id=customer_id,
-                skip=(page - 1) * page_size,
-                limit=page_size,
             )
             items = []
             for b in bookings:
@@ -208,8 +209,6 @@ class CustomerService:
                         updated_at=b.updated_at,
                     ).model_dump(mode="json")
                 )
-            stmt_count = select(func.count()).select_from(Booking).where(Booking.customer_id == customer_id)
-            total_items = self.db.execute(stmt_count).scalar_one()
         elif tab == "leads":
             stmt = select(Lead).join(Lead.enquiry).where(Enquiry.customer_id == customer_id)
             total_items = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
@@ -217,13 +216,43 @@ class CustomerService:
                 stmt.order_by(Lead.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
             ).scalars().all()
             items = [LeadResponse.model_validate(item).model_dump(mode="json") for item in records]
-        elif tab == "enquery":
+        elif tab in ("enquiry", "enquery"):
             stmt = select(Enquiry).where(Enquiry.customer_id == customer_id)
             total_items = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
             records = self.db.execute(
                 stmt.order_by(Enquiry.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
             ).scalars().all()
             items = [EnquiryResponse.model_validate(item).model_dump(mode="json") for item in records]
+        elif tab == "wishlist":
+            stmt = (
+                select(TourWishlist)
+                .options(joinedload(TourWishlist.package))
+                .where(TourWishlist.customer_id == customer_id)
+            )
+            total_items = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+            records = self.db.execute(
+                stmt.order_by(TourWishlist.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+            ).scalars().all()
+            items = []
+            for item in records:
+                package = item.package
+                if not package:
+                    continue
+                items.append(
+                    {
+                        "id": str(item.id),
+                        "wishlist_id": str(item.id),
+                        "package_id": str(package.id),
+                        "tour_code": package.tour_code,
+                        "slug": package.slug,
+                        "title": package.title,
+                        "destination": package.destination,
+                        "type": package.type.value if hasattr(package.type, "value") else str(package.type),
+                        "description": package.description,
+                        "is_featured": package.is_featured,
+                        "wishlisted_at": item.created_at.isoformat() if item.created_at else None,
+                    }
+                )
         elif tab == "review":
             stmt = select(Review).where(Review.customer_id == customer_id, Review.is_active.is_(True))
             total_items = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
@@ -284,16 +313,17 @@ class CustomerService:
                     file_url=f"/api/v1/documents/{item.id}/file",
                     customer_name=customer.name,
                     customer_profile_pic=customer.profile_pic,
-                    uploaded_by_customer_id=item.uploaded_by_account_id if item.uploaded_by_account and item.uploaded_by_account.role.value == "CUSTOMER" else None,
-                    uploaded_by_user_id=item.uploaded_by_account_id if item.uploaded_by_account and item.uploaded_by_account.role.value != "CUSTOMER" else None,
-                    uploaded_by_account_id=item.uploaded_by_account_id,
-                    uploader_name=item.uploaded_by_account.name
-                    if item.uploaded_by_account
+                    uploaded_by_customer_id=item.uploaded_by_account_id
+                    if item.uploaded_by_account and item.uploaded_by_account.role.value == "CUSTOMER"
                     else None,
-                    uploader_profile_pic=item.uploaded_by_account.profile_pic
-                    if item.uploaded_by_account
+                    uploaded_by_user_id=item.uploaded_by_account_id
+                    if item.uploaded_by_account and item.uploaded_by_account.role.value != "CUSTOMER"
                     else None,
-                    uploaded_by="CUSTOMER" if item.uploaded_by_account and item.uploaded_by_account.role.value == "CUSTOMER" else "ADMIN",
+                    uploader_name=item.uploaded_by_account.name if item.uploaded_by_account else None,
+                    uploader_profile_pic=item.uploaded_by_account.profile_pic if item.uploaded_by_account else None,
+                    uploaded_by="CUSTOMER"
+                    if item.uploaded_by_account and item.uploaded_by_account.role.value == "CUSTOMER"
+                    else "ADMIN",
                     can_delete=False,
                     type="outgoing" if item.uploaded_by_account_id == customer.id else "incoming",
                 ).model_dump(mode="json")

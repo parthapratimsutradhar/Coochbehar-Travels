@@ -20,7 +20,7 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=ActionResponse,
+    response_model=SuccessResponse[VendorResponse],
     status_code=status.HTTP_201_CREATED,
     responses={422: {"model": ErrorResponse}},
     summary="Create a new vendor",
@@ -31,8 +31,8 @@ def create_vendor(
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
     del current_user
-    VendorService(db).create_vendor(payload)
-    return ActionResponse(message=VendorSuccess.CREATED)
+    vendor = VendorService(db).create_vendor(payload)
+    return SuccessResponse(message=VendorSuccess.CREATED, data=VendorResponse.model_validate(vendor))
 
 
 @router.get(

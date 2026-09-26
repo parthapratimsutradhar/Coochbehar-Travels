@@ -30,3 +30,13 @@ class FinancialReportResponse(SchemaBase):
     end_date: str | None = None
     rows: list[dict] = Field(default_factory=list)
     totals: dict[str, Decimal] = Field(default_factory=dict)
+
+
+class FinancialStatisticsResponse(SchemaBase):
+    period: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    total_income: str | None = None
+    total_expenses: str | None = None
+    referral_income: str | None = None
+    net_profit_loss: str | None = None

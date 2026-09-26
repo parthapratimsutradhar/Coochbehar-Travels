@@ -14,6 +14,7 @@ from app.main import app
 from app.models.account import Account
 from app.models.base import Base
 from app.models.document import Document
+from app.services.customer_service import CustomerService
 
 compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
 
@@ -158,3 +159,25 @@ def test_customer_list_and_download_return_proxy_urls(client, db_session):
         assert dl_res.json()["data"]["download_url"] == f"/api/v1/documents/{doc.id}/file?download=true"
     finally:
         app.dependency_overrides.pop(get_current_customer, None)
+
+
+def test_customer_documents_tab_builds_valid_payload(db_session):
+    customer = create_account(db_session, AccountRole.CUSTOMER, "cust4@example.com")
+    admin = create_account(db_session, AccountRole.ADMIN, "admin2@example.com")
+    doc = create_document(db_session, customer.id, admin.id, file_name="visa.pdf")
+
+    payload = CustomerService(db_session).get_customer_tab_data(
+        customer_id=customer.id,
+        customer=customer,
+        tab="documents",
+        page=1,
+        page_size=10,
+    )
+
+    assert payload["tab"] == "documents"
+    assert payload["items"]
+    item = payload["items"][0]
+    assert item["id"] == str(doc.id)
+    assert item["uploaded_by_account_id"] == str(admin.id)
+    assert item["uploaded_by"] == "ADMIN"
+    assert item["type"] == "incoming"

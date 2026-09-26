@@ -26,7 +26,7 @@ class BookingTraveler(UUIDEntity):
         String(100),
         nullable=False,
     )
-    
+
     gender: Mapped[Gender | None] = mapped_column(
         Enum(Gender, name="gender"),
         nullable=True,

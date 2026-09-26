@@ -11,6 +11,7 @@ from app.models.trip_items import TripItem
 from app.models.trip_itinerary import TripItinerary
 from app.models.trip_hotel import TripHotel
 from app.models.trip_vehicle import TripVehicle
+from app.models.tour_variant import TourVariant
 
 
 class BookingRepository:
@@ -22,10 +23,14 @@ class BookingRepository:
             select(Booking)
             .options(
                 joinedload(Booking.travellers),
-                joinedload(Booking.package),
-                joinedload(Booking.variant),
-                joinedload(Booking.departure),
                 joinedload(Booking.customer),
+                joinedload(Booking.enquiry).joinedload(Enquiry.destination_ref),
+                joinedload(Booking.package),
+                joinedload(Booking.variant).joinedload(TourVariant.details),
+                joinedload(Booking.departure),
+                joinedload(Booking.offer),
+                joinedload(Booking.sales_account),
+                joinedload(Booking.created_by_account),
                 joinedload(Booking.status_history),
                 joinedload(Booking.trip_items).joinedload(TripItem.hotel),
                 joinedload(Booking.trip_items).joinedload(TripItem.vehicle),
@@ -63,7 +68,13 @@ class BookingRepository:
     ) -> tuple[list[Booking], int]:
         stmt = select(Booking).options(
             joinedload(Booking.customer),
+            joinedload(Booking.enquiry).joinedload(Enquiry.destination_ref),
             joinedload(Booking.package),
+            joinedload(Booking.variant).joinedload(TourVariant.details),
+            joinedload(Booking.departure),
+            joinedload(Booking.offer),
+            joinedload(Booking.sales_account),
+            joinedload(Booking.created_by_account),
             joinedload(Booking.trip_items).joinedload(TripItem.hotel),
             joinedload(Booking.trip_items).joinedload(TripItem.vehicle),
             joinedload(Booking.trip_itinerary),

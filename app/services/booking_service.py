@@ -4,7 +4,7 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.enums import BookingSource, BookingStatus, LeadSource, PaymentStatus
+from app.core.enums import BookingSource, BookingStatus, LeadSource, PaymentStatus, TourType
 from app.models.account import Account
 from app.models.booking import Booking
 from app.repository.booking_repo import BookingRepository
@@ -29,23 +29,35 @@ class BookingService:
         self.customer_repo = CustomerRepository(db)
 
     def create_offline_booking(self, payload: OfflineBookingCreate, staff_user: Account) -> Booking:
-        # 1. Resolve or create customer account
+        primary_traveler = payload.travellers[0] if payload.travellers else None
         customer = None
+
         if payload.customer_id:
             customer = self.customer_repo.get_by_id(payload.customer_id)
-        if not customer:
-            customer = self.customer_repo.get_by_mobile(payload.mobile)
-        if not customer and payload.email:
-            customer = self.customer_repo.get_by_email(payload.email)
-        if not customer:
+
+        if not customer and primary_traveler is not None:
+            if primary_traveler.mobile:
+                customer = self.customer_repo.get_by_mobile(primary_traveler.mobile)
+            if not customer and primary_traveler.email:
+                customer = self.customer_repo.get_by_email(primary_traveler.email)
+
+        if not customer and primary_traveler is not None:
             customer = self.customer_repo.create_customer(
-                name=payload.customer_name,
-                mobile=payload.mobile,
-                email=payload.email,
+                name=primary_traveler.full_name,
+                mobile=primary_traveler.mobile,
+                email=primary_traveler.email,
                 source=LeadSource.OFFLINE,
             )
 
+        if customer is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A customer must be supplied either directly or via the first traveller record.",
+            )
+
         booking_code = f"BK-OFF-{uuid.uuid4().hex[:6].upper()}"
+        package_id = payload.package_id
+        offer_id = payload.tour_offer_id
         total_amount = payload.total_selling_price
         advance = min(payload.advance_received, total_amount)
         due_amount = max(Decimal(0), total_amount - advance)
@@ -61,11 +73,12 @@ class BookingService:
             "customer_id": customer.id,
             "enquiry_id": payload.enquiry_id,
             "quotation_id": payload.quotation_id,
-            "package_id": payload.package_id,
+            "offer_id": offer_id,
+            "package_id": package_id,
             "variant_id": payload.variant_id,
             "departure_id": payload.departure_id,
-            "booking_type": "PACKAGE" if payload.package_id else "CUSTOM",
-            "source": BookingSource.OFFLINE,
+            "booking_type": TourType.DOMESTIC,
+            "source": payload.source or BookingSource.OFFLINE,
             "sales_account_id": payload.sales_account_id or staff_user.id,
             "status": status_val,
             "adult_count": payload.adult_count,
@@ -80,15 +93,28 @@ class BookingService:
             "created_by": staff_user.id,
         }
 
-        travellers_data = [t.model_dump() for t in payload.travellers]
+        travellers_data = [traveller.model_dump(exclude_none=True) for traveller in payload.travellers]
+
         cost_items = payload.costs if payload.costs is not None else payload.items
+        itinerary_data = [day.model_dump(exclude_none=True) for day in payload.itinerary]
+        if payload.travel_date and not itinerary_data:
+            itinerary_data.append(
+                {
+                    "day_number": 1,
+                    "date": payload.travel_date,
+                    "title": "Travel Day",
+                    "description": "Travel date captured during offline booking creation.",
+                    "sort_order": 0,
+                }
+            )
+
         booking = self.booking_repo.create(
             booking_data,
             travellers=travellers_data,
-            items=[item.model_dump() for item in cost_items],
-            hotels=[hotel.model_dump() for hotel in payload.hotels],
-            vehicles=[vehicle.model_dump() for vehicle in payload.vehicles],
-            itinerary=[day.model_dump() for day in payload.itinerary],
+            items=[item.model_dump(exclude_none=True) for item in cost_items],
+            hotels=[hotel.model_dump(exclude_none=True) for hotel in payload.hotels],
+            vehicles=[vehicle.model_dump(exclude_none=True) for vehicle in payload.vehicles],
+            itinerary=itinerary_data,
         )
 
         # 2. Record advance payment if present
@@ -121,7 +147,7 @@ class BookingService:
             "package_id": payload.package_id,
             "variant_id": payload.variant_id,
             "departure_id": payload.departure_id,
-            "booking_type": "ONLINE",
+            "booking_type": TourType.DOMESTIC,
             "source": payload.source or BookingSource.WEBSITE,
             "status": BookingStatus.TENTATIVE,
             "adult_count": payload.adult_count,
@@ -155,42 +181,12 @@ class BookingService:
             else 0.0
         )
 
-        customer = booking.customer
-        return BookingDetailResponse(
-            id=booking.id,
-            booking_code=booking.booking_code,
-            customer_id=booking.customer_id,
-            enquiry_id=booking.enquiry_id,
-            package_id=booking.package_id,
-            variant_id=booking.variant_id,
-            departure_id=booking.departure_id,
-            quotation_id=booking.quotation_id,
-            offer_id=booking.offer_id,
-            booking_type=booking.booking_type,
-            source=booking.source,
-            sales_account_id=booking.sales_account_id,
-            status=booking.status,
-            adult_count=booking.adult_count,
-            child_count=booking.child_count,
-            senior_count=booking.senior_count,
-            subtotal=booking.subtotal,
-            discount_amount=booking.discount_amount,
-            total_amount=booking.total_amount,
-            paid_amount=booking.paid_amount,
-            due_amount=booking.due_amount,
-            notes=booking.notes,
-            created_by=booking.created_by,
-            created_at=booking.created_at,
-            updated_at=booking.updated_at,
-            customer_name=customer.name if customer else None,
-            customer_mobile=customer.mobile if customer else None,
-            gross_profit=gross_profit,
-            profit_margin=margin,
-            travellers=[t for t in booking.travellers],
-            items=list(booking.trip_items),
-            itinerary=list(booking.trip_itinerary),
-            status_history=[h for h in booking.status_history],
-        )
+        detail = BookingDetailResponse.model_validate(booking)
+        detail.customer_name = booking.customer.name if booking.customer else None
+        detail.customer_mobile = booking.customer.mobile if booking.customer else None
+        detail.gross_profit = gross_profit
+        detail.profit_margin = margin
+        return detail
 
     def list_all_bookings(
         self,

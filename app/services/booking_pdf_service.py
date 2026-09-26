@@ -52,17 +52,16 @@ def build_booking_pdf(booking: Booking) -> bytes:
         Paragraph("TRAVELLERS", section),
     ]
 
-    traveller_rows = [[Paragraph("Name", small), Paragraph("Type", small), Paragraph("Mobile", small), Paragraph("Email", small)]]
+    traveller_rows = [[Paragraph("Name", small), Paragraph("Mobile", small), Paragraph("Email", small)]]
     for traveller in booking.travellers:
         traveller_rows.append([
             Paragraph(_text(traveller.full_name), small),
-            Paragraph(_text(getattr(traveller, "traveler_type", "")), small),
             Paragraph(_text(traveller.mobile), small),
             Paragraph(_text(traveller.email), small),
         ])
     if len(traveller_rows) == 1:
-        traveller_rows.append([Paragraph("No traveller details supplied", small), "", "", ""])
-    story.append(Table(traveller_rows, colWidths=[52 * mm, 28 * mm, 38 * mm, 56 * mm], repeatRows=1, style=TableStyle([
+        traveller_rows.append([Paragraph("No traveller details supplied", small), "", ""])
+    story.append(Table(traveller_rows, colWidths=[62 * mm, 44 * mm, 62 * mm], repeatRows=1, style=TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#16324F")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#B7C6D4")),
