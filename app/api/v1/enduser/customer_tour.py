@@ -1,12 +1,21 @@
-from fastapi import APIRouter, Depends, Query
+import uuid
+
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_customer
 from app.core.enums import BookingStatus
 from app.db.database import get_db
 from app.models.account import Account
-from app.schemas.customer_tour import CustomerTourResponse
-from app.schemas.response import ErrorResponse, SuccessResponse
+from app.schemas.booking import (
+    BookingResponse,
+    BookingTravelerCreate,
+    BookingTravelerResponse,
+    BookingTravelerUpdate,
+)
+from app.schemas.customer_tour import CustomerTourDetailResponse
+from app.schemas.pagination import PaginatedResponse, PaginationMeta
+from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.booking_service import BookingService
 
 router = APIRouter(
@@ -17,18 +26,20 @@ router = APIRouter(
 
 @router.get(
     "",
-    response_model=SuccessResponse[list[CustomerTourResponse]],
+    response_model=PaginatedResponse[BookingResponse],
     responses={401: {"model": ErrorResponse}},
     summary="List my tours",
-    description="Return all booked tours belonging to the authenticated customer, newest first.",
+    description="Return paginated bookings belonging to the authenticated customer, newest first.",
 )
 def list_my_tours(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     month: int | None = Query(None, ge=1, le=12, description="Filter by travel month"),
     year: int | None = Query(None, ge=2000, le=2100, description="Filter by travel year"),
     status: str | None = Query(None, description="Filter by tour status"),
     current_customer: Account = Depends(get_current_customer),
     db: Session = Depends(get_db),
-) -> SuccessResponse[list[CustomerTourResponse]]:
+) -> PaginatedResponse[BookingResponse]:
     service = BookingService(db)
     # Parse status if valid BookingStatus
     booking_status = None
@@ -38,63 +49,116 @@ def list_my_tours(
         except ValueError:
             pass
 
-    bookings = service.list_my_bookings(
+    bookings, total_items = service.list_my_bookings(
         customer_id=current_customer.id,
+        page=page,
+        page_size=page_size,
         month=month,
         year=year,
         status=booking_status,
     )
-
-    items = []
-    for b in bookings:
-        pax = b.adult_count + b.child_count + b.senior_count
-        tour_name = b.package.title if b.package else f"Tour {b.booking_code}"
-        itinerary_dates = sorted(
-            item.date.date() for item in b.trip_itinerary if item.date
-        )
-        destination = (
-            b.package.destination.name
-            if b.package and b.package.destination
-            else (
-                b.enquiry.destination_ref.name
-                if b.enquiry and b.enquiry.destination_ref
-                else None
-            )
-        )
-        travel_date = (
-            b.departure.departure_date
-            if b.departure
-            else (
-                itinerary_dates[0]
-                if itinerary_dates
-                else (b.enquiry.travel_date if b.enquiry else None)
-            )
-        )
-        return_date = (
-            b.departure.return_date
-            if b.departure
-            else (itinerary_dates[-1] if itinerary_dates else None)
-        )
-        items.append(
-            CustomerTourResponse(
-                id=b.id,
-                tour_name=tour_name,
-                destination=destination,
-                travel_date=travel_date,
-                return_date=return_date,
-                pax_no=pax,
-                total_amount=b.total_amount,
-                status=b.status.value,
-                notes=b.notes,
-                package_id=b.package_id,
-                variant_id=b.variant_id,
-                enquiry_id=b.enquiry_id,
-                created_at=b.created_at,
-                updated_at=b.updated_at,
-            )
-        )
-
-    return SuccessResponse(
-        message="Your tours fetched successfully",
-        data=items,
+    total_pages = (total_items + page_size - 1) // page_size if total_items else 0
+    return PaginatedResponse(
+        message="Items fetched successfully",
+        data=[BookingResponse.model_validate(booking) for booking in bookings],
+        pagination=PaginationMeta(
+            current_page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            has_next=page < total_pages,
+            has_previous=page > 1,
+        ),
     )
+
+
+@router.get(
+    "/{booking_id}",
+    response_model=SuccessResponse[CustomerTourDetailResponse],
+    responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Get my tour details",
+    description="Return full details for a booking belonging to the authenticated customer.",
+)
+def get_my_tour_details(
+    booking_id: uuid.UUID,
+    current_customer: Account = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> SuccessResponse[CustomerTourDetailResponse]:
+    booking = BookingService(db).get_booking_detail(
+        booking_id,
+        customer_id=current_customer.id,
+    )
+    return SuccessResponse(
+        message="Booking details fetched successfully",
+        data=CustomerTourDetailResponse.model_validate(booking.model_dump()),
+    )
+
+
+@router.post(
+    "/{booking_id}/travellers",
+    response_model=SuccessResponse[BookingTravelerResponse],
+    status_code=status.HTTP_201_CREATED,
+    responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Add a traveller to my booking",
+)
+def add_my_booking_traveller(
+    booking_id: uuid.UUID,
+    payload: BookingTravelerCreate,
+    current_customer: Account = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> SuccessResponse[BookingTravelerResponse]:
+    traveller = BookingService(db).add_traveller(
+        booking_id,
+        payload,
+        customer_id=current_customer.id,
+    )
+    return SuccessResponse(
+        message="Traveller added successfully",
+        data=BookingTravelerResponse.model_validate(traveller),
+    )
+
+
+@router.patch(
+    "/{booking_id}/travellers/{traveller_id}",
+    response_model=ActionResponse,
+    responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Update a traveller on my booking",
+)
+def update_my_booking_traveller(
+    booking_id: uuid.UUID,
+    traveller_id: uuid.UUID,
+    payload: BookingTravelerUpdate,
+    current_customer: Account = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> ActionResponse:
+    BookingService(db).update_traveller(
+        booking_id,
+        traveller_id,
+        payload,
+        customer_id=current_customer.id,
+    )
+    return ActionResponse(message="Traveller updated successfully")
+
+
+@router.delete(
+    "/{booking_id}/travellers/{traveller_id}",
+    response_model=ActionResponse,
+    responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Remove a traveller from my booking",
+)
+def delete_my_booking_traveller(
+    booking_id: uuid.UUID,
+    traveller_id: uuid.UUID,
+    current_customer: Account = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> ActionResponse:
+    BookingService(db).delete_traveller(
+        booking_id,
+        traveller_id,
+        customer_id=current_customer.id,
+    )
+    return ActionResponse(message="Traveller deleted successfully")
+
+    
+
+

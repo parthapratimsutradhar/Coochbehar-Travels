@@ -14,6 +14,7 @@ from app.main import app
 from app.models.account import Account
 from app.models.base import Base
 from app.models.document import Document
+from app.services import customer_document_service as customer_document_service_module
 from app.services.customer_service import CustomerService
 
 compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
@@ -157,6 +158,79 @@ def test_customer_list_and_download_return_proxy_urls(client, db_session):
         dl_res = client.get(f"/api/v1/documents/{doc.id}/download")
         assert dl_res.status_code == 200
         assert dl_res.json()["data"]["download_url"] == f"/api/v1/documents/{doc.id}/file?download=true"
+    finally:
+        app.dependency_overrides.pop(get_current_customer, None)
+
+
+def test_customer_list_returns_requested_document_fields(client, db_session):
+    owner = create_account(db_session, AccountRole.CUSTOMER, "owner@example.com")
+    uploader = create_account(db_session, AccountRole.CUSTOMER, "uploader@example.com")
+    doc = create_document(db_session, owner.id, uploader.id)
+
+    app.dependency_overrides[get_current_customer] = lambda: owner
+    try:
+        response = client.get("/api/v1/documents")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["message"] == "Items fetched successfully"
+        assert set(payload["data"][0]) == {
+            "id",
+            "document_type",
+            "title",
+            "description",
+            "customer_id",
+            "customer_name",
+            "customer_profile_pic",
+            "uploaded_by_account_id",
+            "uploader_name",
+            "uploader_profile_pic",
+            "uploaded_at",
+            "file_url",
+            "file_name",
+            "mime_type",
+            "file_size",
+            "type",
+            "can_delete",
+        }
+        document = payload["data"][0]
+        assert document["can_delete"] is False
+        assert document["type"] == "incoming"
+        assert document["id"] == str(doc.id)
+    finally:
+        app.dependency_overrides.pop(get_current_customer, None)
+
+
+def test_customer_upload_accepts_admin_style_json_payload(client, db_session, monkeypatch):
+    customer = create_account(db_session, AccountRole.CUSTOMER, "upload-customer@example.com")
+
+    async def promote_asset(file_url, target_folder):
+        assert file_url == "https://storage.example/temporary-uploads/id-proof.pdf"
+        assert target_folder == "customer-documents"
+        return {"url": "https://storage.example/customer-documents/id-proof.pdf"}
+
+    monkeypatch.setattr(customer_document_service_module, "promote_cloudinary_asset", promote_asset)
+    app.dependency_overrides[get_current_customer] = lambda: customer
+    try:
+        response = client.post(
+            "/api/v1/documents",
+            json={
+                "file": "https://storage.example/temporary-uploads/id-proof.pdf",
+                "file_name": "id-proof.pdf",
+                "document_type": "ID_PROOF",
+                "title": "  Identity proof  ",
+                "description": "  Uploaded document  ",
+            },
+        )
+
+        assert response.status_code == 201
+        assert response.json()["message"] == "Document uploaded successfully"
+        document = db_session.query(Document).one()
+        assert document.customer_id == customer.id
+        assert document.uploaded_by_account_id == customer.id
+        assert document.title == "Identity proof"
+        assert document.description == "Uploaded document"
+        assert document.file_url == "https://storage.example/customer-documents/id-proof.pdf"
+        assert document.mime_type == "application/pdf"
     finally:
         app.dependency_overrides.pop(get_current_customer, None)
 

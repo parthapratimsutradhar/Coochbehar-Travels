@@ -123,16 +123,19 @@ class BookingRepository:
     def list_for_customer(
         self,
         customer_id: uuid.UUID,
+        page: int = 1,
+        page_size: int = 20,
         month: int | None = None,
         year: int | None = None,
         status: BookingStatus | None = None,
-    ) -> list[Booking]:
+    ) -> tuple[list[Booking], int]:
         itinerary_start = (
             select(func.min(TripItinerary.date))
             .where(TripItinerary.booking_id == Booking.id)
             .scalar_subquery()
         )
         travel_date = func.coalesce(
+            Booking.departure_date,
             TourDeparture.departure_date,
             func.date(itinerary_start),
             Enquiry.travel_date,
@@ -142,7 +145,10 @@ class BookingRepository:
             .outerjoin(TourDeparture, Booking.departure_id == TourDeparture.id)
             .outerjoin(Enquiry, Booking.enquiry_id == Enquiry.id)
             .options(
+                joinedload(Booking.customer),
+                joinedload(Booking.destination),
                 joinedload(Booking.package).joinedload(TourPackage.destination),
+                joinedload(Booking.variant).joinedload(TourVariant.details),
                 joinedload(Booking.departure),
                 joinedload(Booking.enquiry).joinedload(Enquiry.destination_ref),
                 joinedload(Booking.trip_itinerary),
@@ -156,8 +162,15 @@ class BookingRepository:
         if year is not None:
             stmt = stmt.where(func.extract("year", travel_date) == year)
 
-        bookings = self.db.execute(stmt.order_by(Booking.created_at.desc())).unique().scalars().all()
-        return list(bookings)
+        total = self.db.execute(
+            select(func.count()).select_from(stmt.order_by(None).subquery())
+        ).scalar_one()
+        bookings = self.db.execute(
+            stmt.order_by(Booking.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).unique().scalars().all()
+        return list(bookings), total
 
     def list_for_day(self, travel_day) -> list[Booking]:
         stmt = (

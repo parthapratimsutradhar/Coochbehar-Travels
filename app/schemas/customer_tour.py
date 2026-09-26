@@ -1,7 +1,8 @@
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
+from app.schemas.booking import BookingDetailResponse
 from app.schemas.base import SchemaBase
 
 
@@ -22,3 +23,8 @@ class CustomerTourResponse(SchemaBase):
     enquiry_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class CustomerTourDetailResponse(BookingDetailResponse):
+    gross_profit: Decimal | None = Field(default=None, exclude=True)
+    profit_margin: float | None = Field(default=None, exclude=True)

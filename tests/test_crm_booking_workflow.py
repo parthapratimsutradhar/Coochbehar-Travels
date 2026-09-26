@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.dialects.postgresql import JSONB
@@ -24,7 +25,13 @@ from app.models.destination import Destination
 from app.models.enquiry import Enquiry
 from app.models.quotation import Quotation
 from app.models.tour_package import TourPackage
-from app.schemas.booking import BookingDetailResponse, BookingTripItemResponse, OfflineBookingCreate
+from app.schemas.booking import (
+    BookingDetailResponse,
+    BookingTravelerCreate,
+    BookingTravelerUpdate,
+    BookingTripItemResponse,
+    OfflineBookingCreate,
+)
 from app.services.auth_service import AuthService
 from app.services.booking_service import BookingService
 from app.utils.security import create_access_token
@@ -267,6 +274,8 @@ def test_customer_tours_uses_booking_itinerary_dates(db_session, test_customer, 
     assert booking.return_date == date(2026, 10, 20)
 
     response = list_my_tours(
+        page=1,
+        page_size=20,
         month=10,
         year=2026,
         status=None,
@@ -275,9 +284,43 @@ def test_customer_tours_uses_booking_itinerary_dates(db_session, test_customer, 
     )
 
     assert len(response.data) == 1
-    assert response.data[0].travel_date == date(2026, 10, 15)
+    assert response.data[0].departure_date == date(2026, 10, 15)
     assert response.data[0].return_date == date(2026, 10, 20)
-    assert response.data[0].destination is None
+    assert response.data[0].destination_id is None
+    assert response.pagination.total_items == 1
+    assert response.pagination.current_page == 1
+
+
+@pytest.mark.parametrize("operation", ["add", "update", "delete"])
+def test_customer_cannot_manage_travellers_on_another_booking(operation):
+    service = BookingService.__new__(BookingService)
+    service.get_booking = lambda booking_id: SimpleNamespace(customer_id=uuid.uuid4())
+    booking_id = uuid.uuid4()
+    traveller_id = uuid.uuid4()
+    customer_id = uuid.uuid4()
+
+    with pytest.raises(HTTPException) as exc_info:
+        if operation == "add":
+            service.add_traveller(
+                booking_id,
+                BookingTravelerCreate(full_name="Guest"),
+                customer_id=customer_id,
+            )
+        elif operation == "update":
+            service.update_traveller(
+                booking_id,
+                traveller_id,
+                BookingTravelerUpdate(full_name="Guest"),
+                customer_id=customer_id,
+            )
+        else:
+            service.delete_traveller(
+                booking_id,
+                traveller_id,
+                customer_id=customer_id,
+            )
+
+    assert exc_info.value.status_code == 404
 
 
 def test_offline_booking_resolves_destination_and_dates_from_payload_or_references(

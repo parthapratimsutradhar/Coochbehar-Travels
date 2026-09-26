@@ -336,8 +336,6 @@ class BookingDetailResponse(BookingResponse):
     items: list[BookingTripItemResponse] = Field(default_factory=list)
     itinerary: list[BookingTripItineraryResponse] = Field(default_factory=list)
     status_history: list[BookingStatusHistoryResponse] = Field(default_factory=list)
-    customer_name: str | None = None
-    customer_mobile: str | None = None
     gross_profit: Decimal | None = None
     profit_margin: float | None = None
 

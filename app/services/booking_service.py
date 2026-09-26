@@ -229,8 +229,14 @@ class BookingService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
         return booking
 
-    def get_booking_detail(self, booking_id: uuid.UUID) -> BookingDetailResponse:
+    def get_booking_detail(
+        self,
+        booking_id: uuid.UUID,
+        customer_id: uuid.UUID | None = None,
+    ) -> BookingDetailResponse:
         booking = self.get_booking(booking_id)
+        if customer_id is not None and booking.customer_id != customer_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
         costs = list(booking.trip_items)
         total_costs = sum((c.total_price for c in costs), Decimal(0))
         gross_profit = booking.total_amount - total_costs
@@ -280,12 +286,16 @@ class BookingService:
     def list_my_bookings(
         self,
         customer_id: uuid.UUID,
+        page: int = 1,
+        page_size: int = 20,
         month: int | None = None,
         year: int | None = None,
         status: BookingStatus | None = None,
-    ) -> list[Booking]:
+    ) -> tuple[list[Booking], int]:
         return self.booking_repo.list_for_customer(
             customer_id=customer_id,
+            page=page,
+            page_size=page_size,
             month=month,
             year=year,
             status=status,
@@ -333,8 +343,14 @@ class BookingService:
         )
         return pdf_url
 
-    def add_traveller(self, booking_id: uuid.UUID, payload: BookingTravelerCreate) -> dict:
+    def add_traveller(
+        self,
+        booking_id: uuid.UUID,
+        payload: BookingTravelerCreate,
+        customer_id: uuid.UUID | None = None,
+    ) -> dict:
         booking = self.get_booking(booking_id)
+        self._ensure_booking_customer(booking, customer_id)
         from app.models.booking_traveler import BookingTraveler
         traveler = BookingTraveler(booking_id=booking.id, **payload.model_dump())
         self.db.add(traveler)
@@ -342,16 +358,34 @@ class BookingService:
         self.db.refresh(traveler)
         return traveler
 
-    def update_traveller(self, booking_id: uuid.UUID, traveller_id: uuid.UUID, payload: BookingTravelerUpdate):
+    def update_traveller(
+        self,
+        booking_id: uuid.UUID,
+        traveller_id: uuid.UUID,
+        payload: BookingTravelerUpdate,
+        customer_id: uuid.UUID | None = None,
+    ):
         booking = self.get_booking(booking_id)
+        self._ensure_booking_customer(booking, customer_id)
         traveller = next((item for item in booking.travellers if item.id == traveller_id), None)
         if traveller is None:
             raise HTTPException(status_code=404, detail="Traveller not found.")
         return self.booking_repo.update_traveller(traveller, payload.model_dump(exclude_unset=True))
 
-    def delete_traveller(self, booking_id: uuid.UUID, traveller_id: uuid.UUID) -> None:
+    def delete_traveller(
+        self,
+        booking_id: uuid.UUID,
+        traveller_id: uuid.UUID,
+        customer_id: uuid.UUID | None = None,
+    ) -> None:
         booking = self.get_booking(booking_id)
+        self._ensure_booking_customer(booking, customer_id)
         traveller = next((item for item in booking.travellers if item.id == traveller_id), None)
         if traveller is None:
             raise HTTPException(status_code=404, detail="Traveller not found.")
         self.booking_repo.delete_traveller(traveller)
+
+    @staticmethod
+    def _ensure_booking_customer(booking: Booking, customer_id: uuid.UUID | None) -> None:
+        if customer_id is not None and booking.customer_id != customer_id:
+            raise HTTPException(status_code=404, detail="Booking not found.")

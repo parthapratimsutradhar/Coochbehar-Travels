@@ -32,6 +32,26 @@ class DocumentResponse(SchemaBase):
     type: str = None # "incoming" for customer uploads, "outgoing" for admin uploads
 
 
+class CustomerDocumentListResponse(SchemaBase):
+    id: uuid.UUID
+    document_type: DocumentType
+    title: str
+    description: str | None = None
+    customer_id: uuid.UUID | None = None
+    customer_name: str | None = None
+    customer_profile_pic: str | None = None
+    uploaded_by_account_id: uuid.UUID | None = None
+    uploader_name: str | None = None
+    uploader_profile_pic: str | None = None
+    uploaded_at: datetime
+    file_url: str
+    file_name: str
+    mime_type: str | None = None
+    file_size: int | None = None
+    type: str
+    can_delete: bool = False
+
+
 class AdminDocumentResponse(SchemaBase):
     id: uuid.UUID
     document_type: DocumentType
@@ -54,6 +74,14 @@ class AdminDocumentResponse(SchemaBase):
 
 class AdminDocumentUploadRequest(SchemaBase):
     customer_id: uuid.UUID
+    file: str = Field(..., min_length=1, description="Temporary upload URL or Cloudinary public ID")
+    file_name: str = Field(default="document", min_length=1, max_length=255)
+    document_type: DocumentType
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str | None = None
+
+
+class CustomerDocumentUploadRequest(SchemaBase):
     file: str = Field(..., min_length=1, description="Temporary upload URL or Cloudinary public ID")
     file_name: str = Field(default="document", min_length=1, max_length=255)
     document_type: DocumentType
