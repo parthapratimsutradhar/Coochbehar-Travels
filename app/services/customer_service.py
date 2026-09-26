@@ -1,15 +1,24 @@
 import uuid
+from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.enums import LeadSource
+from app.core.enums import (
+    FinancialAccountOwnerType,
+    FinancialAccountType,
+    FinancialTransactionStatus,
+    LeadSource,
+)
 from app.models.account import Account
 from app.models.booking import Booking
 from app.models.document import Document
 from app.models.enquiry import Enquiry
+from app.models.financial_account import FinancialAccount
+from app.models.financial_transaction import FinancialTransaction
+from app.models.financial_transaction_entry import FinancialTransactionEntry
 from app.models.lead import Lead
 from app.models.referral import Referral
 from app.models.review import Review
@@ -22,6 +31,7 @@ from app.schemas.customer import CustomerCreate, CustomerResponse, CustomerUpdat
 from app.schemas.customer_tour import CustomerTourResponse
 from app.schemas.document import DocumentResponse
 from app.schemas.enquiry import EnquiryResponse
+from app.schemas.financial_transaction import financial_transaction_response
 from app.schemas.lead import LeadResponse
 from app.schemas.pagination import PaginationMeta
 from app.schemas.referral import ReferralHistoryItemResponse
@@ -284,6 +294,103 @@ class CustomerService:
                 ).model_dump(mode="json")
                 for item in records
             ]
+        elif tab == "invoice":
+            bookings, total_items = self.booking_repo.list_all(
+                page=page,
+                page_size=page_size,
+                customer_id=customer_id,
+            )
+            items = []
+            for booking in bookings:
+                package = booking.package
+                items.append(
+                    {
+                        "booking_id": str(booking.id),
+                        "booking_code": booking.booking_code,
+                        "tour_name": package.title if package else f"Booking {booking.booking_code}",
+                        "status": booking.status.value,
+                        "passenger_count": booking.adult_count + booking.child_count + booking.senior_count,
+                        "cost_breakdown": {
+                            "items": [
+                                {
+                                    "id": str(item.id),
+                                    "item_type": item.item_type.value,
+                                    "name": item.name,
+                                    "description": item.description,
+                                    "quantity": item.quantity,
+                                    "unit_price": str(item.unit_price),
+                                    "total_price": str(item.total_price),
+                                }
+                                for item in booking.trip_items
+                            ],
+                            "subtotal": str(booking.subtotal),
+                            "discount_amount": str(booking.discount_amount),
+                            "total_amount": str(booking.total_amount),
+                            "paid_amount": str(booking.paid_amount),
+                            "due_amount": str(booking.due_amount),
+                        },
+                    }
+                )
+        elif tab == "ledger":
+            wallet_accounts = select(FinancialAccount.id).where(
+                FinancialAccount.owner_id == customer_id,
+                FinancialAccount.owner_type == FinancialAccountOwnerType.CUSTOMER,
+                FinancialAccount.account_type == FinancialAccountType.LIABILITY,
+            )
+            wallet_transactions = select(FinancialTransactionEntry.transaction_id).where(
+                FinancialTransactionEntry.account_id.in_(wallet_accounts)
+            )
+            stmt = select(FinancialTransaction).where(
+                or_(
+                    FinancialTransaction.customer_id == customer_id,
+                    FinancialTransaction.id.in_(wallet_transactions),
+                )
+            )
+            total_items = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+            records = self.db.execute(
+                stmt.order_by(
+                    FinancialTransaction.transaction_date.desc(),
+                    FinancialTransaction.created_at.desc(),
+                )
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            ).scalars().all()
+            items = [
+                {
+                    "transaction_code": item.transaction_code,
+                    **financial_transaction_response(item).model_dump(mode="json"),
+                }
+                for item in records
+            ]
+            wallet_balance = self.db.execute(
+                select(
+                    func.coalesce(
+                        func.sum(FinancialTransactionEntry.credit - FinancialTransactionEntry.debit),
+                        0,
+                    )
+                )
+                .join(FinancialAccount, FinancialAccount.id == FinancialTransactionEntry.account_id)
+                .join(FinancialTransaction, FinancialTransaction.id == FinancialTransactionEntry.transaction_id)
+                .where(
+                    FinancialAccount.owner_id == customer_id,
+                    FinancialAccount.owner_type == FinancialAccountOwnerType.CUSTOMER,
+                    FinancialAccount.account_type == FinancialAccountType.LIABILITY,
+                    FinancialTransaction.status == FinancialTransactionStatus.COMPLETED,
+                )
+            ).scalar_one()
+            currency = self.db.execute(
+                select(FinancialAccount.currency)
+                .where(
+                    FinancialAccount.owner_id == customer_id,
+                    FinancialAccount.owner_type == FinancialAccountOwnerType.CUSTOMER,
+                    FinancialAccount.account_type == FinancialAccountType.LIABILITY,
+                )
+                .limit(1)
+            ).scalar_one_or_none() or "INR"
+            extra_data = {
+                "balance": str(Decimal(str(wallet_balance or 0)).quantize(Decimal("0.01"))),
+                "currency": currency,
+            }
         else:  # documents
             stmt = select(Document).where(
                 Document.customer_id == customer_id,
@@ -333,6 +440,7 @@ class CustomerService:
         total_pages = (total_items + page_size - 1) // page_size if total_items else 0
         return {
             "tab": tab,
+            **(extra_data if tab == "ledger" else {}),
             "items": items,
             "pagination": PaginationMeta(
                 current_page=page,
