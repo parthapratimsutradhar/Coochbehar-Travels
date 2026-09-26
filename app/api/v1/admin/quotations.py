@@ -37,6 +37,7 @@ def list_quotations(
 	page_size: int = Query(20, ge=1, le=100),
 	status_filter: QuotationStatus | None = Query(None, alias="status"),
 	search: str | None = Query(None),
+	enquiry_id: uuid.UUID | None = Query(None),
 	db: Session = Depends(get_db),
 	current_user: Account = Depends(get_current_admin_or_staff),
 ) -> PaginatedResponse[QuotationListResponse]:
@@ -46,6 +47,7 @@ def list_quotations(
 		page_size=page_size,
 		status=status_filter,
 		search=search,
+		enquiry_id=enquiry_id,
 	)
 	total_pages = result.get("total_pages", 0)
 	return PaginatedResponse(

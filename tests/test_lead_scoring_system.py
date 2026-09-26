@@ -141,15 +141,8 @@ def test_score_boundaries_clamped(db_session):
 
 # ── 3. Enquiry -> Lead Creation Endpoints ─────────────────────────────
 
-def test_visitor_submits_enquiry_creates_lead_with_initial_score(client: TestClient, db_session, monkeypatch):
-    """Visitor submits enquiry -> Enquiry + Lead created with calculated initial score and Socket.IO emitted."""
-    emitted_events = []
-
-    def mock_emit_lead_created(lead):
-        emitted_events.append(("lead:created", lead.lead_code, lead.lead_score))
-
-    monkeypatch.setattr("app.api.v1.enduser.enquiries.emit_lead_created", mock_emit_lead_created)
-
+def test_visitor_submits_enquiry_without_creating_lead(client: TestClient, db_session):
+    """Visitor submits an enquiry without creating a sales lead."""
     # Create visitor
     visitor = Visitor(visitor_code="VIS-ENQ01")
     db_session.add(visitor)
@@ -169,19 +162,13 @@ def test_visitor_submits_enquiry_creates_lead_with_initial_score(client: TestCli
     )
     assert res.status_code == 201
 
-    # Verify DB state
-    lead = db_session.execute(select(Lead).where(Lead.visitor_id == visitor.id)).scalar_one_or_none()
-    assert lead is not None
-    assert lead.full_name == "Jane Explorer"
-    assert lead.mobile == "+919876500000"
-    # Base (20) + phone (10) + name (5) + msg (5) = 40
-    assert lead.lead_score == 40
-    assert lead.status == LeadStatus.NEW
-
-    # Verify Socket.IO emit
-    assert len(emitted_events) == 1
-    assert emitted_events[0][0] == "lead:created"
-    assert emitted_events[0][2] == 40
+    enquiry = db_session.execute(
+        select(Enquiry).where(Enquiry.visitor_id == visitor.id)
+    ).scalar_one()
+    lead = db_session.execute(
+        select(Lead).where(Lead.enquiry_id == enquiry.id)
+    ).scalar_one_or_none()
+    assert lead is None
 
 
 def test_customer_submits_custom_tour_creates_lead(client: TestClient, db_session, monkeypatch):

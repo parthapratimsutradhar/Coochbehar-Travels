@@ -30,7 +30,11 @@ class EnquiryService:
         self.scoring_service = LeadScoringService(db)
         self.notification_service = NotificationService(db)
 
-    async def create_fixed_tour_enquiry(self, payload: EnquiryCreate) -> Enquiry:
+    async def create_fixed_tour_enquiry(
+        self,
+        payload: EnquiryCreate,
+        create_lead: bool = True,
+    ) -> Enquiry:
         customer = self._resolve_customer(payload.mobile, payload.email)
         enquiry_code = f"ENQ-{uuid.uuid4().hex[:8].upper()}"
         enquiry = self.enquiry_repo.create(
@@ -62,17 +66,17 @@ class EnquiryService:
             special_requirements=payload.special_requirements,
         )
 
-        initial_score = self.scoring_service.calculate_initial_score(enquiry)
-        lead_code = f"LEAD-{uuid.uuid4().hex[:8].upper()}"
-        lead = self.lead_repo.create(
-            lead_code=lead_code,
-            enquiry_id=enquiry.id,
-            lead_score=initial_score,
-            status=LeadStatus.NEW,
-        )
-
         emit_enquiry_created(enquiry)
-        emit_lead_created(lead)
+        if create_lead:
+            initial_score = self.scoring_service.calculate_initial_score(enquiry)
+            lead_code = f"LEAD-{uuid.uuid4().hex[:8].upper()}"
+            lead = self.lead_repo.create(
+                lead_code=lead_code,
+                enquiry_id=enquiry.id,
+                lead_score=initial_score,
+                status=LeadStatus.NEW,
+            )
+            emit_lead_created(lead)
 
         package = self.db.get(TourPackage, payload.package_id) if payload.package_id else None
         tour_name = package.title if package else "tour enquiry"

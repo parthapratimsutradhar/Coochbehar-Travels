@@ -1,6 +1,7 @@
+from collections.abc import Mapping
 from datetime import date, datetime
 from uuid import UUID
-from pydantic import AliasChoices, Field, ConfigDict
+from pydantic import AliasChoices, AliasPath, Field, ConfigDict, model_validator
 from app.schemas.base import SchemaBase
 from app.schemas.lead import LeadSummaryResponse
 from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType, MealPlan
@@ -45,6 +46,13 @@ class EnquiryCreate(SchemaBase):
     special_requirements: str | None = None
     meal_plan: MealPlan | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def unwrap_data_envelope(cls, data):
+        if isinstance(data, Mapping) and set(data) == {"data"}:
+            return data["data"]
+        return data
+
 
 
 class EnquiryUpdate(SchemaBase):
@@ -67,6 +75,46 @@ class EnquiryResponse(EnquiryBase):
     enquirer_email: str | None = None
     hotel_id: UUID | None = None
     vehicle_id: UUID | None = None
+    travel_date: date | None = None
+    travel_duration_day: int | None = None
+    travel_duration_night: int | None = None
+    adult_count: int | None = None
+    child_count: int | None = None
+    senior_count: int | None = None
+    room_count: int | None = None
+    vehicle_count: int | None = None
+    meal_plan: MealPlan | None = None
+    budget_min: float | None = None
+    budget_max: float | None = None
+    special_requirements: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CustomerEnquiryResponse(EnquiryBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    enquiry_code: str
+    visitor_id: UUID | None = None
+    customer_id: UUID | None = None
+    destination_id: UUID | None = None
+    destination_name: str | None = Field(
+        default=None,
+        validation_alias=AliasPath("destination_ref", "name"),
+    )
+    status: EnquiryStatus
+    enquirer_name: str | None = None
+    enquirer_phone: str | None = None
+    enquirer_email: str | None = None
+    hotel_id: UUID | None = None
+    hotel_name: str | None = Field(default=None, validation_alias=AliasPath("hotel", "name"))
+    vehicle_id: UUID | None = None
+    vehicle_name: str | None = Field(default=None, validation_alias=AliasPath("vehicle", "name"))
+    vehicle_registration_number: str | None = Field(
+        default=None,
+        validation_alias=AliasPath("vehicle", "registration_number"),
+    )
     travel_date: date | None = None
     travel_duration_day: int | None = None
     travel_duration_night: int | None = None

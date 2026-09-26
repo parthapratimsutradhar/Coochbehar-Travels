@@ -94,8 +94,15 @@ class QuotationService:
         page_size: int = 20,
         status: QuotationStatus | None = None,
         search: str | None = None,
+        enquiry_id: uuid.UUID | None = None,
     ) -> dict:
-        items, total = self.quotation_repo.list_all(page=page, page_size=page_size, status=status, search=search)
+        items, total = self.quotation_repo.list_all(
+            page=page,
+            page_size=page_size,
+            status=status,
+            search=search,
+            enquiry_id=enquiry_id,
+        )
         total_pages = (total + page_size - 1) // page_size if total else 0
         return {
             "items": items,

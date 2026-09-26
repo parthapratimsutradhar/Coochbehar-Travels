@@ -83,6 +83,7 @@ class QuotationRepository:
         page_size: int = 20,
         status: QuotationStatus | None = None,
         search: str | None = None,
+        enquiry_id: uuid.UUID | None = None,
     ) -> tuple[list[Quotation], int]:
         stmt = select(Quotation).options(
             joinedload(Quotation.items).joinedload(TripItem.hotel),
@@ -91,6 +92,8 @@ class QuotationRepository:
         )
         if status is not None:
             stmt = stmt.where(Quotation.status == status)
+        if enquiry_id is not None:
+            stmt = stmt.where(Quotation.enquiry_id == enquiry_id)
         if search:
             term = f"%{search.strip()}%"
             stmt = stmt.where(
