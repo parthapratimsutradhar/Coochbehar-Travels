@@ -59,6 +59,7 @@ class EnquiryRepository:
         page_size: int = 20,
         status: EnquiryStatus | None = None,
         search: str | None = None,
+        customer_id: uuid.UUID | None = None,
     ) -> tuple[list[Enquiry], int]:
         stmt = select(Enquiry).options(
             joinedload(Enquiry.package),
@@ -66,6 +67,8 @@ class EnquiryRepository:
             joinedload(Enquiry.customer),
             joinedload(Enquiry.lead),
         )
+        if customer_id is not None:
+            stmt = stmt.where(Enquiry.customer_id == customer_id)
         if status is not None:
             stmt = stmt.where(Enquiry.status == status)
         if search:

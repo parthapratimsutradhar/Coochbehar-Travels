@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 import uuid
 from fastapi import HTTPException, status
@@ -28,7 +28,44 @@ class BookingService:
         self.booking_repo = BookingRepository(db)
         self.customer_repo = CustomerRepository(db)
 
+    def _resolve_booking_travel_fields(
+        self,
+        payload: OfflineBookingCreate | OnlineBookingCreate,
+    ) -> tuple[uuid.UUID | None, date | None, date | None]:
+        package, variant, enquiry, departure = self.booking_repo.get_booking_reference_data(
+            package_id=payload.package_id,
+            variant_id=payload.variant_id,
+            enquiry_id=payload.enquiry_id,
+            departure_id=payload.departure_id,
+        )
+
+        destination_id = payload.destination_id
+        if destination_id is None and package is not None:
+            destination_id = package.destination_id
+        if destination_id is None and enquiry is not None:
+            destination_id = enquiry.destination_id
+
+        departure_date = payload.departure_date
+        if departure_date is None and departure is not None:
+            departure_date = departure.departure_date
+        if departure_date is None and enquiry is not None:
+            departure_date = enquiry.travel_date
+
+        return_date = payload.return_date
+        if return_date is None and departure is not None:
+            return_date = departure.return_date
+        if return_date is None and departure_date is not None:
+            if enquiry is not None and enquiry.travel_duration_day:
+                return_date = departure_date + timedelta(days=enquiry.travel_duration_day - 1)
+            elif enquiry is not None and enquiry.travel_duration_night is not None:
+                return_date = departure_date + timedelta(days=enquiry.travel_duration_night)
+            elif variant is not None and variant.duration_days > 0:
+                return_date = departure_date + timedelta(days=variant.duration_days - 1)
+
+        return destination_id, departure_date, return_date
+
     def create_offline_booking(self, payload: OfflineBookingCreate, staff_user: Account) -> Booking:
+        destination_id, departure_date, return_date = self._resolve_booking_travel_fields(payload)
         primary_traveler = payload.travellers[0] if payload.travellers else None
         customer = None
 
@@ -77,6 +114,9 @@ class BookingService:
             "package_id": package_id,
             "variant_id": payload.variant_id,
             "departure_id": payload.departure_id,
+            "destination_id": destination_id,
+            "departure_date": departure_date,
+            "return_date": return_date,
             "booking_type": TourType.DOMESTIC,
             "source": payload.source or BookingSource.OFFLINE,
             "sales_account_id": payload.sales_account_id or staff_user.id,
@@ -97,16 +137,31 @@ class BookingService:
 
         cost_items = payload.costs if payload.costs is not None else payload.items
         itinerary_data = [day.model_dump(exclude_none=True) for day in payload.itinerary]
-        if payload.travel_date and not itinerary_data:
-            itinerary_data.append(
-                {
-                    "day_number": 1,
-                    "date": payload.travel_date,
-                    "title": "Travel Day",
-                    "description": "Travel date captured during offline booking creation.",
-                    "sort_order": 0,
-                }
+        if departure_date or return_date:
+            itinerary_dates = {
+                day["date"].date() if isinstance(day.get("date"), datetime) else day.get("date")
+                for day in itinerary_data
+                if day.get("date") is not None
+            }
+            date_labels = (
+                (departure_date, "Departure Day"),
+                (return_date, "Return Day"),
             )
+            next_day_number = max((day["day_number"] for day in itinerary_data), default=0) + 1
+            next_sort_order = max((day["sort_order"] for day in itinerary_data), default=-1) + 1
+            for travel_day, title in date_labels:
+                if travel_day is not None and travel_day not in itinerary_dates:
+                    itinerary_data.append(
+                        {
+                            "day_number": next_day_number,
+                            "date": datetime.combine(travel_day, time.min, tzinfo=timezone.utc),
+                            "title": title,
+                            "sort_order": next_sort_order,
+                        }
+                    )
+                    itinerary_dates.add(travel_day)
+                    next_day_number += 1
+                    next_sort_order += 1
 
         booking = self.booking_repo.create(
             booking_data,
@@ -138,6 +193,7 @@ class BookingService:
         return booking
 
     def create_online_booking(self, payload: OnlineBookingCreate, customer: Account) -> Booking:
+        destination_id, departure_date, return_date = self._resolve_booking_travel_fields(payload)
         booking_code = f"BK-{uuid.uuid4().hex[:8].upper()}"
         booking_data = {
             "booking_code": booking_code,
@@ -147,6 +203,9 @@ class BookingService:
             "package_id": payload.package_id,
             "variant_id": payload.variant_id,
             "departure_id": payload.departure_id,
+            "destination_id": destination_id,
+            "departure_date": departure_date,
+            "return_date": return_date,
             "booking_type": TourType.DOMESTIC,
             "source": payload.source or BookingSource.WEBSITE,
             "status": BookingStatus.TENTATIVE,
@@ -217,6 +276,20 @@ class BookingService:
             "total_items": total,
             "total_pages": total_pages,
         }
+
+    def list_my_bookings(
+        self,
+        customer_id: uuid.UUID,
+        month: int | None = None,
+        year: int | None = None,
+        status: BookingStatus | None = None,
+    ) -> list[Booking]:
+        return self.booking_repo.list_for_customer(
+            customer_id=customer_id,
+            month=month,
+            year=year,
+            status=status,
+        )
 
     def update_booking_status(
         self,

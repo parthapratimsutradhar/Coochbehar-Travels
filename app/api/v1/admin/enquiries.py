@@ -46,13 +46,20 @@ async def create_enquiry(
 def list_enquiries(
     status_filter: EnquiryStatus | None = Query(None, alias="status", description="Filter by enquiry status"),
     search: str | None = Query(None),
+    customer_id: uuid.UUID | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
     service = EnquiryService(db)
-    result = service.list_all_enquiries(page=page, page_size=page_size, status=status_filter, search=search)
+    result = service.list_all_enquiries(
+        page=page,
+        page_size=page_size,
+        status=status_filter,
+        search=search,
+        customer_id=customer_id,
+    )
     return PaginatedResponse(
         message=EnquirySuccess.RETRIEVED,
         data=[EnquiryResponse.model_validate(e) for e in result["items"]],

@@ -22,10 +22,11 @@ router = APIRouter(
 )
 def get_current_customer_profile(
     current_customer: Account = Depends(get_current_customer),
+    db: Session = Depends(get_db),
 ):
     return SuccessResponse(
         message="Customer profile fetched successfully.",
-        data=CustomerResponse.model_validate(current_customer),
+        data=CustomerService(db).get_customer_response(current_customer.id),
     )
 
 
@@ -43,7 +44,7 @@ async def update_customer_profile(
     updated = await CustomerService(db).update_customer(current_customer.id, payload)
     return SuccessResponse(
         message="Customer profile updated successfully.",
-        data=CustomerResponse.model_validate(updated),
+        data=updated,
     )
 
 
@@ -52,7 +53,7 @@ async def update_customer_profile(
     response_model=ActionResponse,
     responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
     summary="Delete Customer Account",
-    description="Verify a DELETE_ACCOUNT OTP for the authenticated customer's email or mobile number, then permanently delete the account.",
+    description="Verify a DELETE_ACCOUNT OTP for the authenticated customer's email or mobile number, then deactivate the account.",
 )
 def delete_customer_account(
     payload: CustomerOtpVerifySchema,
@@ -69,4 +70,4 @@ def delete_customer_account(
     )
     auth_service.customer_repo.delete_customer(current_customer)
     clear_refresh_cookie(response)
-    return ActionResponse(message="Customer account deleted successfully.")
+    return ActionResponse(message="Customer account deactivated successfully.")

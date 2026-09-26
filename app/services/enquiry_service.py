@@ -181,8 +181,15 @@ class EnquiryService:
         page_size: int = 20,
         status: EnquiryStatus | None = None,
         search: str | None = None,
+        customer_id: uuid.UUID | None = None,
     ) -> dict:
-        items, total = self.enquiry_repo.list_all(page=page, page_size=page_size, status=status, search=search)
+        items, total = self.enquiry_repo.list_all(
+            page=page,
+            page_size=page_size,
+            status=status,
+            search=search,
+            customer_id=customer_id,
+        )
         total_pages = (total + page_size - 1) // page_size if total else 0
         return {
             "items": items,

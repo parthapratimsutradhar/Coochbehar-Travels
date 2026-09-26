@@ -1,7 +1,7 @@
 from decimal import Decimal
 import uuid
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from app.core.enums import BookingSource, BookingStatus
 from app.models.booking import Booking
 from app.models.booking_status_history import BookingStatusHistory
@@ -11,6 +11,8 @@ from app.models.trip_items import TripItem
 from app.models.trip_itinerary import TripItinerary
 from app.models.trip_hotel import TripHotel
 from app.models.trip_vehicle import TripVehicle
+from app.models.tour_departure import TourDeparture
+from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
 
 
@@ -25,7 +27,8 @@ class BookingRepository:
                 joinedload(Booking.travellers),
                 joinedload(Booking.customer),
                 joinedload(Booking.enquiry).joinedload(Enquiry.destination_ref),
-                joinedload(Booking.package),
+                joinedload(Booking.destination),
+                joinedload(Booking.package).joinedload(TourPackage.destination),
                 joinedload(Booking.variant).joinedload(TourVariant.details),
                 joinedload(Booking.departure),
                 joinedload(Booking.offer),
@@ -69,7 +72,8 @@ class BookingRepository:
         stmt = select(Booking).options(
             joinedload(Booking.customer),
             joinedload(Booking.enquiry).joinedload(Enquiry.destination_ref),
-            joinedload(Booking.package),
+            joinedload(Booking.destination),
+            joinedload(Booking.package).joinedload(TourPackage.destination),
             joinedload(Booking.variant).joinedload(TourVariant.details),
             joinedload(Booking.departure),
             joinedload(Booking.offer),
@@ -99,6 +103,62 @@ class BookingRepository:
         ).unique().scalars().all()
         return list(bookings), total
 
+    def get_booking_reference_data(
+        self,
+        package_id: uuid.UUID | None,
+        variant_id: uuid.UUID | None,
+        enquiry_id: uuid.UUID | None,
+        departure_id: uuid.UUID | None,
+    ) -> tuple[TourPackage | None, TourVariant | None, Enquiry | None, TourDeparture | None]:
+        package = self.db.get(TourPackage, package_id) if package_id else None
+        variant = self.db.get(TourVariant, variant_id) if variant_id else None
+        enquiry = self.db.get(Enquiry, enquiry_id) if enquiry_id else None
+        departure = self.db.get(TourDeparture, departure_id) if departure_id else None
+        if variant is None and departure is not None:
+            variant = departure.variant
+        if package is None and variant is not None:
+            package = variant.package
+        return package, variant, enquiry, departure
+
+    def list_for_customer(
+        self,
+        customer_id: uuid.UUID,
+        month: int | None = None,
+        year: int | None = None,
+        status: BookingStatus | None = None,
+    ) -> list[Booking]:
+        itinerary_start = (
+            select(func.min(TripItinerary.date))
+            .where(TripItinerary.booking_id == Booking.id)
+            .scalar_subquery()
+        )
+        travel_date = func.coalesce(
+            TourDeparture.departure_date,
+            func.date(itinerary_start),
+            Enquiry.travel_date,
+        )
+        stmt = (
+            select(Booking)
+            .outerjoin(TourDeparture, Booking.departure_id == TourDeparture.id)
+            .outerjoin(Enquiry, Booking.enquiry_id == Enquiry.id)
+            .options(
+                joinedload(Booking.package).joinedload(TourPackage.destination),
+                joinedload(Booking.departure),
+                joinedload(Booking.enquiry).joinedload(Enquiry.destination_ref),
+                joinedload(Booking.trip_itinerary),
+            )
+            .where(Booking.customer_id == customer_id)
+        )
+        if status is not None:
+            stmt = stmt.where(Booking.status == status)
+        if month is not None:
+            stmt = stmt.where(func.extract("month", travel_date) == month)
+        if year is not None:
+            stmt = stmt.where(func.extract("year", travel_date) == year)
+
+        bookings = self.db.execute(stmt.order_by(Booking.created_at.desc())).unique().scalars().all()
+        return list(bookings)
+
     def list_for_day(self, travel_day) -> list[Booking]:
         stmt = (
             select(Booking)
@@ -106,12 +166,19 @@ class BookingRepository:
             .outerjoin(TripItinerary, TripItinerary.booking_id == Booking.id)
             .options(
                 joinedload(Booking.customer),
-                joinedload(Booking.package),
-                joinedload(Booking.variant),
-                joinedload(Booking.travellers),
-                joinedload(Booking.trip_items).joinedload(TripItem.hotel),
-                joinedload(Booking.trip_items).joinedload(TripItem.vehicle),
-                joinedload(Booking.trip_itinerary),
+                joinedload(Booking.enquiry).joinedload(Enquiry.destination_ref),
+                joinedload(Booking.destination),
+                joinedload(Booking.package).joinedload(TourPackage.destination),
+                joinedload(Booking.variant).joinedload(TourVariant.details),
+                joinedload(Booking.departure),
+                joinedload(Booking.offer),
+                joinedload(Booking.sales_account),
+                joinedload(Booking.created_by_account),
+                selectinload(Booking.travellers),
+                selectinload(Booking.trip_items).joinedload(TripItem.hotel),
+                selectinload(Booking.trip_items).joinedload(TripItem.vehicle),
+                selectinload(Booking.trip_itinerary),
+                selectinload(Booking.status_history),
             )
             .where(
                 (Enquiry.travel_date == travel_day)

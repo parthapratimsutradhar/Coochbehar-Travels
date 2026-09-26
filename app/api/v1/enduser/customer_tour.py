@@ -49,15 +49,39 @@ def list_my_tours(
     for b in bookings:
         pax = b.adult_count + b.child_count + b.senior_count
         tour_name = b.package.title if b.package else f"Tour {b.booking_code}"
-        destination = b.package.destination if b.package else None
-        travel_date = b.departure.departure_date if b.departure else None
+        itinerary_dates = sorted(
+            item.date.date() for item in b.trip_itinerary if item.date
+        )
+        destination = (
+            b.package.destination.name
+            if b.package and b.package.destination
+            else (
+                b.enquiry.destination_ref.name
+                if b.enquiry and b.enquiry.destination_ref
+                else None
+            )
+        )
+        travel_date = (
+            b.departure.departure_date
+            if b.departure
+            else (
+                itinerary_dates[0]
+                if itinerary_dates
+                else (b.enquiry.travel_date if b.enquiry else None)
+            )
+        )
+        return_date = (
+            b.departure.return_date
+            if b.departure
+            else (itinerary_dates[-1] if itinerary_dates else None)
+        )
         items.append(
             CustomerTourResponse(
                 id=b.id,
                 tour_name=tour_name,
                 destination=destination,
                 travel_date=travel_date,
-                return_date=None,
+                return_date=return_date,
                 pax_no=pax,
                 total_amount=b.total_amount,
                 status=b.status.value,

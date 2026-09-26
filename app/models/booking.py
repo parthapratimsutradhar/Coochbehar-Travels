@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import uuid
+from datetime import date
 from sqlalchemy import (
     Enum,
     ForeignKey,
@@ -93,6 +94,16 @@ class Booking(BaseEntity):
         index=True,
     )
 
+    destination_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("destinations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    departure_date: Mapped[date | None] = mapped_column(nullable=True)
+
+    return_date: Mapped[date | None] = mapped_column(nullable=True)
+
     adult_count: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -174,6 +185,8 @@ class Booking(BaseEntity):
         "TourDeparture",
         back_populates="bookings",
     )
+
+    destination = relationship("Destination", foreign_keys=[destination_id])
 
     package = relationship("TourPackage")
     

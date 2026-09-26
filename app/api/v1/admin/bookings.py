@@ -9,6 +9,7 @@ from app.core.enums import BookingSource, BookingStatus
 from app.db.database import get_db
 from app.models.account import Account
 from app.schemas.booking import (
+    BookingDayDetailResponse,
     BookingDetailResponse,
     BookingEmailRequest,
     BookingResponse,
@@ -28,7 +29,7 @@ router = APIRouter(prefix="/admin/bookings", tags=["Admin - Bookings"])
 
 @router.post(
     "",
-    response_model=ActionResponse,
+    response_model=SuccessResponse[BookingDetailResponse],
     status_code=status.HTTP_201_CREATED,
     responses={404: {"model": ErrorResponse}},
     summary="Create a booking with travellers and trip costs",
@@ -37,9 +38,13 @@ def create_booking(
     payload: OfflineBookingCreate,
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
-) -> ActionResponse:
-    BookingService(db).create_offline_booking(payload, current_user)
-    return ActionResponse(message="Booking created successfully")
+) -> SuccessResponse[BookingDetailResponse]:
+    service = BookingService(db)
+    booking = service.create_offline_booking(payload, current_user)
+    return SuccessResponse(
+        message="Booking created successfully",
+        data=service.get_booking_detail(booking.id),
+    )
 
 
 @router.get(
@@ -71,7 +76,7 @@ def list_bookings(
         search=search,
     )
     return PaginatedResponse(
-        message="Bookings fetched successfully",
+        message="Items fetched successfully",
         data=[BookingResponse.model_validate(item) for item in result["items"]],
         pagination=PaginationMeta(
             current_page=page,
@@ -86,19 +91,19 @@ def list_bookings(
 
 @router.get(
     "/day/{travel_day}",
-    response_model=SuccessResponse[list[BookingDetailResponse]],
+    response_model=SuccessResponse[list[BookingDayDetailResponse]],
     summary="List bookings for a travel day",
 )
 def list_bookings_for_day(
     travel_day: date,
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
-) -> SuccessResponse[list[BookingDetailResponse]]:
+) -> SuccessResponse[list[BookingDayDetailResponse]]:
     del current_user
     bookings = BookingService(db).list_bookings_for_day(travel_day)
     return SuccessResponse(
         message="Bookings for the day fetched successfully",
-        data=[BookingDetailResponse.model_validate(item) for item in bookings],
+        data=[BookingDayDetailResponse.model_validate(item) for item in bookings],
     )
 
 

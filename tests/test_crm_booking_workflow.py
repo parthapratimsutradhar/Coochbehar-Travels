@@ -14,6 +14,7 @@ from sqlalchemy.pool import StaticPool
 compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
 
 from app.api.v1.admin.quotations import get_quotation, list_quotations
+from app.api.v1.enduser.customer_tour import list_my_tours
 from app.core.enums import AccountRole, BookingSource, BookingStatus, EnquiryChannel, EnquiryStatus, EnquiryType, PaymentMethod, QuotationStatus, TourType
 from app.db.database import get_db
 from app.main import app
@@ -22,7 +23,8 @@ from app.models.account import Account
 from app.models.destination import Destination
 from app.models.enquiry import Enquiry
 from app.models.quotation import Quotation
-from app.schemas.booking import BookingDetailResponse, OfflineBookingCreate
+from app.models.tour_package import TourPackage
+from app.schemas.booking import BookingDetailResponse, BookingTripItemResponse, OfflineBookingCreate
 from app.services.auth_service import AuthService
 from app.services.booking_service import BookingService
 from app.utils.security import create_access_token
@@ -73,6 +75,57 @@ def test_booking_detail_response_serializes_orm_travellers():
 
     assert response.travellers[0].full_name == "Alice Traveler"
     assert response.travellers[0].booking_id == booking_id
+
+
+def test_booking_trip_item_response_serializes_hotel_and_vehicle_as_arrays():
+    timestamp = datetime.now(timezone.utc)
+    trip_item_id = uuid.uuid4()
+    booking_id = uuid.uuid4()
+    hotel = SimpleNamespace(
+        hotel_id=None,
+        hotel_name="Sample hotel",
+        check_in=timestamp,
+        check_out=timestamp,
+        nights=1,
+        room_count=1,
+        room_type=None,
+        id=uuid.uuid4(),
+        trip_item_id=trip_item_id,
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+    vehicle = SimpleNamespace(
+        vehicle_id=None,
+        vehicle_name="Sample vehicle",
+        vehicle_type=None,
+        start_date=timestamp,
+        end_date=timestamp,
+        rental_minutes=1,
+        quantity=1,
+        id=uuid.uuid4(),
+        trip_item_id=trip_item_id,
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+    trip_item = SimpleNamespace(
+        id=trip_item_id,
+        booking_id=booking_id,
+        item_type="other",
+        name="Trip item",
+        description=None,
+        quantity=1,
+        unit_price=0,
+        total_price=0,
+        hotel=hotel,
+        vehicle=vehicle,
+    )
+
+    response = BookingTripItemResponse.model_validate(trip_item)
+
+    assert len(response.hotel) == 1
+    assert response.hotel[0].hotel_name == "Sample hotel"
+    assert len(response.vehicle) == 1
+    assert response.vehicle[0].vehicle_name == "Sample vehicle"
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -152,7 +205,8 @@ def test_customer(db_session):
 def test_offline_booking_service_accepts_actual_schema_contract(db_session, test_customer, superadmin_user):
     payload = OfflineBookingCreate(
         customer_id=test_customer.id,
-        travel_date=date(2026, 10, 15),
+        departure_date=date(2026, 10, 15),
+        return_date=date(2026, 10, 20),
         adult_count=2,
         child_count=1,
         senior_count=0,
@@ -193,12 +247,247 @@ def test_offline_booking_service_accepts_actual_schema_contract(db_session, test
     assert booking.travellers[0].full_name == "Jane Traveler"
 
 
+def test_customer_tours_uses_booking_itinerary_dates(db_session, test_customer, superadmin_user):
+    payload = OfflineBookingCreate(
+        customer_id=test_customer.id,
+        departure_date=date(2026, 10, 15),
+        return_date=date(2026, 10, 20),
+        adult_count=2,
+        child_count=0,
+        senior_count=0,
+        total_selling_price=25000,
+        advance_received=0,
+        payment_mode=PaymentMethod.CASH,
+        source=BookingSource.OFFLINE,
+        travellers=[{"full_name": "Tour Guest", "is_primary": True}],
+    )
+    booking = BookingService(db_session).create_offline_booking(payload, superadmin_user)
+
+    assert booking.departure_date == date(2026, 10, 15)
+    assert booking.return_date == date(2026, 10, 20)
+
+    response = list_my_tours(
+        month=10,
+        year=2026,
+        status=None,
+        current_customer=test_customer,
+        db=db_session,
+    )
+
+    assert len(response.data) == 1
+    assert response.data[0].travel_date == date(2026, 10, 15)
+    assert response.data[0].return_date == date(2026, 10, 20)
+    assert response.data[0].destination is None
+
+
+def test_offline_booking_resolves_destination_and_dates_from_payload_or_references(
+    db_session,
+    test_customer,
+    superadmin_user,
+):
+    package_destination = Destination(name="Package destination", slug="package-destination")
+    enquiry_destination = Destination(name="Enquiry destination", slug="enquiry-destination")
+    db_session.add_all([package_destination, enquiry_destination])
+    db_session.flush()
+
+    package = TourPackage(
+        tour_code="PKG-BOOKING1",
+        slug="booking-fallback-package",
+        title="Fallback package",
+        destination_id=package_destination.id,
+    )
+    enquiry = Enquiry(
+        enquiry_code="ENQ-BOOKING1",
+        customer_id=test_customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        destination_id=enquiry_destination.id,
+        travel_date=date(2026, 11, 1),
+        travel_duration_day=4,
+    )
+    db_session.add_all([package, enquiry])
+    db_session.flush()
+
+    explicit_payload = OfflineBookingCreate(
+        customer_id=test_customer.id,
+        enquiry_id=enquiry.id,
+        package_id=package.id,
+        destination_id=enquiry_destination.id,
+        departure_date=date(2026, 12, 10),
+        return_date=date(2026, 12, 14),
+        total_selling_price=1000,
+        travellers=[],
+    )
+    explicit_booking = BookingService(db_session).create_offline_booking(
+        explicit_payload,
+        superadmin_user,
+    )
+
+    assert explicit_booking.destination_id == enquiry_destination.id
+    assert explicit_booking.departure_date == date(2026, 12, 10)
+    assert explicit_booking.return_date == date(2026, 12, 14)
+
+    fallback_payload = OfflineBookingCreate(
+        customer_id=test_customer.id,
+        enquiry_id=enquiry.id,
+        package_id=package.id,
+        total_selling_price=1000,
+        travellers=[],
+    )
+    fallback_booking = BookingService(db_session).create_offline_booking(
+        fallback_payload,
+        superadmin_user,
+    )
+
+    assert fallback_booking.destination_id == package_destination.id
+    assert fallback_booking.departure_date == date(2026, 11, 1)
+    assert fallback_booking.return_date == date(2026, 11, 4)
+
+    enquiry_only_payload = OfflineBookingCreate(
+        customer_id=test_customer.id,
+        enquiry_id=enquiry.id,
+        total_selling_price=1000,
+        travellers=[],
+    )
+    enquiry_only_booking = BookingService(db_session).create_offline_booking(
+        enquiry_only_payload,
+        superadmin_user,
+    )
+
+    assert enquiry_only_booking.destination_id == enquiry_destination.id
+    assert enquiry_only_booking.departure_date == date(2026, 11, 1)
+    assert enquiry_only_booking.return_date == date(2026, 11, 4)
+
+
+def test_admin_create_booking_returns_payload_dates(client, superadmin_auth_header, test_customer, db_session):
+    destination = Destination(name="Booking API destination", slug="booking-api-destination")
+    db_session.add(destination)
+    db_session.flush()
+
+    response = client.post(
+        "/api/v1/admin/bookings",
+        headers=superadmin_auth_header,
+        json={
+            "customer_id": str(test_customer.id),
+            "destination_id": str(destination.id),
+            "departure_date": "2026-10-15",
+            "return_date": "2026-10-20",
+            "adult_count": 2,
+            "child_count": 0,
+            "senior_count": 0,
+            "total_selling_price": 25000,
+            "advance_received": 0,
+            "payment_mode": "CASH",
+            "source": "OFFLINE",
+            "travellers": [{"full_name": "Tour Guest", "is_primary": True}],
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    booking_data = response.json()["data"]
+    assert booking_data["destination_id"] == str(destination.id)
+    assert booking_data["departure_date"] == "2026-10-15"
+    assert booking_data["return_date"] == "2026-10-20"
+    itinerary_dates = [day["date"][:10] for day in booking_data["itinerary"]]
+    assert "2026-10-15" in itinerary_dates
+    assert "2026-10-20" in itinerary_dates
+
+    list_response = client.get("/api/v1/admin/bookings", headers=superadmin_auth_header)
+
+    assert list_response.status_code == 200, list_response.text
+    list_payload = list_response.json()
+    assert list_payload["success"] is True
+    assert list_payload["message"] == "Items fetched successfully"
+    listed_booking = list_payload["data"][0]
+    assert set(listed_booking) == {
+        "id",
+        "booking_code",
+        "customer",
+        "enquiry_id",
+        "destination_id",
+        "destination_name",
+        "package",
+        "variant",
+        "departure_id",
+        "departure_date",
+        "return_date",
+        "booking_type",
+        "source",
+        "status",
+        "total_amount",
+        "paid_amount",
+        "due_amount",
+    }
+
+    day_response = client.get(
+        "/api/v1/admin/bookings/day/2026-10-15",
+        headers=superadmin_auth_header,
+    )
+
+    assert day_response.status_code == 200, day_response.text
+    day_payload = day_response.json()
+    assert len(day_payload["data"]) == 1
+    day_booking = day_payload["data"][0]
+    assert day_booking["enquiry"] is None
+    assert "enquiry_id" not in day_booking
+    assert set(day_booking) == {
+        "id",
+        "booking_code",
+        "customer",
+        "enquiry",
+        "destination_id",
+        "destination_name",
+        "package",
+        "variant",
+        "departure_id",
+        "departure_date",
+        "return_date",
+        "booking_type",
+        "source",
+        "status",
+        "total_amount",
+        "paid_amount",
+        "due_amount",
+        "quotation_id",
+        "offer",
+        "sales_account",
+        "adult_count",
+        "child_count",
+        "senior_count",
+        "subtotal",
+        "discount_amount",
+        "notes",
+        "created_by",
+        "created_at",
+        "updated_at",
+        "travellers",
+        "items",
+        "itinerary",
+        "status_history",
+        "customer_name",
+        "customer_mobile",
+        "gross_profit",
+        "profit_margin",
+    }
+
+    detail_response = client.get(
+        f"/api/v1/admin/bookings/{booking_data['id']}",
+        headers=superadmin_auth_header,
+    )
+
+    assert detail_response.status_code == 200, detail_response.text
+    detail_booking = detail_response.json()["data"]
+    assert detail_booking["enquiry_id"] is None
+    assert "enquiry" not in detail_booking
+    assert set(detail_booking) == (set(day_booking) - {"enquiry"}) | {"enquiry_id"}
+
+
 def test_offline_booking_service_uses_package_id_schema_contract(db_session, test_customer, superadmin_user):
     package_id = uuid.uuid4()
     payload = OfflineBookingCreate(
         customer_id=test_customer.id,
         package_id=package_id,
-        travel_date=date(2026, 10, 15),
+        departure_date=date(2026, 10, 15),
         total_selling_price=25000,
         advance_received=5000,
         payment_mode=PaymentMethod.CASH,
@@ -223,7 +512,7 @@ def test_offline_booking_service_uses_tour_offer_id_schema_contract(db_session, 
     payload = OfflineBookingCreate(
         customer_id=test_customer.id,
         tour_offer_id=offer_id,
-        travel_date=date(2026, 10, 15),
+        departure_date=date(2026, 10, 15),
         total_selling_price=25000,
         advance_received=5000,
         payment_mode=PaymentMethod.CASH,

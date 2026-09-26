@@ -137,6 +137,37 @@ def test_admin_can_assign_update_and_add_lead_activity(client, db_session):
     assert sum(activity.notes == "Customer interested" for activity in lead.activities) == 1
 
 
+def test_admin_enquiry_list_filters_by_customer(client, db_session):
+    admin = make_account(db_session, "ADM-ENQ", AccountRole.ADMIN, "Admin")
+    customer = make_account(db_session, "CUS-ENQ", AccountRole.CUSTOMER, "Customer")
+    other_customer = make_account(db_session, "CUS-OTHER", AccountRole.CUSTOMER, "Other customer")
+    matching_enquiry = Enquiry(
+        enquiry_code="ENQ-CUSTOMER1",
+        customer_id=customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+    )
+    other_enquiry = Enquiry(
+        enquiry_code="ENQ-CUSTOMER2",
+        customer_id=other_customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+    )
+    db_session.add_all([matching_enquiry, other_enquiry])
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/admin/enquiries",
+        params={"customer_id": str(customer.id)},
+        headers=auth_header(admin),
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["pagination"]["total_items"] == 1
+    assert [enquiry["id"] for enquiry in payload["data"]] == [str(matching_enquiry.id)]
+
+
 def test_admin_can_unassign_lead(client, db_session):
     admin = make_account(db_session, "ADM-UNAS", AccountRole.ADMIN, "Admin")
     enquiry = Enquiry(

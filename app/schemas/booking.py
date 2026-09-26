@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
-from pydantic import ConfigDict, EmailStr, Field, AliasChoices, model_validator
+from pydantic import ConfigDict, EmailStr, Field, AliasChoices, field_validator, model_validator
 from app.core.enums import BookingSource, BookingStatus, PaymentMethod
 from app.schemas.base import SchemaBase
 from app.schemas.quotation import (
@@ -66,7 +66,9 @@ class OfflineBookingCreate(SchemaBase):
     package_id: UUID | None = None
     variant_id: UUID | None = None
     departure_id: UUID | None = None
-    travel_date: date | None = None
+    destination_id: UUID | None = None
+    departure_date: date | None = None
+    return_date: date | None = None
     adult_count: int = Field(default=1, ge=0)
     child_count: int = Field(default=0, ge=0)
     senior_count: int = Field(default=0, ge=0)
@@ -78,7 +80,6 @@ class OfflineBookingCreate(SchemaBase):
     special_notes: str | None = None
     travellers: list[BookingTravelerCreate] = Field(default_factory=list)
     items: list[QuotationItemCreate] = Field(default_factory=list)
-    costs: list[QuotationItemCreate] | None = None
     hotels: list[QuotationHotelCreate] = Field(default_factory=list)
     vehicles: list[QuotationVehicleCreate] = Field(default_factory=list)
     itinerary: list[QuotationItineraryCreate] = Field(default_factory=list)
@@ -90,6 +91,9 @@ class OnlineBookingCreate(SchemaBase):
     package_id: UUID | None = None
     variant_id: UUID | None = None
     departure_id: UUID | None = None
+    destination_id: UUID | None = None
+    departure_date: date | None = None
+    return_date: date | None = None
     adult_count: int = Field(default=1, ge=0)
     child_count: int = Field(default=0, ge=0)
     senior_count: int = Field(default=0, ge=0)
@@ -174,10 +178,14 @@ class BookingResponse(SchemaBase):
     id: UUID
     booking_code: str
     customer: BookingAccountSummaryResponse | None = None
-    enquiry: BookingEnquirySummaryResponse | None = None
+    enquiry_id: UUID | None = None
+    destination_id: UUID | None = None
+    destination_name: str | None = None
     package: BookingPackageSummaryResponse | None = None
     variant: BookingVariantSummaryResponse | None = None
-    departure: BookingDepartureSummaryResponse | None = None
+    departure_id: UUID | None = None
+    departure_date: date | None = None
+    return_date: date | None = None
     booking_type: str
     source: BookingSource
     status: BookingStatus
@@ -199,6 +207,7 @@ class BookingResponse(SchemaBase):
         package = getattr(value, "package", None)
         variant = getattr(value, "variant", None)
         departure = getattr(value, "departure", None)
+        destination = getattr(value, "destination", None)
 
         banner = None
         if variant is not None:
@@ -216,6 +225,18 @@ class BookingResponse(SchemaBase):
         if enquiry is not None:
             destination_ref = getattr(enquiry, "destination_ref", None)
             enquiry_destination_name = getattr(destination_ref, "name", None)
+
+        package_destination = getattr(package, "destination", None) if package is not None else None
+        destination_id = getattr(value, "destination_id", None)
+        if destination_id is None and package is not None:
+            destination_id = getattr(package, "destination_id", None)
+        if destination_id is None and enquiry is not None:
+            destination_id = getattr(enquiry, "destination_id", None)
+        destination_name = (
+            getattr(destination, "name", None)
+            or getattr(package_destination, "name", None)
+            or enquiry_destination_name
+        )
 
         package_name = None
         if package is not None:
@@ -235,11 +256,9 @@ class BookingResponse(SchemaBase):
                 "mobile": getattr(customer, "mobile", None),
                 "profile_pic": getattr(customer, "profile_pic", None),
             } if customer else None,
-            "enquiry": {
-                "id": enquiry.id,
-                "destination_id": getattr(enquiry, "destination_id", None),
-                "destination_name": enquiry_destination_name,
-            } if enquiry else None,
+            "enquiry_id": getattr(value, "enquiry_id", None),
+            "destination_id": destination_id,
+            "destination_name": destination_name,
             "package": {
                 "id": package.id,
                 "name": package_name,
@@ -250,11 +269,11 @@ class BookingResponse(SchemaBase):
                 "name": variant_name,
                 "banner": banner,
             } if variant else None,
-            "departure": {
-                "id": departure.id,
-                "departure_date": getattr(departure, "departure_date", None),
-                "return_date": getattr(departure, "return_date", None),
-            } if departure else None,
+            "departure_id": getattr(value, "departure_id", None),
+            "departure_date": getattr(value, "departure_date", None)
+            or (getattr(departure, "departure_date", None) if departure else None),
+            "return_date": getattr(value, "return_date", None)
+            or (getattr(departure, "return_date", None) if departure else None),
             "booking_type": getattr(value, "booking_type", None),
             "source": getattr(value, "source", None),
             "status": getattr(value, "status", None),
@@ -275,8 +294,15 @@ class BookingTripItemResponse(SchemaBase):
     quantity: int
     unit_price: Decimal
     total_price: Decimal
-    hotel: QuotationHotelResponse | None = None
-    vehicle: QuotationVehicleResponse | None = None
+    hotel: list[QuotationHotelResponse] = Field(default_factory=list)
+    vehicle: list[QuotationVehicleResponse] = Field(default_factory=list)
+
+    @field_validator("hotel", "vehicle", mode="before")
+    @classmethod
+    def normalize_related_items(cls, value):
+        if value is None:
+            return []
+        return value if isinstance(value, list) else [value]
 
 
 class BookingTripItineraryResponse(SchemaBase):
@@ -332,6 +358,8 @@ class BookingDetailResponse(BookingResponse):
             customer = getattr(value, "customer", None)
 
             base.update({
+                "enquiry_id": getattr(value, "enquiry_id", None),
+                "enquiry": getattr(value, "enquiry_id", None),
                 "quotation_id": getattr(value, "quotation_id", None),
                 "offer": {"id": offer.id, "name": getattr(offer, "name", None)} if offer else None,
                 "sales_account": {
@@ -377,3 +405,8 @@ class BookingDetailResponse(BookingResponse):
             })
             return base
         return value
+
+
+class BookingDayDetailResponse(BookingDetailResponse):
+    enquiry_id: UUID | None = Field(default=None, exclude=True)
+    enquiry: UUID | None = None

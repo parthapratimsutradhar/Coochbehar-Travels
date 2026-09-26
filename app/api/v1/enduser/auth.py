@@ -11,9 +11,10 @@ from app.schemas.auth import (
     CustomerTokenResponse,
     OtpRequestResponse,
 )
-from app.schemas.customer import CustomerResponse, CustomerUpdate
+from app.schemas.customer import CustomerResponse
 from app.schemas.response import SuccessResponse, ErrorResponse
 from app.services.auth_service import AuthService
+from app.services.customer_service import CustomerService
 
 router = APIRouter(
     prefix="/auth",
@@ -135,9 +136,10 @@ async def google_login_customer(
 )
 def get_current_customer_profile(
     current_customer: Account = Depends(get_current_customer),
+    db: Session = Depends(get_db),
 ):
     return SuccessResponse(
         message="Customer profile fetched successfully.",
-        data=CustomerResponse.model_validate(current_customer),
+        data=CustomerService(db).get_customer_response(current_customer.id),
     )
 
