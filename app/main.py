@@ -107,6 +107,8 @@ def _enduser_openapi() -> dict:
             "/api/v1/auth",
             "/api/v1/account",
             "/api/v1/tour-packages",
+            "/api/v1/hotels",
+            "/api/v1/vehicles",
             "/api/v1/enquiries",
             "/api/v1/visitors",
             "/api/v1/customer-tours",

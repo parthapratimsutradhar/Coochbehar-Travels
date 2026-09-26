@@ -40,3 +40,12 @@ class VehicleResponse(VehicleBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class VehiclePublicResponse(VehicleBase):
+    model_config = ConfigDict(from_attributes=True, extra="allow")
+
+    vehicle_image: list[GalleryItem] = Field(default_factory=list)
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
