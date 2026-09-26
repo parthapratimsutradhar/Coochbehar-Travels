@@ -34,8 +34,6 @@ class FinancialTransactionBase(SchemaBase):
     booking_id: UUID | None = None
     customer_id: UUID | None = None
     reference: str | None = Field(default=None, max_length=255)
-    creditor: str | None = Field(default=None, max_length=150)
-    debtor: str | None = Field(default=None, max_length=150)
 
 
 class FinancialTransactionCreate(FinancialTransactionBase):
@@ -55,8 +53,6 @@ class FinancialTransactionUpdate(SchemaBase):
     booking_id: UUID | None = None
     customer_id: UUID | None = None
     reference: str | None = Field(default=None, max_length=255)
-    creditor: str | None = Field(default=None, max_length=150)
-    debtor: str | None = Field(default=None, max_length=150)
 
 
 class FinancialReportDownloadRequest(SchemaBase):
@@ -103,8 +99,6 @@ def financial_transaction_response(transaction) -> FinancialTransactionResponse:
             "booking_id": transaction.booking_id,
             "customer_id": transaction.customer_id,
             "reference": transaction.reference,
-            "creditor": metadata.get("creditor"),
-            "debtor": metadata.get("debtor"),
             "created_by_account_id": transaction.created_by_account_id,
             "created_at": transaction.created_at,
             "updated_at": transaction.updated_at,

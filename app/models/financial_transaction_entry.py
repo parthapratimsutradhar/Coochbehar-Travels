@@ -16,12 +16,21 @@ if TYPE_CHECKING:
 class FinancialTransactionEntry(BaseEntity):
     __tablename__ = "financial_transaction_entries"
     __table_args__ = (
-        CheckConstraint("debit >= 0", name="ck_financial_entry_debit_nonnegative"),
-        CheckConstraint("credit >= 0", name="ck_financial_entry_credit_nonnegative"),
+        CheckConstraint(
+            "debit >= 0", 
+            name="ck_financial_entry_debit_nonnegative"
+        ),
+        
+        CheckConstraint(
+            "credit >= 0", 
+            name="ck_financial_entry_credit_nonnegative"
+        ),
+        
         CheckConstraint(
             "NOT (debit > 0 AND credit > 0)",
             name="ck_financial_entry_debit_or_credit",
         ),
+        
         CheckConstraint(
             "debit > 0 OR credit > 0",
             name="ck_financial_entry_nonzero",
@@ -34,15 +43,30 @@ class FinancialTransactionEntry(BaseEntity):
         nullable=False,
         index=True,
     )
+    
     account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("financial_accounts.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
-    debit: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    credit: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    
+    debit: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
+        nullable=False,
+        default=0
+    )
+
+    credit: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
+        nullable=False,
+        default=0
+    )
+
+    description: Mapped[str | None] = mapped_column(
+        String(255), 
+        nullable=True
+    )
 
     transaction: Mapped["FinancialTransaction"] = relationship(
         "FinancialTransaction", back_populates="entries"

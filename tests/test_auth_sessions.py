@@ -546,8 +546,38 @@ def test_15_user_cannot_revoke_another_users_session(
     assert second_session.revoked_at is None
 
 
-def test_16_refresh_token_reuse_replay_handling(client: TestClient, test_user: Account):
-    """16. Test that replaying an already-rotated refresh token revokes all user sessions (theft defense)."""
+def test_16_stale_refresh_replay_does_not_kill_other_device_sessions(
+    client: TestClient, test_user: Account
+):
+    """A stale token should be rejected without invalidating the other active device session."""
+    req1 = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
+    log1 = client.post(
+        "/api/v1/admin/auth/otp/verify",
+        json={"identifier": test_user.email, "otp": req1.json()["data"]["dev_otp"]},
+    )
+    device1_cookies = dict(log1.cookies)
+
+    req2 = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
+    log2 = client.post(
+        "/api/v1/admin/auth/otp/verify",
+        json={"identifier": test_user.email, "otp": req2.json()["data"]["dev_otp"]},
+    )
+    device2_cookies = dict(log2.cookies)
+
+    first_refresh = client.post("/api/v1/sessions/refresh", cookies=device1_cookies)
+    assert first_refresh.status_code == 200
+    device1_rotated = dict(first_refresh.cookies)
+
+    replay_res = client.post("/api/v1/sessions/refresh", cookies=device1_cookies)
+    assert replay_res.status_code == 401
+    assert "reuse detected" in replay_res.json()["message"]
+
+    assert client.post("/api/v1/sessions/refresh", cookies=device2_cookies).status_code == 200
+    assert client.post("/api/v1/sessions/refresh", cookies=device1_rotated).status_code == 200
+
+
+def test_17_refresh_token_reuse_replay_handling(client: TestClient, test_user: Account):
+    """Replay of a stale token is rejected; it should not log the user out of every other device."""
     req = client.post("/api/v1/admin/auth/otp/request", json={"identifier": test_user.email})
     log = client.post("/api/v1/admin/auth/otp/verify", json={"identifier": test_user.email, "otp": req.json()["data"]["dev_otp"]})
     old_cookies = dict(log.cookies)
@@ -560,10 +590,10 @@ def test_16_refresh_token_reuse_replay_handling(client: TestClient, test_user: A
     assert replay_res.status_code == 401
     assert "reuse detected" in replay_res.json()["message"]
 
-    assert client.post("/api/v1/sessions/refresh", cookies=valid_cookies).status_code == 401
+    assert client.post("/api/v1/sessions/refresh", cookies=valid_cookies).status_code == 200
 
 
-def test_17_missing_refresh_cookie(client: TestClient):
+def test_18_missing_refresh_cookie(client: TestClient):
     """17. Test that refresh endpoint returns 401 if no refresh cookie is sent."""
     assert client.post("/api/v1/sessions/refresh").status_code == 401
 

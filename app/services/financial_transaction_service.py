@@ -81,10 +81,7 @@ class FinancialTransactionService:
         if amount <= 0:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Amount must be greater than zero.")
 
-        metadata = {
-            "creditor": getattr(payload, "creditor", None),
-            "debtor": getattr(payload, "debtor", None),
-        }
+        metadata = {}
         if getattr(payload, "vendor_id", None) is not None:
             metadata["vendor_id"] = str(payload.vendor_id)
         if getattr(payload, "booking_id", None) is not None:
@@ -204,10 +201,6 @@ class FinancialTransactionService:
             transaction.reference = payload.reference
 
         metadata = dict(transaction.metadata_ or {})
-        if payload.creditor is not None:
-            metadata["creditor"] = payload.creditor
-        if payload.debtor is not None:
-            metadata["debtor"] = payload.debtor
         if payload.vendor_id is not None:
             metadata["vendor_id"] = str(payload.vendor_id)
         if payload.booking_id is not None:
@@ -282,8 +275,6 @@ class FinancialTransactionService:
                     "currency": item.currency,
                     "description": item.description,
                     "transaction_date": item.transaction_date.isoformat(),
-                    "creditor": meta.get("creditor"),
-                    "debtor": meta.get("debtor"),
                     "status": item.status.value,
                 }
             )
@@ -301,7 +292,7 @@ class FinancialTransactionService:
     @staticmethod
     def export_csv(report_rows: list[dict], report_type: str) -> str:
         output = io.StringIO()
-        fieldnames = ["transaction_code", "transaction_type", "category", "amount", "currency", "description", "transaction_date", "creditor", "debtor", "status"]
+        fieldnames = ["transaction_code", "transaction_type", "category", "amount", "currency", "description", "transaction_date", "status"]
         writer = csv.DictWriter(output, fieldnames=fieldnames)
         writer.writeheader()
         for row in report_rows:

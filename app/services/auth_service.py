@@ -630,9 +630,8 @@ class AuthService:
             )
 
         if session.revoked_at is not None:
-            self.session_repo.revoke_all_for_actor(
-                account_id=session.account_id,
-            )
+            # A rotated or revoked token is a replay of a stale session. Reject only that
+            # token so other simultaneous device sessions remain valid.
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=AuthError.REFRESH_REUSE,

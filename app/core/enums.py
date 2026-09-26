@@ -198,6 +198,8 @@ class FinancialAccountOwnerType(AppEnum):
 class FinancialTransactionType(AppEnum):
     INCOME = "INCOME"
     EXPENSE = "EXPENSE"
+
+class FinancialTransactionCategory(AppEnum):
     REFERRAL_INCOME = "REFERRAL_INCOME"
     BOOKING_PAYMENT = "BOOKING_PAYMENT"
     BOOKING_REFUND = "BOOKING_REFUND"
