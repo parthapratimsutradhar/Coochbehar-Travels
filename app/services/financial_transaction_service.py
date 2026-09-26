@@ -31,6 +31,16 @@ class FinancialTransactionService:
         mapping = {
             "INCOME": FinancialTransactionType.INCOME,
             "EXPENSE": FinancialTransactionType.EXPENSE,
+            "BOOKING_PAYMENT": FinancialTransactionType.INCOME,
+            "BOOKING_INCOME": FinancialTransactionType.INCOME,
+            "BOOKING_REFUND": FinancialTransactionType.EXPENSE,
+            "WALLET_CREDIT": FinancialTransactionType.INCOME,
+            "WALLET_DEBIT": FinancialTransactionType.EXPENSE,
+            "VENDOR_PAYMENT": FinancialTransactionType.EXPENSE,
+            "TRANSFER": FinancialTransactionType.INCOME,
+            "ADJUSTMENT": FinancialTransactionType.EXPENSE,
+            "REFERRAL_INCOME": FinancialTransactionType.INCOME,
+            "REFERRAL_REWARD": FinancialTransactionType.INCOME,
         }
         normalized = (value or "EXPENSE").strip().upper()
         if normalized in mapping:
@@ -252,12 +262,21 @@ class FinancialTransactionService:
         expenses = Decimal("0")
         referral_income = Decimal("0")
         for transaction in transactions:
-            if transaction.transaction_type in {FinancialTransactionType.BOOKING_PAYMENT, FinancialTransactionType.WALLET_CREDIT}:
+            category = transaction.category
+            if category in {
+                FinancialTransactionCategory.BOOKING_PAYMENT,
+                FinancialTransactionCategory.WALLET_CREDIT,
+            }:
                 income += transaction.amount
-            elif transaction.transaction_type == FinancialTransactionType.REFERRAL_REWARD:
+            elif category == FinancialTransactionCategory.REFERRAL_REWARD:
                 referral_income += transaction.amount
                 income += transaction.amount
-            elif transaction.transaction_type in {FinancialTransactionType.EXPENSE, FinancialTransactionType.VENDOR_PAYMENT}:
+            elif category in {
+                FinancialTransactionCategory.REFERRAL_INCOME,
+                FinancialTransactionCategory.BOOKING_REFUND,
+            }:
+                expenses += transaction.amount
+            elif category in {FinancialTransactionCategory.VENDOR_PAYMENT, FinancialTransactionCategory.ADJUSTMENT, FinancialTransactionCategory.WALLET_DEBIT}:
                 expenses += transaction.amount
         net = income - expenses
         return {
@@ -276,23 +295,51 @@ class FinancialTransactionService:
 
         normalized = (report_type or "income").strip().lower()
         if normalized == "income":
-            query = query.filter(FinancialTransaction.transaction_type.in_([FinancialTransactionType.BOOKING_PAYMENT, FinancialTransactionType.REFERRAL_REWARD, FinancialTransactionType.WALLET_CREDIT]))
+            query = query.filter(
+                FinancialTransaction.category.in_(
+                    [
+                        FinancialTransactionCategory.BOOKING_PAYMENT,
+                        FinancialTransactionCategory.REFERRAL_REWARD,
+                        FinancialTransactionCategory.WALLET_CREDIT,
+                    ]
+                )
+            )
         elif normalized == "expenses":
-            query = query.filter(FinancialTransaction.transaction_type.in_([FinancialTransactionType.EXPENSE, FinancialTransactionType.VENDOR_PAYMENT]))
+            query = query.filter(
+                FinancialTransaction.category.in_(
+                    [
+                        FinancialTransactionCategory.VENDOR_PAYMENT,
+                        FinancialTransactionCategory.ADJUSTMENT,
+                        FinancialTransactionCategory.WALLET_DEBIT,
+                        FinancialTransactionCategory.BOOKING_REFUND,
+                    ]
+                )
+            )
         elif normalized == "referral_income":
-            query = query.filter(FinancialTransaction.transaction_type == FinancialTransactionType.REFERRAL_REWARD)
+            query = query.filter(FinancialTransaction.category == FinancialTransactionCategory.REFERRAL_REWARD)
         else:
-            query = query.filter(FinancialTransaction.transaction_type.in_([FinancialTransactionType.BOOKING_PAYMENT, FinancialTransactionType.EXPENSE, FinancialTransactionType.REFERRAL_REWARD, FinancialTransactionType.VENDOR_PAYMENT]))
+            query = query.filter(
+                FinancialTransaction.category.in_(
+                    [
+                        FinancialTransactionCategory.BOOKING_PAYMENT,
+                        FinancialTransactionCategory.VENDOR_PAYMENT,
+                        FinancialTransactionCategory.REFERRAL_REWARD,
+                        FinancialTransactionCategory.WALLET_CREDIT,
+                        FinancialTransactionCategory.ADJUSTMENT,
+                        FinancialTransactionCategory.WALLET_DEBIT,
+                        FinancialTransactionCategory.BOOKING_REFUND,
+                    ]
+                )
+            )
 
         rows = []
         for item in query.order_by(FinancialTransaction.transaction_date.desc()).all():
-            meta = item.metadata_ or {}
             rows.append(
                 {
                     "id": str(item.id),
                     "transaction_code": item.transaction_code,
                     "transaction_type": item.transaction_type.value,
-                    "category": item.category,
+                    "category": item.category.value if item.category else None,
                     "amount": str(item.amount),
                     "currency": item.currency,
                     "description": item.description,

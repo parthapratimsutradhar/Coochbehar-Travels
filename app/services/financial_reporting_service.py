@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 
-from app.core.enums import BookingStatus, FinancialTransactionStatus, FinancialTransactionType, FinancialAccountOwnerType, FinancialAccountType
+from app.core.enums import BookingStatus, FinancialTransactionCategory, FinancialTransactionStatus, FinancialTransactionType, FinancialAccountOwnerType, FinancialAccountType
 from app.models.booking import Booking
 from app.models.financial_account import FinancialAccount
 from app.models.financial_transaction import FinancialTransaction
@@ -39,8 +39,23 @@ class FinancialReportingService:
         revenue = Decimal(self.db.query(func.coalesce(func.sum(Booking.total_amount), 0)).filter(
             Booking.status != BookingStatus.CANCELLED
         ).scalar() or 0)
-        collections = self._sum_transactions(FinancialTransactionType.BOOKING_PAYMENT)
-        expenses = self._sum_transactions(FinancialTransactionType.EXPENSE)
+        collections = self.db.query(func.coalesce(func.sum(FinancialTransaction.amount), 0)).filter(
+            FinancialTransaction.status == FinancialTransactionStatus.COMPLETED,
+            FinancialTransaction.category.in_([
+                FinancialTransactionCategory.BOOKING_PAYMENT,
+                FinancialTransactionCategory.WALLET_CREDIT,
+                FinancialTransactionCategory.REFERRAL_REWARD,
+            ]),
+        ).scalar() or 0
+        expenses = self.db.query(func.coalesce(func.sum(FinancialTransaction.amount), 0)).filter(
+            FinancialTransaction.status == FinancialTransactionStatus.COMPLETED,
+            FinancialTransaction.category.in_([
+                FinancialTransactionCategory.VENDOR_PAYMENT,
+                FinancialTransactionCategory.ADJUSTMENT,
+                FinancialTransactionCategory.WALLET_DEBIT,
+                FinancialTransactionCategory.BOOKING_REFUND,
+            ]),
+        ).scalar() or 0
         direct_cost = Decimal(self.db.query(func.coalesce(func.sum(TripItem.total_price), 0)).filter(TripItem.booking_id.is_not(None)).scalar() or 0)
         customer_outstanding = Decimal(self.db.query(func.coalesce(func.sum(Booking.due_amount), 0)).filter(
             Booking.status != BookingStatus.CANCELLED
@@ -138,22 +153,22 @@ class FinancialReportingService:
             totals = {"revenue": sum((row["revenue"] for row in rows), Decimal(0)), "direct_cost": sum((row["direct_cost"] for row in rows), Decimal(0))}
             totals["gross_profit"] = totals["revenue"] - totals["direct_cost"]
         elif normalized == "collections":
-            rows = [{"transaction_id": str(item.id), "booking_id": str(item.booking_id) if item.booking_id else None, "customer_id": str(item.customer_id) if item.customer_id else None, "amount": item.amount, "payment_method": item.payment_method.value if item.payment_method else None, "transaction_date": item.transaction_date.isoformat()} for item in transactions.filter(FinancialTransaction.transaction_type == FinancialTransactionType.BOOKING_PAYMENT).all()]
+            rows = [{"transaction_id": str(item.id), "booking_id": str(item.booking_id) if item.booking_id else None, "customer_id": str(item.customer_id) if item.customer_id else None, "amount": item.amount, "payment_method": item.payment_method.value if item.payment_method else None, "transaction_date": item.transaction_date.isoformat()} for item in transactions.filter(FinancialTransaction.category == FinancialTransactionCategory.BOOKING_PAYMENT).all()]
             totals = {"amount": sum((row["amount"] for row in rows), Decimal(0))}
         elif normalized == "outstanding":
             rows = [{"booking_id": str(item.id), "booking_code": item.booking_code, "customer_id": str(item.customer_id), "total_amount": item.total_amount, "paid_amount": item.paid_amount, "outstanding": item.due_amount} for item in bookings.filter(Booking.due_amount > 0).all()]
             totals = {"outstanding": sum((row["outstanding"] for row in rows), Decimal(0))}
         elif normalized in {"expenses", "vendor-payments", "wallet-transactions"}:
-            transaction_type = {"expenses": FinancialTransactionType.EXPENSE, "vendor-payments": FinancialTransactionType.VENDOR_PAYMENT}.get(normalized)
+            transaction_category = {"expenses": FinancialTransactionCategory.ADJUSTMENT, "vendor-payments": FinancialTransactionCategory.VENDOR_PAYMENT}.get(normalized)
             if normalized == "vendor-payments":
                 query = all_transactions.filter(
-                    FinancialTransaction.transaction_type == FinancialTransactionType.VENDOR_PAYMENT,
+                    FinancialTransaction.category == FinancialTransactionCategory.VENDOR_PAYMENT,
                     FinancialTransaction.status.in_([FinancialTransactionStatus.COMPLETED, FinancialTransactionStatus.REVERSED]),
                 )
-            elif transaction_type:
-                query = transactions.filter(FinancialTransaction.transaction_type == transaction_type)
+            elif transaction_category:
+                query = transactions.filter(FinancialTransaction.category == transaction_category)
             else:
-                query = all_transactions.filter(FinancialTransaction.transaction_type.in_([FinancialTransactionType.WALLET_CREDIT, FinancialTransactionType.WALLET_DEBIT, FinancialTransactionType.ADJUSTMENT]))
+                query = all_transactions.filter(FinancialTransaction.category.in_([FinancialTransactionCategory.WALLET_CREDIT, FinancialTransactionCategory.WALLET_DEBIT, FinancialTransactionCategory.ADJUSTMENT]))
             rows = [{"transaction_id": str(item.id), "amount": item.amount, "status": item.status.value, "customer_id": str(item.customer_id) if item.customer_id else None, "vendor_id": str(item.vendor_id) if item.vendor_id else None, "booking_id": str(item.booking_id) if item.booking_id else None, "category": item.category, "payment_method": item.payment_method.value if item.payment_method else None, "transaction_date": item.transaction_date.isoformat(), "description": item.description} for item in query.all()]
             totals = {"amount": sum((row["amount"] for row in rows if row["status"] == FinancialTransactionStatus.COMPLETED.value), Decimal(0))}
         elif normalized == "payment-method":

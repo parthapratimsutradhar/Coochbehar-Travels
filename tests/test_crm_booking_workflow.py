@@ -14,7 +14,7 @@ from sqlalchemy.pool import StaticPool
 compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
 
 from app.api.v1.admin.quotations import get_quotation, list_quotations
-from app.core.enums import AccountRole, BookingSource, EnquiryChannel, EnquiryStatus, EnquiryType, PaymentMethod, QuotationStatus
+from app.core.enums import AccountRole, BookingSource, BookingStatus, EnquiryChannel, EnquiryStatus, EnquiryType, PaymentMethod, QuotationStatus, TourType
 from app.db.database import get_db
 from app.main import app
 from app.models.base import Base
@@ -22,7 +22,7 @@ from app.models.account import Account
 from app.models.destination import Destination
 from app.models.enquiry import Enquiry
 from app.models.quotation import Quotation
-from app.schemas.booking import OfflineBookingCreate
+from app.schemas.booking import BookingDetailResponse, OfflineBookingCreate
 from app.services.auth_service import AuthService
 from app.services.booking_service import BookingService
 from app.utils.security import create_access_token
@@ -34,6 +34,45 @@ test_engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+
+def test_booking_detail_response_serializes_orm_travellers():
+    booking_id = uuid.uuid4()
+    traveler = SimpleNamespace(
+        id=uuid.uuid4(),
+        booking_id=booking_id,
+        full_name="Alice Traveler",
+        gender=None,
+        date_of_birth=None,
+        mobile=None,
+        email=None,
+        relationship_to_customer=None,
+        is_primary=True,
+    )
+    booking = SimpleNamespace(
+        id=booking_id,
+        booking_code="BK-ORM-001",
+        customer=None,
+        enquiry=None,
+        package=None,
+        variant=None,
+        departure=None,
+        booking_type=TourType.DOMESTIC,
+        source=BookingSource.WEBSITE,
+        status=BookingStatus.TENTATIVE,
+        total_amount=0,
+        paid_amount=0,
+        due_amount=0,
+        travellers=[traveler],
+        trip_items=[],
+        trip_itinerary=[],
+        status_history=[],
+    )
+
+    response = BookingDetailResponse.model_validate(booking)
+
+    assert response.travellers[0].full_name == "Alice Traveler"
+    assert response.travellers[0].booking_id == booking_id
 
 
 @pytest.fixture(scope="function", autouse=True)

@@ -5,6 +5,7 @@ from app.api.v1.admin.analytics import router as analytics_router
 from app.api.v1.admin.auth import router as auth_router
 from app.api.v1.admin.bookings import router as bookings_router
 from app.api.v1.admin.customer import router as customer_router
+from app.api.v1.admin.dashboard import router as dashboard_router
 from app.api.v1.admin.destinations import router as destinations_router
 from app.api.v1.admin.documents import router as documents_router
 from app.api.v1.admin.enquiries import router as enquiries_router
@@ -27,6 +28,7 @@ router = APIRouter()
 router.include_router(auth_router)
 router.include_router(account_router)
 router.include_router(analytics_router)
+router.include_router(dashboard_router)
 router.include_router(leads_router)
 router.include_router(hotel_router)
 router.include_router(documents_router)

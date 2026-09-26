@@ -18,7 +18,7 @@ from app.schemas.base import SchemaBase
 
 class FinancialTransactionBase(SchemaBase):
     amount: Decimal = Field(..., gt=0)
-    transaction_type: FinancialTransactionType = Field(
+    transaction_type: str | FinancialTransactionType = Field(
         ...,
         description="Type of financial transaction, such as income, expense, or referral income.",
     )
@@ -43,7 +43,7 @@ class FinancialTransactionCreate(FinancialTransactionBase):
 
 class FinancialTransactionUpdate(SchemaBase):
     amount: Decimal | None = Field(default=None, gt=0)
-    transaction_type: FinancialTransactionType | None = Field(default=None, description="Type of financial transaction.")
+    transaction_type: str | FinancialTransactionType | None = Field(default=None, description="Type of financial transaction.")
     category: str | FinancialTransactionCategory | None = Field(default=None, description="Category of the financial transaction.")
     description: str | None = Field(default=None, max_length=500)
     transaction_date: datetime | None = None

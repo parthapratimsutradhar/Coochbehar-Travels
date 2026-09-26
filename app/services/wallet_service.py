@@ -102,7 +102,7 @@ class WalletService:
             with self.db.begin():
                 transaction = FinancialTransaction(
                     transaction_code=f"FT-{uuid.uuid4().hex[:20].upper()}",
-                    transaction_type=FinancialTransactionType.WALLET_CREDIT,
+                    transaction_type=FinancialTransactionType.INCOME,
                     status={
                         PaymentStatus.PENDING: FinancialTransactionStatus.PENDING,
                         PaymentStatus.CANCELLED: FinancialTransactionStatus.CANCELLED,
@@ -130,7 +130,7 @@ class WalletService:
         with self.db.begin():
             source = self.financial._system_account(source_code, source_name, "ASSET")
             return self.financial._create_transaction_in_current_transaction(
-                transaction_type=FinancialTransactionType.WALLET_CREDIT,
+                transaction_type=FinancialTransactionType.INCOME,
                 amount=amount,
                 entries=[
                     {"account_id": source.id, "debit": amount, "credit": Decimal("0"), "description": description},
@@ -158,7 +158,7 @@ class WalletService:
             self.db.commit()
         with self.db.begin():
             transaction = self.financial._create_transaction_in_current_transaction(
-                transaction_type=FinancialTransactionType.BOOKING_PAYMENT,
+                transaction_type=FinancialTransactionType.INCOME,
                 amount=amount,
                 entries=[
                     {"account_id": wallet.id, "debit": amount, "credit": Decimal("0"), "description": description},
@@ -187,7 +187,7 @@ class WalletService:
             self.db.commit()
         with self.db.begin():
             transaction = self.financial._create_transaction_in_current_transaction(
-                transaction_type=FinancialTransactionType.ADJUSTMENT,
+                transaction_type=FinancialTransactionType.EXPENSE,
                 amount=amount,
                 entries=[
                     {"account_id": wallet.id, "debit": amount if debit_wallet else Decimal("0"), "credit": Decimal("0") if debit_wallet else amount, "description": reason},
@@ -233,7 +233,7 @@ class WalletService:
             self.db.commit()
         with self.db.begin():
             transaction = self.financial._create_transaction_in_current_transaction(
-                transaction_type=FinancialTransactionType.BOOKING_REFUND,
+                transaction_type=FinancialTransactionType.EXPENSE,
                 amount=amount,
                 entries=[
                     {"account_id": receivable.id, "debit": amount, "credit": Decimal("0"), "description": reason},

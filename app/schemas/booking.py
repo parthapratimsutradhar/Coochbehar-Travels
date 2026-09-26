@@ -8,7 +8,6 @@ from app.schemas.quotation import (
     QuotationHotelCreate,
     QuotationHotelResponse,
     QuotationItineraryCreate,
-    QuotationItineraryResponse,
     QuotationItemCreate,
     QuotationVehicleCreate,
     QuotationVehicleResponse,
@@ -280,6 +279,20 @@ class BookingTripItemResponse(SchemaBase):
     vehicle: QuotationVehicleResponse | None = None
 
 
+class BookingTripItineraryResponse(SchemaBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    booking_id: UUID
+    day_number: int
+    date: datetime | None = None
+    title: str
+    description: str | None = None
+    overnight_location: str | None = None
+    meal_plan: str | None = None
+    sort_order: int
+
+
 class BookingDetailResponse(BookingResponse):
     quotation_id: UUID | None = None
     offer: BookingOfferSummaryResponse | None = None
@@ -295,7 +308,7 @@ class BookingDetailResponse(BookingResponse):
     updated_at: datetime | None = None
     travellers: list[BookingTravelerResponse] = Field(default_factory=list)
     items: list[BookingTripItemResponse] = Field(default_factory=list)
-    itinerary: list[QuotationItineraryResponse] = Field(default_factory=list)
+    itinerary: list[BookingTripItineraryResponse] = Field(default_factory=list)
     status_history: list[BookingStatusHistoryResponse] = Field(default_factory=list)
     customer_name: str | None = None
     customer_mobile: str | None = None
@@ -343,10 +356,22 @@ class BookingDetailResponse(BookingResponse):
                 } if created_by_account else None,
                 "created_at": getattr(value, "created_at", None),
                 "updated_at": getattr(value, "updated_at", None),
-                "travellers": [trav.model_dump(exclude_none=True) for trav in getattr(value, "travellers", []) or []],
-                "items": [item.model_dump(exclude_none=True) for item in getattr(value, "trip_items", []) or []],
-                "itinerary": [day.model_dump(exclude_none=True) for day in getattr(value, "trip_itinerary", []) or []],
-                "status_history": [history.model_dump(exclude_none=True) for history in getattr(value, "status_history", []) or []],
+                "travellers": [
+                    BookingTravelerResponse.model_validate(trav).model_dump(exclude_none=True)
+                    for trav in getattr(value, "travellers", []) or []
+                ],
+                "items": [
+                    BookingTripItemResponse.model_validate(item).model_dump(exclude_none=True)
+                    for item in getattr(value, "trip_items", []) or []
+                ],
+                "itinerary": [
+                    BookingTripItineraryResponse.model_validate(day).model_dump(exclude_none=True)
+                    for day in getattr(value, "trip_itinerary", []) or []
+                ],
+                "status_history": [
+                    BookingStatusHistoryResponse.model_validate(history).model_dump(exclude_none=True)
+                    for history in getattr(value, "status_history", []) or []
+                ],
                 "customer_name": getattr(customer, "name", None) if customer else None,
                 "customer_mobile": getattr(customer, "mobile", None) if customer else None,
             })

@@ -66,7 +66,7 @@ def test_admin_financial_transactions_and_reports_flow():
         create_response = client.post(
             "/api/v1/admin/financial/transactions",
             json={
-                "transaction_type": FinancialTransactionType.BOOKING_PAYMENT.value,
+                "transaction_type": "BOOKING_PAYMENT",
                 "amount": "2500.50",
                 "category": "booking_income",
                 "description": "Tour booking payment",

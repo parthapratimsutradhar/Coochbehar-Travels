@@ -190,7 +190,7 @@ class FinancialService:
             source_account = self._system_account(source[0], source[1], "ASSET")
             receivable = self._system_account("1100", "Customer Receivable", "ASSET")
             return self._create_transaction_in_current_transaction(
-                transaction_type=FinancialTransactionType.BOOKING_PAYMENT,
+                transaction_type=FinancialTransactionType.INCOME,
                 amount=amount,
                 entries=[
                     {"account_id": source_account.id, "debit": amount, "credit": Decimal("0"), "description": None},
@@ -299,7 +299,7 @@ class FinancialService:
             }.get(payment_method.value, ("1000", "Cash"))
             source = self._system_account(source_code, source_name, "ASSET")
             transaction = self._create_transaction_in_current_transaction(
-                transaction_type=FinancialTransactionType.VENDOR_PAYMENT,
+                transaction_type=FinancialTransactionType.EXPENSE,
                 amount=amount,
                 entries=[
                     {"account_id": payable.id, "debit": amount, "credit": Decimal("0"), "description": description},
@@ -342,7 +342,7 @@ class FinancialService:
             self.db.commit()
         with self.db.begin():
             reversal = self._create_transaction_in_current_transaction(
-                transaction_type=FinancialTransactionType.ADJUSTMENT,
+                transaction_type=FinancialTransactionType.EXPENSE,
                 amount=transaction.amount,
                 entries=[
                     {"account_id": entry.account_id, "debit": entry.credit, "credit": entry.debit, "description": reason}
