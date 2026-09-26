@@ -102,3 +102,9 @@ class EnquiryRepository:
         self.db.commit()
         self.db.refresh(enquiry)
         return enquiry
+
+    def delete(self, enquiry: Enquiry) -> None:
+        if enquiry.lead is not None:
+            self.db.delete(enquiry.lead)
+        self.db.delete(enquiry)
+        self.db.commit()

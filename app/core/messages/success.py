@@ -43,6 +43,7 @@ class EnquirySuccess(StrEnum):
     LEAD_RETRIEVED = "Enquiry lead retrieved successfully."
     CREATED = "Enquiry created successfully."
     UPDATED = "Enquiry updated successfully."
+    DELETED = "Enquiry deleted successfully."
 
 
 class QuotationSuccess(StrEnum):

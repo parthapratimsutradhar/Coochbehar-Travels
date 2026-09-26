@@ -10,7 +10,7 @@ from app.repository.customer_repo import CustomerRepository
 from app.repository.enquiry_repo import EnquiryRepository
 from app.repository.lead_repo import LeadRepository
 from app.schemas.custom_tour_request import CustomTourRequestCreate
-from app.schemas.enquiry import EnquiryCreate, EnquiryUpdate
+from app.schemas.enquiry import CustomerEnquiryUpdate, EnquiryCreate, EnquiryUpdate
 from app.services.lead_scoring_service import LeadScoringService
 from app.services.notification_service import NotificationService
 from app.services.socket_service import (
@@ -227,3 +227,24 @@ class EnquiryService:
                 new_status=enquiry.status.value,
             )
         return enquiry
+
+    def update_customer_enquiry(
+        self,
+        enquiry_id: uuid.UUID,
+        customer_id: uuid.UUID,
+        payload: CustomerEnquiryUpdate,
+    ) -> Enquiry:
+        enquiry = self.get_enquiry(enquiry_id)
+        if enquiry.customer_id != customer_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enquiry not found.")
+
+        update_data = payload.model_dump(exclude_unset=True)
+        enquiry = self.enquiry_repo.update(enquiry, **update_data)
+        emit_enquiry_updated(enquiry)
+        return enquiry
+
+    def delete_customer_enquiry(self, enquiry_id: uuid.UUID, customer_id: uuid.UUID) -> None:
+        enquiry = self.get_enquiry(enquiry_id)
+        if enquiry.customer_id != customer_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enquiry not found.")
+        self.enquiry_repo.delete(enquiry)

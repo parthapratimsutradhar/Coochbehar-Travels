@@ -60,6 +60,38 @@ class EnquiryUpdate(SchemaBase):
     message: str | None = None
 
 
+class CustomerEnquiryUpdate(SchemaBase):
+    package_id: UUID | None = None
+    variant_id: UUID | None = None
+    destination_id: UUID | None = None
+    message: str | None = None
+    enquirer_name: str | None = Field(default=None, max_length=100, validation_alias=AliasChoices("name", "enquirer_name"))
+    enquirer_phone: str | None = Field(
+        default=None,
+        max_length=20,
+        validation_alias=AliasChoices("phone", "mobile", "enquirer_phone"),
+    )
+    enquirer_email: str | None = Field(
+        default=None,
+        max_length=255,
+        validation_alias=AliasChoices("email", "enquirer_email"),
+    )
+    travel_date: date | None = None
+    travel_duration_day: int | None = Field(default=None, ge=0)
+    travel_duration_night: int | None = Field(default=None, ge=0)
+    adult_count: int | None = Field(default=None, ge=0)
+    child_count: int | None = Field(default=None, ge=0)
+    senior_count: int | None = Field(default=None, ge=0)
+    hotel_id: UUID | None = None
+    vehicle_id: UUID | None = None
+    room_count: int | None = Field(default=None, ge=0)
+    vehicle_count: int | None = Field(default=None, ge=0)
+    budget_min: float | None = Field(default=None, ge=0)
+    budget_max: float | None = Field(default=None, ge=0)
+    special_requirements: str | None = None
+    meal_plan: MealPlan | None = None
+
+
 class EnquiryResponse(EnquiryBase):
     model_config = ConfigDict(from_attributes=True)
 
