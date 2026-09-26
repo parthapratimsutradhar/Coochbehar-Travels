@@ -8,13 +8,24 @@ from sqlalchemy.pool import StaticPool
 
 compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
 
-from app.core.enums import AccountRole, BookingSource, BookingStatus, HotelCategory, TourType, VehicleType
+from app.core.enums import (
+    AccountRole,
+    BookingSource,
+    BookingStatus,
+    EnquiryChannel,
+    EnquiryStatus,
+    EnquiryType,
+    HotelCategory,
+    TourType,
+    VehicleType,
+)
 from app.db.database import get_db
 from app.main import app
 from app.models.account import Account
 from app.models.base import Base
 from app.models.booking import Booking
 from app.models.destination import Destination
+from app.models.enquiry import Enquiry
 from app.models.hotel import Hotel
 from app.models.tour_package import TourPackage
 from app.models.vehicle import Vehicle
@@ -105,10 +116,19 @@ def test_admin_dashboard_route_uses_live_database_values(client, admin_user, db_
         name="Puri",
         slug="puri",
         country="India",
+        image_url="https://cdn.example.com/puri.jpg",
         is_domestic=True,
         is_featured=True,
     )
-    db_session.add(destination)
+    enquiry_destination = Destination(
+        name="Konark",
+        slug="konark",
+        country="India",
+        image_url="https://cdn.example.com/konark.jpg",
+        is_domestic=True,
+        is_featured=True,
+    )
+    db_session.add_all([destination, enquiry_destination])
     db_session.flush()
 
     customer = Account(
@@ -118,6 +138,14 @@ def test_admin_dashboard_route_uses_live_database_values(client, admin_user, db_
         mobile="+919000000002",
         role=AccountRole.CUSTOMER,
         is_active=True,
+    )
+    enquiry = Enquiry(
+        enquiry_code="ENQ-DASH-001",
+        enquiry_type=EnquiryType.CUSTOM_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        status=EnquiryStatus.NEW,
+        destination_id=enquiry_destination.id,
+        customer_id=customer.id,
     )
     package = TourPackage(
         tour_code="TP-100",
@@ -142,13 +170,14 @@ def test_admin_dashboard_route_uses_live_database_values(client, admin_user, db_
         price_per_day=3500,
     )
 
-    db_session.add_all([destination, customer, package, hotel, vehicle])
+    db_session.add_all([customer, enquiry, package, hotel, vehicle])
     db_session.flush()
 
     booking_one = Booking(
         booking_code="BK-DATA-1",
         customer_id=customer.id,
-        package_id=package.id,
+        package_id=None,
+        enquiry_id=enquiry.id,
         booking_type=TourType.DOMESTIC,
         source=BookingSource.WEBSITE,
         sales_account_id=admin_user.id,
@@ -195,5 +224,7 @@ def test_admin_dashboard_route_uses_live_database_values(client, admin_user, db_
     assert payload["platform_metrics"]["hotels_listed"] >= 1
     assert payload["platform_metrics"]["tour_packages"] >= 1
     assert payload["platform_metrics"]["bus_routes"] >= 1
-    assert payload["top_destinations"][0]["name"] == "Puri"
+    destinations = {item["name"]: item for item in payload["top_destinations"]}
+    assert destinations["Puri"]["image_url"] == "https://cdn.example.com/puri.jpg"
+    assert destinations["Konark"]["image_url"] == "https://cdn.example.com/konark.jpg"
     assert payload["recent_bookings"][0]["booking_id"] in {"BK-DATA-1", "BK-DATA-2"}

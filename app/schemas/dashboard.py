@@ -48,7 +48,7 @@ class RevenueAnalytics(SchemaBase):
 class TopDestination(SchemaBase):
     rank: int
     name: str
-    icon: str
+    image_url: str | None = None
     total_bookings: int
 
 
