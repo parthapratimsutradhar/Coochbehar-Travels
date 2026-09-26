@@ -18,7 +18,7 @@ class BookingPaymentCreate(SchemaBase):
     currency: str = Field(default="INR", max_length=10)
     payment_method: PaymentMethod = PaymentMethod.CASH
     transaction_type: FinancialTransactionType | TransactionType = FinancialTransactionType.BOOKING_PAYMENT
-    status: FinancialTransactionStatus | PaymentStatus = FinancialTransactionStatus.POSTED
+    status: FinancialTransactionStatus | PaymentStatus = FinancialTransactionStatus.COMPLETED
     gateway: str | None = None
     transaction_id: str | None = None
     notes: str | None = None

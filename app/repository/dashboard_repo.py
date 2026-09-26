@@ -34,7 +34,7 @@ class DashboardRepository:
             select(func.coalesce(func.sum(FinancialTransaction.amount), 0)).where(
                 func.date(FinancialTransaction.transaction_date) == today,
                 FinancialTransaction.transaction_type == "BOOKING_PAYMENT",
-                FinancialTransaction.status == "POSTED",
+                FinancialTransaction.status == "COMPLETED",
             )
         ).scalar_one()
 
@@ -132,7 +132,7 @@ class DashboardRepository:
         # General business expenses
         stmt_exp = select(func.coalesce(func.sum(FinancialTransaction.amount), 0)).where(
             FinancialTransaction.transaction_type == "EXPENSE",
-            FinancialTransaction.status == "POSTED",
+            FinancialTransaction.status == "COMPLETED",
             extract("year", FinancialTransaction.transaction_date) == year,
         )
         if month is not None:

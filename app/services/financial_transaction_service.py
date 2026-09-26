@@ -13,6 +13,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.enums import (
+    FinancialTransactionCategory,
     FinancialTransactionStatus,
     FinancialTransactionType,
     PaymentMethod,
@@ -28,18 +29,8 @@ class FinancialTransactionService:
     @staticmethod
     def normalize_transaction_type(value: str | None) -> FinancialTransactionType:
         mapping = {
-            "INCOME": FinancialTransactionType.BOOKING_PAYMENT,
+            "INCOME": FinancialTransactionType.INCOME,
             "EXPENSE": FinancialTransactionType.EXPENSE,
-            "REFERRAL_INCOME": FinancialTransactionType.REFERRAL_REWARD,
-            "REFERRAL": FinancialTransactionType.REFERRAL_REWARD,
-            "BOOKING_PAYMENT": FinancialTransactionType.BOOKING_PAYMENT,
-            "BOOKING_REFUND": FinancialTransactionType.BOOKING_REFUND,
-            "WALLET_CREDIT": FinancialTransactionType.WALLET_CREDIT,
-            "WALLET_DEBIT": FinancialTransactionType.WALLET_DEBIT,
-            "VENDOR_PAYMENT": FinancialTransactionType.VENDOR_PAYMENT,
-            "TRANSFER": FinancialTransactionType.TRANSFER,
-            "ADJUSTMENT": FinancialTransactionType.ADJUSTMENT,
-            "REFERRAL_REWARD": FinancialTransactionType.REFERRAL_REWARD,
         }
         normalized = (value or "EXPENSE").strip().upper()
         if normalized in mapping:
@@ -53,10 +44,40 @@ class FinancialTransactionService:
             ) from exc
 
     @staticmethod
+    def normalize_category(value: str | None) -> FinancialTransactionCategory | None:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        mapping = {
+            "BOOKING_INCOME": FinancialTransactionCategory.BOOKING_PAYMENT,
+            "BOOKING_PAYMENT": FinancialTransactionCategory.BOOKING_PAYMENT,
+            "BOOKING_REFUND": FinancialTransactionCategory.BOOKING_REFUND,
+            "WALLET_CREDIT": FinancialTransactionCategory.WALLET_CREDIT,
+            "WALLET_DEBIT": FinancialTransactionCategory.WALLET_DEBIT,
+            "VENDOR_PAYMENT": FinancialTransactionCategory.VENDOR_PAYMENT,
+            "TRANSFER": FinancialTransactionCategory.TRANSFER,
+            "ADJUSTMENT": FinancialTransactionCategory.ADJUSTMENT,
+            "REFERRAL_INCOME": FinancialTransactionCategory.REFERRAL_INCOME,
+            "REFERRAL_REWARD": FinancialTransactionCategory.REFERRAL_REWARD,
+        }
+        key = normalized.upper()
+        if key in mapping:
+            return mapping[key]
+        try:
+            return FinancialTransactionCategory(normalized)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Unsupported transaction category: {value}",
+            ) from exc
+
+    @staticmethod
     def normalize_status(value: str | None) -> FinancialTransactionStatus:
         if value is None:
-            return FinancialTransactionStatus.POSTED
+            return FinancialTransactionStatus.COMPLETED
         normalized = value.strip().upper()
+        if normalized == "POSTED":
+            return FinancialTransactionStatus.COMPLETED
         try:
             return FinancialTransactionStatus(normalized)
         except ValueError as exc:
@@ -77,6 +98,7 @@ class FinancialTransactionService:
 
     def create_transaction(self, payload: Any, actor: Account) -> FinancialTransaction:
         transaction_type = self.normalize_transaction_type(getattr(payload, "transaction_type", None))
+        category = self.normalize_category(getattr(payload, "category", None))
         amount = Decimal(str(getattr(payload, "amount")))
         if amount <= 0:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Amount must be greater than zero.")
@@ -95,7 +117,7 @@ class FinancialTransactionService:
             amount=amount,
             currency=getattr(payload, "currency", "INR") or "INR",
             payment_method=self.normalize_payment_method(getattr(payload, "payment_method", None)),
-            category=getattr(payload, "category", None),
+            category=category,
             description=getattr(payload, "description", None),
             reference=getattr(payload, "reference", None),
             vendor_id=getattr(payload, "vendor_id", None),
@@ -136,7 +158,7 @@ class FinancialTransactionService:
         if transaction_type:
             query = query.filter(FinancialTransaction.transaction_type == self.normalize_transaction_type(transaction_type))
         if category:
-            query = query.filter(FinancialTransaction.category.ilike(f"%{category}%"))
+            query = query.filter(FinancialTransaction.category == self.normalize_category(category))
         if status:
             query = query.filter(FinancialTransaction.status == self.normalize_status(status))
         if booking_id:
@@ -180,7 +202,7 @@ class FinancialTransactionService:
         if payload.transaction_type is not None:
             transaction.transaction_type = self.normalize_transaction_type(payload.transaction_type)
         if payload.category is not None:
-            transaction.category = payload.category
+            transaction.category = self.normalize_category(payload.category)
         if payload.description is not None:
             transaction.description = payload.description
         if payload.transaction_date is not None:
@@ -219,7 +241,7 @@ class FinancialTransactionService:
         self.db.commit()
 
     def get_summary(self, start_date: date | None = None, end_date: date | None = None) -> dict[str, Decimal | str | None]:
-        query = self.db.query(FinancialTransaction).filter(FinancialTransaction.status == FinancialTransactionStatus.POSTED)
+        query = self.db.query(FinancialTransaction).filter(FinancialTransaction.status == FinancialTransactionStatus.COMPLETED)
         if start_date:
             query = query.filter(FinancialTransaction.transaction_date >= datetime.combine(start_date, datetime.min.time()))
         if end_date:
@@ -246,7 +268,7 @@ class FinancialTransactionService:
         }
 
     def build_report(self, report_type: str, start_date: date | None = None, end_date: date | None = None) -> dict[str, Any]:
-        query = self.db.query(FinancialTransaction).filter(FinancialTransaction.status == FinancialTransactionStatus.POSTED)
+        query = self.db.query(FinancialTransaction).filter(FinancialTransaction.status == FinancialTransactionStatus.COMPLETED)
         if start_date:
             query = query.filter(FinancialTransaction.transaction_date >= datetime.combine(start_date, datetime.min.time()))
         if end_date:

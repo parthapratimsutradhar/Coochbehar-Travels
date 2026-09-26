@@ -2,6 +2,7 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
+from app.core.enums import FinancialTransactionStatus
 from app.models.account import Account
 from app.models.audit_log import AuditLog
 from app.models.financial_transaction import FinancialTransaction
@@ -56,7 +57,7 @@ class ExpenseService:
     ) -> dict:
         query = self.db.query(FinancialTransaction).filter(
             FinancialTransaction.transaction_type == "EXPENSE",
-            FinancialTransaction.status == "POSTED",
+            FinancialTransaction.status == FinancialTransactionStatus.COMPLETED,
         )
         if category:
             query = query.filter(FinancialTransaction.category.ilike(category))

@@ -10,6 +10,7 @@ from app.core.enums import (
     FinancialReportType,
     FinancialTransactionStatus,
     FinancialTransactionType,
+    FinancialTransactionCategory,
     PaymentMethod,
 )
 from app.schemas.base import SchemaBase
@@ -21,11 +22,11 @@ class FinancialTransactionBase(SchemaBase):
         ...,
         description="Type of financial transaction, such as income, expense, or referral income.",
     )
-    category: str | None = Field(default=None, max_length=100)
+    category: str | FinancialTransactionCategory | None = Field(default=None, description="Category of the financial transaction.")
     description: str | None = Field(default=None, max_length=500)
     transaction_date: datetime | None = None
     status: FinancialTransactionStatus | None = Field(
-        default=FinancialTransactionStatus.POSTED,
+        default=FinancialTransactionStatus.COMPLETED,
         description="Current processing state of the transaction.",
     )
     currency: str = Field(default="INR", min_length=3, max_length=3)
@@ -43,7 +44,7 @@ class FinancialTransactionCreate(FinancialTransactionBase):
 class FinancialTransactionUpdate(SchemaBase):
     amount: Decimal | None = Field(default=None, gt=0)
     transaction_type: FinancialTransactionType | None = Field(default=None, description="Type of financial transaction.")
-    category: str | None = Field(default=None, max_length=100)
+    category: str | FinancialTransactionCategory | None = Field(default=None, description="Category of the financial transaction.")
     description: str | None = Field(default=None, max_length=500)
     transaction_date: datetime | None = None
     status: FinancialTransactionStatus | None = Field(default=None, description="Current processing state.")
@@ -79,17 +80,30 @@ class FinancialTransactionResponse(FinancialTransactionBase):
     created_by_account_id: UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
-    status: str
+    status: FinancialTransactionStatus
 
 
 def financial_transaction_response(transaction) -> FinancialTransactionResponse:
     metadata = transaction.metadata_ or {}
+    category_aliases = {
+        FinancialTransactionCategory.BOOKING_PAYMENT: "booking_income",
+        FinancialTransactionCategory.BOOKING_REFUND: "booking_refund",
+        FinancialTransactionCategory.WALLET_CREDIT: "wallet_credit",
+        FinancialTransactionCategory.WALLET_DEBIT: "wallet_debit",
+        FinancialTransactionCategory.VENDOR_PAYMENT: "vendor_payment",
+        FinancialTransactionCategory.TRANSFER: "transfer",
+        FinancialTransactionCategory.ADJUSTMENT: "adjustment",
+        FinancialTransactionCategory.REFERRAL_INCOME: "referral_income",
+        FinancialTransactionCategory.REFERRAL_REWARD: "referral_reward",
+    }
+    category_value = transaction.category
+    category = category_aliases.get(category_value, category_value.value if category_value else None)
     return FinancialTransactionResponse.model_validate(
         {
             "id": transaction.id,
             "amount": transaction.amount,
             "transaction_type": transaction.transaction_type.value,
-            "category": transaction.category,
+            "category": category,
             "description": transaction.description,
             "transaction_date": transaction.transaction_date,
             "status": transaction.status.value,

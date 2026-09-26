@@ -2,6 +2,7 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.enums import FinancialTransactionStatus
 from app.models.account import Account
 from app.models.audit_log import AuditLog
 from app.repository.booking_repo import BookingRepository
@@ -44,7 +45,7 @@ class PaymentService:
         )
 
         # Update booking paid and due amounts
-        if payment.status == "POSTED":
+        if payment.status == FinancialTransactionStatus.COMPLETED:
             self.booking_repo.update_financials(booking, payment.amount)
 
         self.db.add(AuditLog(

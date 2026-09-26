@@ -29,7 +29,7 @@ class FinancialReportingService:
 
     def _sum_transactions(self, transaction_type: FinancialTransactionType | None = None) -> Decimal:
         query = self.db.query(func.coalesce(func.sum(FinancialTransaction.amount), 0)).filter(
-            FinancialTransaction.status == FinancialTransactionStatus.POSTED
+            FinancialTransaction.status == FinancialTransactionStatus.COMPLETED
         )
         if transaction_type is not None:
             query = query.filter(FinancialTransaction.transaction_type == transaction_type)
@@ -89,7 +89,7 @@ class FinancialReportingService:
         ).filter(
             FinancialAccount.owner_type == FinancialAccountOwnerType.CUSTOMER,
             FinancialAccount.account_type == FinancialAccountType.LIABILITY,
-            FinancialTransaction.status == FinancialTransactionStatus.POSTED,
+            FinancialTransaction.status == FinancialTransactionStatus.COMPLETED,
         ).scalar()
         return Decimal(result or 0)
 
@@ -106,7 +106,7 @@ class FinancialReportingService:
         end_dt = datetime.combine(end, datetime.max.time()) if end else None
         all_transactions = self.db.query(FinancialTransaction)
         transactions = all_transactions.filter(
-            FinancialTransaction.status == FinancialTransactionStatus.POSTED
+            FinancialTransaction.status == FinancialTransactionStatus.COMPLETED
         )
         if start_dt:
             transactions = transactions.filter(FinancialTransaction.transaction_date >= start_dt)
@@ -148,16 +148,16 @@ class FinancialReportingService:
             if normalized == "vendor-payments":
                 query = all_transactions.filter(
                     FinancialTransaction.transaction_type == FinancialTransactionType.VENDOR_PAYMENT,
-                    FinancialTransaction.status.in_([FinancialTransactionStatus.POSTED, FinancialTransactionStatus.REVERSED]),
+                    FinancialTransaction.status.in_([FinancialTransactionStatus.COMPLETED, FinancialTransactionStatus.REVERSED]),
                 )
             elif transaction_type:
                 query = transactions.filter(FinancialTransaction.transaction_type == transaction_type)
             else:
                 query = all_transactions.filter(FinancialTransaction.transaction_type.in_([FinancialTransactionType.WALLET_CREDIT, FinancialTransactionType.WALLET_DEBIT, FinancialTransactionType.ADJUSTMENT]))
             rows = [{"transaction_id": str(item.id), "amount": item.amount, "status": item.status.value, "customer_id": str(item.customer_id) if item.customer_id else None, "vendor_id": str(item.vendor_id) if item.vendor_id else None, "booking_id": str(item.booking_id) if item.booking_id else None, "category": item.category, "payment_method": item.payment_method.value if item.payment_method else None, "transaction_date": item.transaction_date.isoformat(), "description": item.description} for item in query.all()]
-            totals = {"amount": sum((row["amount"] for row in rows if row["status"] == FinancialTransactionStatus.POSTED.value), Decimal(0))}
+            totals = {"amount": sum((row["amount"] for row in rows if row["status"] == FinancialTransactionStatus.COMPLETED.value), Decimal(0))}
         elif normalized == "payment-method":
-            grouped = self.db.query(FinancialTransaction.payment_method, func.sum(FinancialTransaction.amount)).filter(FinancialTransaction.status == FinancialTransactionStatus.POSTED).group_by(FinancialTransaction.payment_method).all()
+            grouped = self.db.query(FinancialTransaction.payment_method, func.sum(FinancialTransaction.amount)).filter(FinancialTransaction.status == FinancialTransactionStatus.COMPLETED).group_by(FinancialTransaction.payment_method).all()
             rows = [{"payment_method": method.value if method else None, "amount": Decimal(amount or 0)} for method, amount in grouped]
             totals = {"amount": sum((row["amount"] for row in rows), Decimal(0))}
         else:

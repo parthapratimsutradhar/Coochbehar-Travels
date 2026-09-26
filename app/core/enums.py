@@ -233,7 +233,8 @@ class FinancialPeriod(AppEnum):
 
 class FinancialTransactionStatus(AppEnum):
     PENDING = "PENDING"
-    POSTED = "POSTED"
+    CONFIRMED = "CONFIRMED"
+    COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
     REVERSED = "REVERSED"

@@ -71,7 +71,7 @@ def test_admin_financial_transactions_and_reports_flow():
                 "category": "booking_income",
                 "description": "Tour booking payment",
                 "transaction_date": "2026-09-01T10:30:00",
-                "status": "POSTED",
+                "status": "COMPLETED",
             },
             headers=headers,
         )

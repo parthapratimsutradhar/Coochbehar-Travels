@@ -53,7 +53,7 @@ class FinancialTransaction(BaseEntity):
     status: Mapped[FinancialTransactionStatus] = mapped_column(
         Enum(FinancialTransactionStatus, name="financial_transaction_status"),
         nullable=False,
-        default=FinancialTransactionStatus.POSTED,
+        default=FinancialTransactionStatus.COMPLETED,
         index=True,
     )
     

@@ -80,7 +80,7 @@ class FinancialService:
         transaction_type: FinancialTransactionType,
         amount: Decimal,
         entries: Iterable[LedgerEntry],
-        status_: FinancialTransactionStatus = FinancialTransactionStatus.POSTED,
+        status_: FinancialTransactionStatus = FinancialTransactionStatus.COMPLETED,
         external_reference: str | None = None,
         transaction_code: str | None = None,
         transaction_date: datetime | None = None,
@@ -171,9 +171,9 @@ class FinancialService:
             if existing is not None:
                 return existing
         if str(payment_status) not in {
-            "FinancialTransactionStatus.POSTED",
+            "FinancialTransactionStatus.COMPLETED",
             "PaymentStatus.SUCCESS",
-            "POSTED",
+            "COMPLETED",
             "SUCCESS",
         }:
             raise HTTPException(
@@ -332,7 +332,7 @@ class FinancialService:
     ) -> FinancialTransaction:
         transaction = self.db.query(FinancialTransaction).filter(
             FinancialTransaction.id == transaction_id,
-            FinancialTransaction.status == FinancialTransactionStatus.POSTED,
+            FinancialTransaction.status == FinancialTransactionStatus.COMPLETED,
         ).one_or_none()
         if transaction is None:
             raise HTTPException(status_code=404, detail="Posted financial transaction not found.")
@@ -366,7 +366,7 @@ class FinancialService:
                 action="FINANCIAL_TRANSACTION_REVERSED",
                 entity_type="FinancialTransaction",
                 entity_id=transaction.id,
-                old_values={"status": FinancialTransactionStatus.POSTED.value},
+                old_values={"status": FinancialTransactionStatus.COMPLETED.value},
                 new_values={"status": FinancialTransactionStatus.REVERSED.value, "reversal_id": str(reversal.id), "reason": reason},
             ))
             return reversal
@@ -381,7 +381,7 @@ class FinancialService:
         transaction = FinancialTransaction(
             transaction_code=f"FT-{uuid.uuid4().hex[:20].upper()}",
             transaction_type=transaction_type,
-            status=FinancialTransactionStatus.POSTED,
+            status=FinancialTransactionStatus.COMPLETED,
             amount=amount,
             transaction_date=attributes.pop("transaction_date", None) or datetime.utcnow(),
             **attributes,
