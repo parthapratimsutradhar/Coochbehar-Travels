@@ -210,13 +210,59 @@ def test_tour_package_endpoints_return_default_variant_data():
     assert list_response.status_code == 200
     body = list_response.json()
     first_item = body["data"][0]
-    assert first_item["destination"] == "Himachal Pradesh"
+    assert body["success"] is True
+    assert body["message"] == "Items fetched successfully"
+    assert first_item["destination_id"]
+    assert first_item["destination_name"] == "Himachal Pradesh"
+    assert first_item["is_wishlist"] is False
     assert first_item["season_name"] == "Summer Special"
     assert first_item["badge"] == "Most Popular"
     assert first_item["banner"] == {
         "image": "https://example.com/default-banner.jpg",
         "video": None,
     }
+
+    variants_response = client.get(
+        f"/api/v1/tour-packages/{first_item['id']}/variants",
+        params={"page": 1, "page_size": 1},
+    )
+    assert variants_response.status_code == 200
+    variants_body = variants_response.json()
+    assert variants_body["message"] == "Items fetched successfully"
+    assert variants_body["pagination"]["total_items"] == 2
+    assert variants_body["pagination"]["has_next"] is True
+    assert variants_body["data"][0] == {
+        "id": variants_body["data"][0]["id"],
+        "tour_id": first_item["id"],
+        "slug": "family-summer",
+        "name": "Family Summer",
+        "season_name": "Summer Special",
+        "valid_from": "2026-04-01",
+        "valid_to": "2026-06-30",
+        "duration_days": 5,
+        "duration_nights": 4,
+        "list_price": 2499.0,
+        "selling_price": 2499.0,
+        "badge": "Most Popular",
+        "is_default": True,
+    }
+
+    detail_response = client.get(
+        f"/api/v1/tour-packages/{first_item['id']}/variants/"
+        f"{variants_body['data'][0]['id']}/details"
+    )
+    assert detail_response.status_code == 200
+    detail_data = detail_response.json()["data"]
+    assert detail_data["tour_id"] == first_item["id"]
+    assert detail_data["variant_id"] == variants_body["data"][0]["id"]
+    assert detail_data["banner"] == {
+        "image": "https://example.com/default-banner.jpg",
+        "video": None,
+    }
+    assert detail_data["gallery"][0]["url"] == "https://example.com/img1.jpg"
+    assert detail_data["highlights"][0]["text"] == "Snow views"
+    assert detail_data["departure_dates"] == []
+    assert detail_data["route"][0]["city"] == "Shimla"
 
     inactive_list_response = client.get(
         "/api/v1/tour-packages",

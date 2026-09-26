@@ -21,6 +21,13 @@ from app.schemas.tour_package import (
     TourPackageListItem,
     TourPackageSelectionItem,
     TourPackageSelectionVariant,
+    TourPackageVariantListItem,
+    TourDetailDepartureItem,
+    TourDetailGalleryItem,
+    TourDetailHighlightItem,
+    TourDetailItineraryItem,
+    TourDetailPayload,
+    TourDetailRouteItem,
     TourSeasonResponse,
 )
 
@@ -81,6 +88,147 @@ class TourPackageService:
             message="Items fetched successfully",
             data=items,
             pagination=pagination,
+        )
+
+    def list_variants(
+        self,
+        package_id,
+        page: int,
+        page_size: int,
+    ) -> PaginatedResponse[TourPackageVariantListItem]:
+        """Return a paginated list of active variants for a package."""
+        page = max(1, page)
+        page_size = max(1, min(page_size, 100))
+        package, variants, total_count = self.repo.get_paginated_variants(
+            package_id,
+            page,
+            page_size,
+        )
+        if package is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=PackageError.PACKAGE_NOT_FOUND,
+            )
+
+        total_pages = math.ceil(total_count / page_size) if total_count else 0
+        items = [
+            TourPackageVariantListItem(
+                id=variant.id,
+                tour_id=package.id,
+                slug=variant.slug,
+                name=variant.name,
+                season_name=variant.season_name,
+                valid_from=variant.valid_from,
+                valid_to=variant.valid_to,
+                duration_days=variant.duration_days,
+                duration_nights=variant.duration_nights,
+                list_price=float(variant.list_price),
+                selling_price=float(variant.selling_price),
+                badge=variant.badge,
+                is_default=variant.is_default,
+            )
+            for variant in variants
+        ]
+        return PaginatedResponse[TourPackageVariantListItem](
+            message="Items fetched successfully",
+            data=items,
+            pagination=PaginationMeta(
+                current_page=page,
+                page_size=page_size,
+                total_items=total_count,
+                total_pages=total_pages,
+                has_next=page < total_pages,
+                has_previous=page > 1,
+            ),
+        )
+
+    def get_tour_detail(self, package_id, variant_id) -> TourDetailPayload:
+        """Return the content details and departures for an active tour variant."""
+        variant = self.repo.get_variant_detail(package_id, variant_id)
+        if variant is None or variant.details is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tour details not found.",
+            )
+
+        details = variant.details
+        banner = self._extract_banner_media(details) or {}
+        raw_gallery = details.gallery if isinstance(details.gallery, list) else []
+        raw_highlights = details.highlights if isinstance(details.highlights, list) else []
+        raw_itinerary = details.itinerary if isinstance(details.itinerary, list) else []
+        raw_route = details.route_stops if isinstance(details.route_stops, list) else []
+
+        gallery = [
+            TourDetailGalleryItem(
+                id=str(item.get("id") or f"g{index + 1}"),
+                alt=item.get("alt"),
+                url=str(item.get("url") or item.get("image") or item.get("src") or ""),
+                type=item.get("type"),
+                display_order=item.get("display_order"),
+            )
+            for index, item in enumerate(raw_gallery)
+            if isinstance(item, dict)
+        ]
+        highlights = [
+            TourDetailHighlightItem(
+                id=str(item.get("id") or f"h{index + 1}"),
+                text=str(item.get("text") or item.get("title") or ""),
+            )
+            if isinstance(item, dict)
+            else TourDetailHighlightItem(id=f"h{index + 1}", text=str(item))
+            for index, item in enumerate(raw_highlights)
+        ]
+        itinerary = [
+            TourDetailItineraryItem(
+                id=str(item.get("id") or f"i{index + 1}"),
+                day=item.get("day", index + 1),
+                title=item.get("title"),
+                description=item.get("description"),
+            )
+            if isinstance(item, dict)
+            else TourDetailItineraryItem(
+                id=f"i{index + 1}",
+                day=index + 1,
+                description=str(item),
+            )
+            for index, item in enumerate(raw_itinerary)
+        ]
+        route = [
+            TourDetailRouteItem(
+                id=str(item.get("id") or f"r{index + 1}"),
+                city=str(item.get("city") or item.get("name") or item.get("place") or ""),
+                nights=item.get("nights"),
+            )
+            if isinstance(item, dict)
+            else TourDetailRouteItem(id=f"r{index + 1}", city=str(item))
+            for index, item in enumerate(raw_route)
+        ]
+        departure_dates = [
+            TourDetailDepartureItem(
+                id=departure.id,
+                departure_date=departure.departure_date,
+                return_date=departure.return_date,
+                total_seats=departure.total_seats,
+                available_seats=departure.available_seats,
+            )
+            for departure in sorted(
+                (item for item in variant.departures if item.is_active),
+                key=lambda item: item.departure_date,
+            )
+        ]
+
+        return TourDetailPayload(
+            id=details.id,
+            tour_id=package_id,
+            variant_id=variant.id,
+            banner=banner,
+            gallery=gallery,
+            highlights=highlights,
+            inclusions=details.inclusions or [],
+            exclusions=details.exclusions or [],
+            departure_dates=departure_dates,
+            itinerary=itinerary,
+            route=route,
         )
 
     def list_packages_for_selection(

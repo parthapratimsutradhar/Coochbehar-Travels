@@ -108,6 +108,54 @@ class ItineraryItemResponse(SchemaBase):
     model_config = {"extra": "allow"}
 
 
+class TourDetailGalleryItem(SchemaBase):
+    id: str
+    alt: str | None = None
+    url: str
+    type: str | None = None
+    display_order: int | None = None
+
+
+class TourDetailHighlightItem(SchemaBase):
+    id: str
+    text: str
+
+
+class TourDetailDepartureItem(SchemaBase):
+    id: uuid.UUID
+    departure_date: date
+    return_date: date | None = None
+    total_seats: int
+    available_seats: int
+
+
+class TourDetailItineraryItem(SchemaBase):
+    id: str
+    day: int | str
+    title: str | None = None
+    description: str | None = None
+
+
+class TourDetailRouteItem(SchemaBase):
+    id: str
+    city: str
+    nights: int | None = None
+
+
+class TourDetailPayload(SchemaBase):
+    id: uuid.UUID
+    tour_id: uuid.UUID
+    variant_id: uuid.UUID
+    banner: BannerResponse
+    gallery: list[TourDetailGalleryItem] = Field(default_factory=list)
+    highlights: list[TourDetailHighlightItem] = Field(default_factory=list)
+    inclusions: list[str] = Field(default_factory=list)
+    exclusions: list[str] = Field(default_factory=list)
+    departure_dates: list[TourDetailDepartureItem] = Field(default_factory=list)
+    itinerary: list[TourDetailItineraryItem] = Field(default_factory=list)
+    route: list[TourDetailRouteItem] = Field(default_factory=list)
+
+
 # ── Season / Variant Sub-Schema ─────────────────────────────────────
 
 class TourSeasonResponse(SchemaBase):
@@ -183,7 +231,8 @@ class TourPackageListItem(SchemaBase):
     tour_code: str
     slug: str
     title: str
-    destination: str | None = None
+    destination_id: uuid.UUID | None = None
+    destination_name: str | None = None
     type: TourType
     description: str | None = None
     season_name: str | None = None
@@ -191,6 +240,26 @@ class TourPackageListItem(SchemaBase):
     banner: BannerResponse | None = None
     is_featured: bool    
     is_wishlist: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+class TourPackageVariantListItem(SchemaBase):
+    """Variant item returned by the paginated public variant list."""
+
+    id: uuid.UUID
+    tour_id: uuid.UUID
+    slug: str
+    name: str
+    season_name: str | None = None
+    valid_from: date
+    valid_to: date
+    duration_days: int
+    duration_nights: int
+    list_price: float
+    selling_price: float
+    badge: str | None = None
+    is_default: bool
 
     model_config = {"from_attributes": True}
 

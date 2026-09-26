@@ -190,7 +190,8 @@ class TourPackageRepository:
                     "tour_code": package.tour_code,
                     "slug": package.slug,
                     "title": package.title,
-                    "destination": destination_name,
+                    "destination_id": package.destination_id,
+                    "destination_name": destination_name,
                     "type": package.type,
                     "description": package.description,
                     "is_featured": package.is_featured,
@@ -252,6 +253,55 @@ class TourPackageRepository:
                 joinedload(TourPackage.variants).joinedload(TourVariant.details),
             )
             .filter(TourPackage.id == package_id)
+            .first()
+        )
+
+    def get_paginated_variants(
+        self,
+        package_id,
+        page: int,
+        page_size: int,
+    ) -> tuple[TourPackage | None, list[TourVariant], int]:
+        """Return an active package and its active variants for one page."""
+        package = (
+            self.db.query(TourPackage)
+            .filter(TourPackage.id == package_id, TourPackage.is_active.is_(True))
+            .first()
+        )
+        if package is None:
+            return None, [], 0
+
+        query = (
+            self.db.query(TourVariant)
+            .filter(
+                TourVariant.package_id == package_id,
+                TourVariant.is_active.is_(True),
+            )
+            .order_by(
+                TourVariant.is_default.desc(),
+                TourVariant.valid_from.asc(),
+                TourVariant.id.asc(),
+            )
+        )
+        total_count = query.count()
+        variants = query.offset((page - 1) * page_size).limit(page_size).all()
+        return package, variants, total_count
+
+    def get_variant_detail(self, package_id, variant_id) -> TourVariant | None:
+        """Fetch a variant and its detail/departure records for an active package."""
+        return (
+            self.db.query(TourVariant)
+            .join(TourPackage, TourVariant.package_id == TourPackage.id)
+            .options(
+                joinedload(TourVariant.details),
+                joinedload(TourVariant.departures),
+            )
+            .filter(
+                TourPackage.id == package_id,
+                TourPackage.is_active.is_(True),
+                TourVariant.id == variant_id,
+                TourVariant.is_active.is_(True),
+            )
             .first()
         )
 
