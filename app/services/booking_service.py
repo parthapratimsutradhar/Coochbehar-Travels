@@ -135,7 +135,7 @@ class BookingService:
 
         travellers_data = [traveller.model_dump(exclude_none=True) for traveller in payload.travellers]
 
-        cost_items = payload.costs if payload.costs is not None else payload.items
+        cost_items = payload.items
         itinerary_data = [day.model_dump(exclude_none=True) for day in payload.itinerary]
         if departure_date or return_date:
             itinerary_dates = {
@@ -247,8 +247,6 @@ class BookingService:
         )
 
         detail = BookingDetailResponse.model_validate(booking)
-        detail.customer_name = booking.customer.name if booking.customer else None
-        detail.customer_mobile = booking.customer.mobile if booking.customer else None
         detail.gross_profit = gross_profit
         detail.profit_margin = margin
         return detail

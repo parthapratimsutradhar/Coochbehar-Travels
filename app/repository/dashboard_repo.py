@@ -3,7 +3,13 @@ from decimal import Decimal
 from sqlalchemy import extract, func, select
 from sqlalchemy.orm import Session
 
-from app.core.enums import AccountRole, BookingStatus, QuotationStatus
+from app.core.enums import (
+    AccountRole,
+    BookingStatus,
+    FinancialTransactionCategory,
+    FinancialTransactionType,
+    QuotationStatus,
+)
 from app.models.account import Account
 from app.models.booking import Booking
 from app.models.financial_transaction import FinancialTransaction
@@ -33,7 +39,8 @@ class DashboardRepository:
         collections = self.db.execute(
             select(func.coalesce(func.sum(FinancialTransaction.amount), 0)).where(
                 func.date(FinancialTransaction.transaction_date) == today,
-                FinancialTransaction.transaction_type == "BOOKING_PAYMENT",
+                FinancialTransaction.transaction_type == FinancialTransactionType.INCOME,
+                FinancialTransaction.category == FinancialTransactionCategory.BOOKING_PAYMENT,
                 FinancialTransaction.status == "COMPLETED",
             )
         ).scalar_one()

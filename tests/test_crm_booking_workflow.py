@@ -429,6 +429,10 @@ def test_admin_create_booking_returns_payload_dates(client, superadmin_auth_head
     assert response.status_code == 201, response.text
     booking_data = response.json()["data"]
     assert booking_data["destination_id"] == str(destination.id)
+    assert booking_data["customer"]["name"] == test_customer.name
+    assert booking_data["customer"]["mobile"] == test_customer.mobile
+    assert "customer_name" not in booking_data
+    assert "customer_mobile" not in booking_data
     assert booking_data["departure_date"] == "2026-10-15"
     assert booking_data["return_date"] == "2026-10-20"
     itinerary_dates = [day["date"][:10] for day in booking_data["itinerary"]]
@@ -507,8 +511,6 @@ def test_admin_create_booking_returns_payload_dates(client, superadmin_auth_head
         "items",
         "itinerary",
         "status_history",
-        "customer_name",
-        "customer_mobile",
         "gross_profit",
         "profit_margin",
     }

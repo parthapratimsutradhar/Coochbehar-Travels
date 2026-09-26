@@ -107,8 +107,14 @@ class FinancialTransactionService:
             return PaymentMethod.OTHER
 
     def create_transaction(self, payload: Any, actor: Account) -> FinancialTransaction:
-        transaction_type = self.normalize_transaction_type(getattr(payload, "transaction_type", None))
-        category = self.normalize_category(getattr(payload, "category", None))
+        raw_transaction_type = getattr(payload, "transaction_type", None)
+        transaction_type = self.normalize_transaction_type(raw_transaction_type)
+        category_value = getattr(payload, "category", None)
+        if category_value is None:
+            legacy_type = getattr(raw_transaction_type, "value", raw_transaction_type)
+            if str(legacy_type).strip().upper() not in {"INCOME", "EXPENSE"}:
+                category_value = str(legacy_type)
+        category = self.normalize_category(category_value)
         amount = Decimal(str(getattr(payload, "amount")))
         if amount <= 0:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Amount must be greater than zero.")
@@ -166,7 +172,15 @@ class FinancialTransactionService:
     ) -> dict[str, Any]:
         query = self.db.query(FinancialTransaction)
         if transaction_type:
-            query = query.filter(FinancialTransaction.transaction_type == self.normalize_transaction_type(transaction_type))
+            normalized_type = transaction_type.strip().upper()
+            if normalized_type in {"INCOME", "EXPENSE"}:
+                query = query.filter(
+                    FinancialTransaction.transaction_type == self.normalize_transaction_type(normalized_type)
+                )
+            else:
+                query = query.filter(
+                    FinancialTransaction.category == self.normalize_category(normalized_type)
+                )
         if category:
             query = query.filter(FinancialTransaction.category == self.normalize_category(category))
         if status:

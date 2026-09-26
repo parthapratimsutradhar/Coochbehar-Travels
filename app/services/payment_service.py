@@ -2,7 +2,11 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.enums import FinancialTransactionStatus
+from app.core.enums import (
+    FinancialTransactionCategory,
+    FinancialTransactionStatus,
+    FinancialTransactionType,
+)
 from app.models.account import Account
 from app.models.audit_log import AuditLog
 from app.repository.booking_repo import BookingRepository
@@ -64,7 +68,8 @@ class PaymentService:
             self.db.query(FinancialTransaction)
             .filter(
                 FinancialTransaction.booking_id == booking_id,
-                FinancialTransaction.transaction_type == "BOOKING_PAYMENT",
+                FinancialTransaction.transaction_type == FinancialTransactionType.INCOME,
+                FinancialTransaction.category == FinancialTransactionCategory.BOOKING_PAYMENT,
             )
             .order_by(FinancialTransaction.created_at.desc())
             .all()

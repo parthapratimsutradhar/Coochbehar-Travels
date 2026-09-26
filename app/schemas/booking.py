@@ -398,8 +398,6 @@ class BookingDetailResponse(BookingResponse):
                     BookingStatusHistoryResponse.model_validate(history).model_dump(exclude_none=True)
                     for history in getattr(value, "status_history", []) or []
                 ],
-                "customer_name": getattr(customer, "name", None) if customer else None,
-                "customer_mobile": getattr(customer, "mobile", None) if customer else None,
             })
             return base
         return value

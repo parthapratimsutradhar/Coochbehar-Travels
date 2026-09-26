@@ -9,6 +9,7 @@ from app.core.enums import (
     AccountRole,
     FinancialAccountOwnerType,
     FinancialAccountType,
+    FinancialTransactionCategory,
     FinancialTransactionStatus,
     FinancialTransactionType,
     PaymentMethod,
@@ -112,6 +113,7 @@ class WalletService:
                     amount=amount,
                     currency=wallet.currency,
                     payment_method=payment_method,
+                    category=FinancialTransactionCategory.WALLET_CREDIT,
                     external_reference=external_reference,
                     gateway=gateway,
                     gateway_transaction_id=gateway_transaction_id,
@@ -138,6 +140,7 @@ class WalletService:
                 ],
                 currency=wallet.currency,
                 payment_method=payment_method,
+                category=FinancialTransactionCategory.WALLET_CREDIT,
                 external_reference=external_reference,
                 gateway=gateway,
                 gateway_transaction_id=gateway_transaction_id,
@@ -168,6 +171,7 @@ class WalletService:
                 customer_id=customer.id,
                 currency=wallet.currency,
                 payment_method=PaymentMethod.WALLET,
+                category=FinancialTransactionCategory.BOOKING_PAYMENT,
                 description=description,
                 created_by_account_id=customer.id,
             )
@@ -196,6 +200,11 @@ class WalletService:
                 customer_id=customer_id,
                 currency=wallet.currency,
                 payment_method=PaymentMethod.OFFLINE,
+                category=(
+                    FinancialTransactionCategory.WALLET_DEBIT
+                    if debit_wallet
+                    else FinancialTransactionCategory.WALLET_CREDIT
+                ),
                 reference=reference,
                 description=reason,
                 created_by_account_id=actor.id,
@@ -243,6 +252,7 @@ class WalletService:
                 booking_id=booking_id,
                 currency=wallet.currency,
                 payment_method=PaymentMethod.OFFLINE,
+                category=FinancialTransactionCategory.BOOKING_REFUND,
                 external_reference=external_reference,
                 reference=reference,
                 description=reason,
