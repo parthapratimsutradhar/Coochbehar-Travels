@@ -132,5 +132,14 @@ class ReferralService:
             booking_window_days=payload.booking_window_days,
             admin=current_user,
         )
-        return ReferralRewardConfigResponse.model_validate(config)
+        updated_by = config.updated_by
+        return ReferralRewardConfigResponse(
+            id=config.id,
+            default_reward_amount=config.default_reward_amount,
+            booking_window_days=config.booking_window_days,
+            updated_by=config.updated_by_account_id,
+            updated_by_name=updated_by.name if updated_by else None,
+            updated_by_profile_image=updated_by.profile_pic if updated_by else None,
+            updated_at=config.updated_at,
+        )
 

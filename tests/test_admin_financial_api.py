@@ -78,9 +78,53 @@ def test_admin_financial_transactions_and_reports_flow():
             headers=headers,
         )
         assert create_response.status_code == 201, create_response.text
-        data = create_response.json()["data"]
-        assert data["amount"] == "2500.50"
+        assert create_response.json()["message"] == "Financial transaction created successfully"
+
+        list_response = client.get(
+            "/api/v1/admin/financial/transactions?transaction_type=BOOKING_PAYMENT&search=booking",
+            headers=headers,
+        )
+        assert list_response.status_code == 200, list_response.text
+        data = list_response.json()["data"][0]
         assert data["category"] == "booking_income"
+        assert data["amount"] == "2500.50"
+
+        stats_response = client.get(
+            "/api/v1/admin/financial/statistics?period=monthly&start_date=2026-09-01&end_date=2026-09-30",
+            headers=headers,
+        )
+        assert stats_response.status_code == 200, stats_response.text
+        assert stats_response.json()["data"]["total_income"] == "2500.50"
+
+        report_response = client.get(
+            "/api/v1/admin/financial/reports?report_type=income&start_date=2026-09-01&end_date=2026-09-30",
+            headers=headers,
+        )
+        assert report_response.status_code == 200, report_response.text
+        assert report_response.json()["data"]["totals"]["income"] == "2500.50"
+
+        download_response = client.post(
+            "/api/v1/admin/financial/download",
+            json={"format": "csv", "report_type": "income", "period": "monthly", "start_date": "2026-09-01", "end_date": "2026-09-30"},
+            headers=headers,
+        )
+        assert download_response.status_code == 200, download_response.text
+        assert download_response.headers["content-type"].startswith("text/csv")
+
+        update_response = client.put(
+            f"/api/v1/admin/financial/transactions/{data['id']}",
+            json={"amount": "3000.00", "description": "Updated booking payment"},
+            headers=headers,
+        )
+        assert update_response.status_code == 200, update_response.text
+        assert update_response.json()["message"] == "Financial transaction updated successfully"
+
+        delete_response = client.delete(
+            f"/api/v1/admin/financial/transactions/{data['id']}",
+            headers=headers,
+        )
+        assert delete_response.status_code == 200, delete_response.text
+        assert delete_response.json()["message"] == "Financial transaction deleted successfully"
 
         list_response = client.get(
             "/api/v1/admin/financial/transactions?transaction_type=BOOKING_PAYMENT&search=booking",

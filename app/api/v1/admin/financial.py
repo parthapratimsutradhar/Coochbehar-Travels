@@ -1,8 +1,5 @@
-import csv
-import io
 import uuid
 from datetime import date
-from decimal import Decimal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
@@ -29,7 +26,7 @@ router = APIRouter(
 
 @router.post(
     "/transactions",
-    response_model=SuccessResponse[FinancialTransactionResponse],
+    response_model=ActionResponse,
     status_code=status.HTTP_201_CREATED,
     responses={422: {"model": ErrorResponse}},
     summary="Create a transaction (income or expense)",
@@ -40,11 +37,8 @@ def create_transaction(
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
     service = FinancialTransactionService(db)
-    transaction = service.create_transaction(payload, current_user)
-    return SuccessResponse(
-        message="Financial transaction created successfully",
-        data=financial_transaction_response(transaction),
-    )
+    service.create_transaction(payload, current_user)
+    return ActionResponse(message="Financial transaction created successfully")
 
 
 @router.get(
@@ -142,7 +136,7 @@ def financial_statistics(
 
 @router.put(
     "/transactions/{transaction_id}",
-    response_model=SuccessResponse[FinancialTransactionResponse],
+    response_model=ActionResponse,
     responses={404: {"model": ErrorResponse}},
     summary="Update an existing financial transaction",
 )
@@ -153,11 +147,8 @@ def update_transaction(
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
     service = FinancialTransactionService(db)
-    transaction = service.update_transaction(transaction_id, payload, current_user)
-    return SuccessResponse(
-        message="Financial transaction updated successfully",
-        data=financial_transaction_response(transaction),
-    )
+    service.update_transaction(transaction_id, payload, current_user)
+    return ActionResponse(message="Financial transaction updated successfully")
 
 
 @router.delete(
