@@ -4,14 +4,13 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_actor, get_current_customer
+from app.api.deps import get_current_customer
 from app.core.enums import DocumentType
 from app.db.database import get_db
 from app.models.account import Account
 from app.schemas.document import (
 	CustomerDocumentListResponse,
 	CustomerDocumentUploadRequest,
-	DocumentDownloadResponse,
 )
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
@@ -61,21 +60,23 @@ def list_documents(
 
 @router.get(
 	"/{document_id}/download",
-	response_model=SuccessResponse[DocumentDownloadResponse],
 	responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
-	summary="Get a document download URL",
+	summary="Download a document",
 )
-def download_document(
+async def download_document(
 	document_id: uuid.UUID,
 	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
-) -> SuccessResponse[DocumentDownloadResponse]:
-	return SuccessResponse(
-		message="Document download URL generated successfully",
-		data=CustomerDocumentService(db).get_download(
-			document_id=document_id,
-			customer_id=current_customer.id,
-		),
+	) -> StreamingResponse:
+	document, content = await CustomerDocumentService(db).get_file(
+		document_id=document_id,
+		current_user=current_customer,
+		role="CUSTOMER",
+	)
+	return StreamingResponse(
+		content,
+		media_type=document.mime_type or "application/octet-stream",
+		headers={"Content-Disposition": f'attachment; filename="{document.file_name}"'},
 	)
 
 

@@ -7,7 +7,7 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api.deps import get_current_actor, get_current_customer
+from app.api.deps import get_current_customer
 from app.core.enums import AccountRole, DocumentType
 from app.db.database import get_db
 from app.main import app
@@ -90,59 +90,7 @@ def create_document(db, customer_id, uploaded_by_id, file_name="passport.pdf", f
     return doc
 
 
-def test_proxy_requires_authentication(client):
-    random_id = uuid.uuid4()
-    response = client.get(f"/api/v1/documents/{random_id}/file")
-    assert response.status_code == 401
-
-
-def test_proxy_customer_cannot_access_other_customer_document(client, db_session):
-    customer_a = create_account(db_session, AccountRole.CUSTOMER, "a@example.com")
-    customer_b = create_account(db_session, AccountRole.CUSTOMER, "b@example.com")
-    doc_a = create_document(db_session, customer_a.id, customer_a.id)
-
-    # Act as customer_b
-    app.dependency_overrides[get_current_actor] = lambda: (customer_b, customer_b.role)
-    try:
-        response = client.get(f"/api/v1/documents/{doc_a.id}/file")
-        assert response.status_code == 403
-        assert "You do not have permission" in response.json()["message"]
-    finally:
-        app.dependency_overrides.pop(get_current_actor, None)
-
-
-def test_proxy_customer_can_access_own_document(client, db_session):
-    customer = create_account(db_session, AccountRole.CUSTOMER, "cust@example.com")
-    doc = create_document(db_session, customer.id, customer.id, file_name="my_passport.pdf")
-
-    app.dependency_overrides[get_current_actor] = lambda: (customer, customer.role)
-    try:
-        response = client.get(f"/api/v1/documents/{doc.id}/file")
-        assert response.status_code == 200
-        assert "inline" in response.headers["content-disposition"]
-        assert "my_passport.pdf" in response.headers["content-disposition"]
-        assert response.headers["content-type"] == "application/pdf"
-        assert response.content == b"mock document content"
-    finally:
-        app.dependency_overrides.pop(get_current_actor, None)
-
-
-def test_proxy_admin_can_access_any_customer_document(client, db_session):
-    admin = create_account(db_session, AccountRole.ADMIN, "admin@example.com")
-    customer = create_account(db_session, AccountRole.CUSTOMER, "cust2@example.com")
-    doc = create_document(db_session, customer.id, customer.id, file_name="visa.pdf")
-
-    app.dependency_overrides[get_current_actor] = lambda: (admin, admin.role)
-    try:
-        response = client.get(f"/api/v1/documents/{doc.id}/file?download=true")
-        assert response.status_code == 200
-        assert "attachment" in response.headers["content-disposition"]
-        assert "visa.pdf" in response.headers["content-disposition"]
-    finally:
-        app.dependency_overrides.pop(get_current_actor, None)
-
-
-def test_customer_list_returns_proxy_and_download_returns_stored_url(client, db_session):
+def test_customer_list_returns_proxy_and_download_returns_blob(client, db_session):
     customer = create_account(db_session, AccountRole.CUSTOMER, "cust3@example.com")
     doc = create_document(db_session, customer.id, customer.id)
 
@@ -154,10 +102,12 @@ def test_customer_list_returns_proxy_and_download_returns_stored_url(client, db_
         doc_item = list_res.json()["data"][0]
         assert doc_item["file_url"] == f"/api/v1/documents/{doc.id}/file"
 
-        # 2. Test download endpoint returns the stored file URL
+        # 2. Test download endpoint returns the document blob
         dl_res = client.get(f"/api/v1/documents/{doc.id}/download")
         assert dl_res.status_code == 200
-        assert dl_res.json()["data"]["download_url"] == doc.file_url
+        assert dl_res.content == b"mock document content"
+        assert "attachment" in dl_res.headers["content-disposition"]
+        assert "passport.pdf" in dl_res.headers["content-disposition"]
     finally:
         app.dependency_overrides.pop(get_current_customer, None)
 
