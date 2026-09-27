@@ -142,7 +142,7 @@ def test_proxy_admin_can_access_any_customer_document(client, db_session):
         app.dependency_overrides.pop(get_current_actor, None)
 
 
-def test_customer_list_and_download_return_proxy_urls(client, db_session):
+def test_customer_list_returns_proxy_and_download_returns_stored_url(client, db_session):
     customer = create_account(db_session, AccountRole.CUSTOMER, "cust3@example.com")
     doc = create_document(db_session, customer.id, customer.id)
 
@@ -154,10 +154,10 @@ def test_customer_list_and_download_return_proxy_urls(client, db_session):
         doc_item = list_res.json()["data"][0]
         assert doc_item["file_url"] == f"/api/v1/documents/{doc.id}/file"
 
-        # 2. Test download endpoint returns proxy URL
+        # 2. Test download endpoint returns the stored file URL
         dl_res = client.get(f"/api/v1/documents/{doc.id}/download")
         assert dl_res.status_code == 200
-        assert dl_res.json()["data"]["download_url"] == f"/api/v1/documents/{doc.id}/file?download=true"
+        assert dl_res.json()["data"]["download_url"] == doc.file_url
     finally:
         app.dependency_overrides.pop(get_current_customer, None)
 

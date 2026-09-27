@@ -72,7 +72,7 @@ class CustomerDocumentService:
 		return DocumentDownloadResponse(
 			document_id=document.id,
 			file_name=document.file_name,
-			download_url=f"/api/v1/documents/{document.id}/file?download=true",
+			download_url=document.file_url,
 		)
 
 	async def get_file(
