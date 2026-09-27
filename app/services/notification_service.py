@@ -169,8 +169,13 @@ class NotificationService:
         if user_id and user_id not in recipients:
             recipients.append(user_id)
 
-        if not recipients:
-            raise ValueError("At least one notification recipient is required")
+        bind = None
+        try:
+            bind = self.db.get_bind()
+        except Exception:
+            pass
+        is_sqlite = bind is not None and bind.dialect.name == "sqlite"
+        recipient_ids_val = [str(r) for r in recipients] if is_sqlite else recipients
 
         item = Notification(
             notification_type=payload.notification_type,
@@ -180,7 +185,7 @@ class NotificationService:
             action_url=payload.action_url,
             data=payload.data,
             expires_at=payload.expires_at,
-            recipient_ids=recipients,
+            recipient_ids=recipient_ids_val,
         )
         self.db.add(item)
         self.db.flush()

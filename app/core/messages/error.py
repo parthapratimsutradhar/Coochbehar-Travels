@@ -47,6 +47,9 @@ class WishlistError(StrEnum):
 
 class ReferralError(StrEnum):
     INVALID_CODE = "Invalid referral code."
+    EXISTING_ACCOUNT = "Only new accounts can be referred."
+    SELF_REFERRAL = "You cannot refer yourself."
+    ALREADY_REFERRED = "Customer has already been referred."
 
 
 class AccessError(StrEnum):

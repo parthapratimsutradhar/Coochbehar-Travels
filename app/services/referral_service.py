@@ -5,12 +5,14 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.enums import PaymentMethod, ReferralStatus
+from app.core.enums import AccountRole, PaymentMethod, ReferralStatus
 from app.core.messages.error import ReferralError
 from app.models.account import Account
 from app.models.referral import Referral
 from app.models.referral_reward_history import ReferralRewardHistory
+from app.repository.customer_repo import CustomerRepository
 from app.repository.referral_repo import ReferralRepository
+from app.schemas.notification import NotificationCreate
 from app.schemas.referral import (
     ReferralHistoryItemResponse,
     ReferralCodeResponse,
@@ -21,6 +23,7 @@ from app.schemas.referral import (
     ReferralRewardConfigResponse,
     ReferredCustomerResponse,
 )
+from app.services.notification_service import NotificationService
 
 
 class ReferralService:
@@ -28,18 +31,120 @@ class ReferralService:
         self.db = db
         self.repo = ReferralRepository(db)
 
-    def validate_invite(self, referral_code: str) -> ReferralInviteResponse:
+    def validate_invite(
+        self,
+        referral_code: str,
+        identifier: str | None = None,
+    ) -> ReferralInviteResponse:
         normalized_code = referral_code.strip().upper()
         referrer_profile = self.repo.get_profile_by_code(normalized_code)
-        if referrer_profile is None or referrer_profile.account is None:
+        if (
+            referrer_profile is None
+            or referrer_profile.account is None
+            or not referrer_profile.account.is_active
+            or referrer_profile.account.role != AccountRole.CUSTOMER
+        ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=ReferralError.INVALID_CODE,
             )
+
+        if identifier:
+            customer_repo = CustomerRepository(self.db)
+            cleaned = identifier.strip()
+            if (
+                customer_repo.get_by_identifier(cleaned)
+                or customer_repo.has_active_account_with_identifier(cleaned)
+                or customer_repo.has_active_customer_with_identifier(cleaned)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ReferralError.EXISTING_ACCOUNT,
+                )
+            referrer = referrer_profile.account
+            if (
+                (referrer.email and referrer.email.strip().lower() == cleaned.lower())
+                or (referrer.mobile and referrer.mobile.strip() == cleaned)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ReferralError.SELF_REFERRAL,
+                )
+
         return ReferralInviteResponse(
             referral_code=referrer_profile.referral_code,
             referrer_name=referrer_profile.account.name,
         )
+
+    def create_referral(
+        self,
+        referrer: Account,
+        referred: Account,
+        notes: str = "Created from referral registration.",
+    ) -> Referral:
+        """Create and persist a referral relationship, using the latest reward configuration."""
+        if referrer.id == referred.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ReferralError.SELF_REFERRAL,
+            )
+
+        existing = (
+            self.db.query(Referral)
+            .filter(Referral.referred_customer_id == referred.id)
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ReferralError.EXISTING_ACCOUNT,
+            )
+
+        config = self.repo.get_latest_config()
+        default_reward = (
+            Decimal(str(config.default_reward_amount))
+            if config and config.default_reward_amount is not None
+            else Decimal("500.00")
+        )
+        booking_window_days = (
+            int(config.booking_window_days)
+            if config and config.booking_window_days is not None
+            else 30
+        )
+
+        referral = Referral(
+            referrer_customer_id=referrer.id,
+            referred_customer_id=referred.id,
+            status=ReferralStatus.REGISTERED,
+            default_reward_amount=default_reward,
+            booking_window_days=booking_window_days,
+            notes=notes,
+        )
+        self.db.add(referral)
+        self.db.commit()
+        self.db.refresh(referral)
+
+        try:
+            NotificationService(self.db).create(
+                NotificationCreate(
+                    notification_type="REFERRAL_CREATED",
+                    title="Thank you for your referral",
+                    message=(
+                        f"Thank you for referring {referred.name}. "
+                        "Your referral reward will be updated when applicable."
+                    ),
+                    data={
+                        "referred_customer_id": str(referred.id),
+                        "referred_customer_name": referred.name,
+                        "referral_id": str(referral.id),
+                    },
+                ),
+                customer_id=referrer.id,
+            )
+        except Exception:
+            pass
+
+        return referral
 
     def get_customer_referral_code(self, customer_id: uuid.UUID) -> ReferralCodeResponse:
         profile = self.repo.get_profile_by_account_id(customer_id)

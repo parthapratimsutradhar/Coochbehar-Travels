@@ -5,12 +5,14 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.enums import CustomerOtpPurpose, LeadSource, ReferralStatus
+from app.core.enums import AccountRole, CustomerOtpPurpose, LeadSource, ReferralStatus
+from app.core.messages.error import ReferralError
 from app.core.messages.validation import AuthError
 from app.models.account import Account
 from app.models.customer_profile import CustomerProfile
 from app.models.referral import Referral
 from app.models.referral_config import ReferralRewardConfig
+from app.services.referral_service import ReferralService
 from app.repository.auth_session_repo import AuthSessionRepository
 from app.repository.customer_repo import CustomerRepository
 from app.repository.otp_repo import OtpRepository
@@ -341,6 +343,7 @@ class AuthService:
         identifier: str,
         purpose: str = "LOGIN",
         visitor_id: uuid.UUID | None = None,
+        referral_code: str | None = None,
     ) -> tuple[str, str, str, int, str | None]:
         """Generate and dispatch OTP for Customer / Traveler login or registration."""
         if purpose not in {item.value for item in CustomerOtpPurpose}:
@@ -350,6 +353,27 @@ class AuthService:
             )
 
         cleaned, id_type = self.normalize_identifier(identifier)
+
+        if referral_code:
+            referrer = self._resolve_referrer(referral_code)
+            if (
+                (referrer.email and referrer.email.strip().lower() == cleaned.lower())
+                or (referrer.mobile and referrer.mobile.strip() == cleaned)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ReferralError.SELF_REFERRAL,
+                )
+            if (
+                self.customer_repo.has_active_customer_with_identifier(cleaned)
+                or self.customer_repo.has_active_account_with_identifier(cleaned)
+                or self.customer_repo.get_by_identifier(cleaned)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ReferralError.EXISTING_ACCOUNT,
+                )
+
         self._validate_customer_auth_identifier(cleaned, purpose)
 
         raw_otp = generate_otp(6)
@@ -422,8 +446,25 @@ class AuthService:
         self._validate_customer_auth_identifier(cleaned, purpose)
         customer = self.customer_repo.get_by_identifier(cleaned)
 
-        if not customer:
+        if customer:
+            if referral_code:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ReferralError.EXISTING_ACCOUNT,
+                )
+            if name and customer.name == "Valued Traveler":
+                customer.name = name.strip()
+                self.db.commit()
+        else:
             referrer = self._resolve_referrer(referral_code)
+            if referrer and (
+                (referrer.email and referrer.email.strip().lower() == cleaned.lower())
+                or (referrer.mobile and referrer.mobile.strip() == cleaned)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ReferralError.SELF_REFERRAL,
+                )
             customer_name = name.strip() if name else "Valued Traveler"
             if challenge.identifier_type == "EMAIL":
                 customer = self.customer_repo.create_customer(
@@ -441,9 +482,6 @@ class AuthService:
                 )
             if referrer:
                 self._create_referral(referrer, customer)
-        elif name and customer.name == "Valued Traveler":
-            customer.name = name.strip()
-            self.db.commit()
 
         target_visitor_id = visitor_id or challenge.visitor_id
         if target_visitor_id:
@@ -528,9 +566,20 @@ class AuthService:
         picture = google_data.get("picture")
 
         customer = self.customer_repo.get_by_email(email)
-        if not customer:
+        if customer:
+            if referral_code:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ReferralError.EXISTING_ACCOUNT,
+                )
+        else:
             self._validate_customer_auth_identifier(email, CustomerOtpPurpose.LOGIN.value)
             referrer = self._resolve_referrer(referral_code)
+            if referrer and (referrer.email and referrer.email.strip().lower() == email.strip().lower()):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ReferralError.SELF_REFERRAL,
+                )
             customer = self.customer_repo.create_customer(
                 name=name,
                 email=email,
@@ -583,50 +632,22 @@ class AuthService:
         referrer = (
             self.db.query(Account)
             .join(CustomerProfile, CustomerProfile.account_id == Account.id)
-            .filter(CustomerProfile.referral_code == normalized_code)
+            .filter(
+                CustomerProfile.referral_code == normalized_code,
+                Account.is_active.is_(True),
+                Account.role == AccountRole.CUSTOMER,
+            )
             .first()
         )
         if referrer is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid referral code.",
+                detail=ReferralError.INVALID_CODE,
             )
         return referrer
 
     def _create_referral(self, referrer: Account, referred: Account) -> None:
-        config = (
-            self.db.query(ReferralRewardConfig)
-            .filter_by(is_active=True)
-            .order_by(ReferralRewardConfig.created_at.desc())
-            .first()
-        )
-        default_reward = Decimal(str(config.default_reward_amount)) if config else Decimal("500.00")
-        referral = Referral(
-            referrer_customer_id=referrer.id,
-            referred_customer_id=referred.id,
-            status=ReferralStatus.REGISTERED,
-            default_reward_amount=default_reward,
-            booking_window_days=config.booking_window_days if config else 30,
-            notes="Created from referral registration.",
-        )
-        self.db.add(referral)
-        self.db.commit()
-        NotificationService(self.db).create(
-            NotificationCreate(
-                notification_type="REFERRAL_CREATED",
-                title="Thank you for your referral",
-                message=(
-                    f"Thank you for referring {referred.name}. "
-                    "Your referral reward will be updated when applicable."
-                ),
-                data={
-                    "referred_customer_id": str(referred.id),
-                    "referred_customer_name": referred.name,
-                    "referral_id": str(referral.id),
-                },
-            ),
-            customer_id=referrer.id,
-        )
+        ReferralService(self.db).create_referral(referrer, referred)
 
     # ── COMMON REFRESH & SESSION ROTATION ──────────────────────────────
     def refresh_session(

@@ -80,6 +80,17 @@ class CustomerOtpRequestSchema(SchemaBase):
         default=None,
         description="Optional visitor UUID to associate telemetry with this login",
     )
+    referral_code: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=30,
+        description="Optional referral code to validate during registration",
+    )
+
+    @field_validator("referral_code", mode="before")
+    @classmethod
+    def normalize_referral_code(cls, value):
+        return normalize_referral_code(value)
 
 
 class CustomerOtpVerifySchema(SchemaBase):

@@ -38,6 +38,7 @@ def request_customer_otp(
         identifier=payload.identifier,
         purpose=getattr(payload.purpose, "value", payload.purpose),
         visitor_id=payload.visitor_id,
+        referral_code=payload.referral_code,
     )
     return SuccessResponse(
         message=message,

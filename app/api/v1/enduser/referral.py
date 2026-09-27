@@ -23,17 +23,21 @@ router = APIRouter(
 @router.get(
 	"/invite/{referral_code}",
 	response_model=SuccessResponse[ReferralInviteResponse],
-	responses={404: {"model": ErrorResponse}},
+	responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
 	summary="Validate a referral invite link",
 	description="Resolve a referral link before the friend starts OTP or Google signup.",
 )
 def validate_referral_invite(
 	referral_code: str,
+	identifier: str | None = Query(
+		None,
+		description="Optional phone number or email to check referral eligibility (only new accounts can be referred)",
+	),
 	db: Session = Depends(get_db),
 ) -> SuccessResponse[ReferralInviteResponse]:
 	return SuccessResponse(
 		message=ReferralSuccess.INVITE_VALID,
-		data=ReferralService(db).validate_invite(referral_code),
+		data=ReferralService(db).validate_invite(referral_code, identifier=identifier),
 	)
 
 
