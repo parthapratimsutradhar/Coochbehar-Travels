@@ -10,7 +10,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.enums import (
     FinancialTransactionCategory,
@@ -86,8 +86,6 @@ class FinancialTransactionService:
         if value is None:
             return FinancialTransactionStatus.COMPLETED
         normalized = value.strip().upper()
-        if normalized == "POSTED":
-            return FinancialTransactionStatus.COMPLETED
         try:
             return FinancialTransactionStatus(normalized)
         except ValueError as exc:
@@ -169,8 +167,12 @@ class FinancialTransactionService:
         search: str | None = None,
         page: int = 1,
         page_size: int = 20,
+        exclude_vendor_transactions: bool = False,
     ) -> dict[str, Any]:
-        query = self.db.query(FinancialTransaction)
+        query = self.db.query(FinancialTransaction).options(
+            joinedload(FinancialTransaction.booking),
+            joinedload(FinancialTransaction.created_by_account),
+        )
         if transaction_type:
             normalized_type = transaction_type.strip().upper()
             if normalized_type in {"INCOME", "EXPENSE"}:
@@ -189,6 +191,14 @@ class FinancialTransactionService:
             query = query.filter(FinancialTransaction.booking_id == booking_id)
         if customer_id:
             query = query.filter(FinancialTransaction.customer_id == customer_id)
+        if exclude_vendor_transactions:
+            query = query.filter(
+                FinancialTransaction.vendor_id.is_(None),
+                or_(
+                    FinancialTransaction.category.is_(None),
+                    FinancialTransaction.category != FinancialTransactionCategory.VENDOR_PAYMENT,
+                ),
+            )
         if vendor_id:
             query = query.filter(FinancialTransaction.vendor_id == vendor_id)
         if start_date:

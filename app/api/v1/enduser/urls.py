@@ -12,7 +12,7 @@ from app.api.v1.enduser.review import router as review_router
 from app.api.v1.enduser.tour_packages import router as tour_packages_router
 from app.api.v1.enduser.visitors import router as visitors_router
 from app.api.v1.enduser.wishlist import router as wishlist_router
-from app.api.v1.enduser.wallet import router as wallet_router
+from app.api.v1.enduser.transactions import router as transactions_router
 
 router = APIRouter()
 
@@ -28,4 +28,4 @@ router.include_router(review_router)
 router.include_router(referral_router)
 router.include_router(visitors_router)
 router.include_router(wishlist_router)
-router.include_router(wallet_router)
+router.include_router(transactions_router)

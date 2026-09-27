@@ -21,6 +21,7 @@ from app.models.booking import Booking
 from app.models.financial_account import FinancialAccount
 from app.models.financial_transaction import FinancialTransaction
 from app.models.financial_transaction_entry import FinancialTransactionEntry
+from app.schemas.wallet import WalletBalanceResponse
 from app.services.financial_service import FinancialService
 
 
@@ -57,16 +58,25 @@ class WalletService:
             FinancialTransaction.id == FinancialTransactionEntry.transaction_id,
         ).filter(
             FinancialTransactionEntry.account_id == wallet.id,
-            FinancialTransaction.status == FinancialTransactionStatus.POSTED,
+            FinancialTransaction.status == FinancialTransactionStatus.COMPLETED,
         ).scalar() or Decimal("0")
         debits = self.db.query(func.coalesce(func.sum(FinancialTransactionEntry.debit), 0)).join(
             FinancialTransaction,
             FinancialTransaction.id == FinancialTransactionEntry.transaction_id,
         ).filter(
             FinancialTransactionEntry.account_id == wallet.id,
-            FinancialTransaction.status == FinancialTransactionStatus.POSTED,
+            FinancialTransaction.status == FinancialTransactionStatus.COMPLETED,
         ).scalar() or Decimal("0")
         return Decimal(credits) - Decimal(debits)
+
+    def get_wallet_balance(self, customer_id: uuid.UUID) -> WalletBalanceResponse:
+        wallet = self.get_wallet_account(customer_id)
+        return WalletBalanceResponse(
+            account_id=wallet.id,
+            customer_id=customer_id,
+            balance=self.balance(wallet),
+            currency=wallet.currency,
+        )
 
     def history(self, customer_id: uuid.UUID, limit: int = 100) -> list[FinancialTransaction]:
         wallet = self.get_wallet_account(customer_id)

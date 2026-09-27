@@ -165,6 +165,9 @@ class FinancialTransaction(BaseEntity):
         back_populates="financial_transactions",
     )
 
+    booking = relationship("Booking", foreign_keys=[booking_id])
+    created_by_account = relationship("Account", foreign_keys=[created_by_account_id])
+
     entries: Mapped[list["FinancialTransactionEntry"]] = relationship(
         "FinancialTransactionEntry",
         back_populates="transaction",

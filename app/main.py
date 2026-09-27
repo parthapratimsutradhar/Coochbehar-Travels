@@ -117,7 +117,7 @@ def _enduser_openapi() -> dict:
             "/api/v1/documents",
             "/api/v1/referral",
             "/api/v1/quotations",
-            "/api/v1/wallet",
+            "/api/v1/transactions",
             "/api/v1/sessions",
             "/api/v1/notifications",
             "/api/v1/enums",

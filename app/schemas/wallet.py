@@ -60,3 +60,10 @@ class WalletResponse(SchemaBase):
     balance: Decimal
     currency: str
     transactions: list[WalletTransactionResponse] = Field(default_factory=list)
+
+
+class WalletBalanceResponse(SchemaBase):
+    account_id: UUID
+    customer_id: UUID
+    balance: Decimal
+    currency: str

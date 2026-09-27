@@ -207,6 +207,19 @@ Once the server is running, access the interactive Scalar API documentation at:
 
 * 🌈 **Scalar Documentation**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) (or [http://127.0.0.1:8000/scalar](http://127.0.0.1:8000/scalar))
 
+### Customer Transactions API
+
+Customer transaction endpoints are grouped under `/api/v1/transactions`. Both require a customer Bearer token; the customer is taken from the authenticated token, so these endpoints do not accept a customer ID.
+
+| Method | Path | Purpose |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/transactions/balance` | Get the authenticated customer's wallet balance and currency. |
+| `GET` | `/api/v1/transactions` | List the authenticated customer's financial transactions, newest first. |
+
+The balance is computed from completed ledger entries as total wallet credits minus total wallet debits. Pending, failed, cancelled, and reversed transactions do not contribute to the balance.
+
+The transaction list supports `page` (default `1`, minimum `1`) and `page_size` (default `20`, range `1` to `100`). It returns the financial transaction fields, including amount, type, category, status, payment method, reference, related booking ID, and transaction date, in the standard paginated response envelope.
+
 ### Enquiry API
 
 End-user enquiry routes are grouped under `/api/v1/enquiries`:

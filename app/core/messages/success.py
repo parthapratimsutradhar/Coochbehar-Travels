@@ -45,6 +45,11 @@ class WishlistSuccess(StrEnum):
     DELETED = "Tour removed from wishlist successfully."
 
 
+class WalletSuccess(StrEnum):
+    BALANCE_RETRIEVED = "Wallet balance fetched successfully."
+    TRANSACTIONS_RETRIEVED = "Customer transactions fetched successfully."
+
+
 class EnquirySuccess(StrEnum):
     RETRIEVED = "Enquiries fetched successfully."
     LEAD_RETRIEVED = "Enquiry lead retrieved successfully."

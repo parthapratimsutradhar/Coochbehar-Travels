@@ -73,10 +73,20 @@ class FinancialReportDownloadRequest(SchemaBase):
     end_date: date | None = Field(default=None, description="Inclusive end date for the report range.")
 
 
+class FinancialTransactionAccountSummaryResponse(SchemaBase):
+    account_id: UUID
+    name: str
+    email: str | None = None
+    mobile: str | None = None
+    profile_picture: str | None = None
+
+
 class FinancialTransactionResponse(FinancialTransactionBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    booking_code: str | None = None
+    created_by: FinancialTransactionAccountSummaryResponse | None = None
     created_by_account_id: UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -113,6 +123,18 @@ def financial_transaction_response(transaction) -> FinancialTransactionResponse:
             "booking_id": transaction.booking_id,
             "customer_id": transaction.customer_id,
             "reference": transaction.reference,
+            "booking_code": transaction.booking.booking_code if transaction.booking else None,
+            "created_by": (
+                {
+                    "account_id": transaction.created_by_account.id,
+                    "name": transaction.created_by_account.name,
+                    "email": transaction.created_by_account.email,
+                    "mobile": transaction.created_by_account.mobile,
+                    "profile_picture": transaction.created_by_account.profile_pic,
+                }
+                if transaction.created_by_account
+                else None
+            ),
             "created_by_account_id": transaction.created_by_account_id,
             "created_at": transaction.created_at,
             "updated_at": transaction.updated_at,
