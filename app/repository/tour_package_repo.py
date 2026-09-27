@@ -6,7 +6,7 @@ methods and handles any business-logic transformations.
 
 import math
 
-from sqlalchemy import func, or_, case
+from sqlalchemy import and_, func, or_, case
 from sqlalchemy.orm import Session, joinedload, contains_eager
 
 from app.models.destination import Destination
@@ -121,6 +121,12 @@ class TourPackageRepository:
                 TourVariant.package_id,
                 TourVariant.duration_days,
                 TourVariant.duration_nights,
+                func.row_number()
+                .over(
+                    partition_by=TourVariant.package_id,
+                    order_by=(TourVariant.created_at.asc(), TourVariant.id.asc()),
+                )
+                .label("row_num"),
             )
             .filter(
                 TourVariant.is_default == True,  # noqa: E712
@@ -144,7 +150,10 @@ class TourPackageRepository:
             )
             .outerjoin(
                 default_variant,
-                TourPackage.id == default_variant.c.package_id,
+                and_(
+                    TourPackage.id == default_variant.c.package_id,
+                    default_variant.c.row_num == 1,
+                ),
             )
             .outerjoin(TourPackage.destination)
         )

@@ -864,6 +864,55 @@ def test_admin_can_create_update_and_delete_tour_package_variant_and_detail(clie
     assert update_variant_response.status_code == 200
     assert update_variant_response.json()["message"] == "Tour variant updated successfully"
 
+    create_second_variant_response = client.post(
+        "/api/v1/admin/tour-variants",
+        json={
+            "tour_id": package_id,
+            "slug": "admin-created-secondary",
+            "name": "Admin Created Secondary Variant",
+            "valid_from": "2026-10-01",
+            "valid_to": "2026-10-08",
+            "duration_days": 6,
+            "duration_nights": 5,
+            "list_price": 5500,
+            "selling_price": 5500,
+            "is_default": True,
+        },
+        headers=auth_header,
+    )
+    assert create_second_variant_response.status_code == 201
+    second_variant_id = (
+        db_session.query(TourVariant)
+        .filter_by(slug="admin-created-secondary")
+        .one()
+        .id
+    )
+    db_session.expire_all()
+    assert (
+        db_session.query(TourVariant)
+        .filter_by(slug="admin-created-variant")
+        .one()
+        .is_default
+        is False
+    )
+    assert db_session.get(TourVariant, second_variant_id).is_default is True
+
+    promote_first_variant_response = client.patch(
+        f"/api/v1/admin/tour-variants/{variant_id}",
+        json={"is_default": True},
+        headers=auth_header,
+    )
+    assert promote_first_variant_response.status_code == 200
+    db_session.expire_all()
+    assert (
+        db_session.query(TourVariant)
+        .filter_by(slug="admin-created-variant")
+        .one()
+        .is_default
+        is True
+    )
+    assert db_session.get(TourVariant, second_variant_id).is_default is False
+
     detail_id = client.get(
         f"/api/v1/admin/tour-packages/{package_id}/variants/{variant_id}",
         headers=auth_header,

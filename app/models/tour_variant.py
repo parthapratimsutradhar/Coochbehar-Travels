@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import ActiveEntity
 from decimal import Decimal
@@ -8,6 +8,15 @@ from datetime import date
 
 class TourVariant(ActiveEntity):
     __tablename__ = "tour_variants"
+    __table_args__ = (
+        Index(
+            "uq_tour_variants_single_default_per_package",
+            "package_id",
+            unique=True,
+            postgresql_where=text("is_default = true"),
+            sqlite_where=text("is_default = 1"),
+        ),
+    )
 
     package_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey(

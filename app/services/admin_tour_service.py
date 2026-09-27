@@ -138,6 +138,23 @@ class AdminTourService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour variant not found.")
         return variant
 
+    def _clear_default_variant(
+        self,
+        package_id: uuid.UUID,
+        keep_variant_id: uuid.UUID | None = None,
+    ) -> None:
+        self.db.query(TourPackage.id).filter(
+            TourPackage.id == package_id
+        ).with_for_update().one()
+
+        query = self.db.query(TourVariant).filter(
+            TourVariant.package_id == package_id,
+            TourVariant.is_default.is_(True),
+        )
+        if keep_variant_id is not None:
+            query = query.filter(TourVariant.id != keep_variant_id)
+        query.update({TourVariant.is_default: False}, synchronize_session=False)
+
     def create_variant(self, payload: dict[str, Any]) -> TourVariant:
         package = self.db.get(TourPackage, payload["tour_id"])
         if package is None:
@@ -145,6 +162,9 @@ class AdminTourService:
 
         if self.repo.get_variant_by_slug(payload["slug"]):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A tour variant with this slug already exists.")
+
+        if payload.get("is_default", False):
+            self._clear_default_variant(package.id)
 
         list_price = Decimal(str(payload.get("list_price", payload.get("selling_price", 0))))
         selling_price = Decimal(str(payload.get("selling_price", list_price)))
@@ -171,6 +191,9 @@ class AdminTourService:
     def update_variant(self, variant_id: uuid.UUID, payload: dict[str, Any]) -> TourVariant:
         variant = self.get_variant(variant_id)
         update_data = payload.copy()
+
+        if update_data.get("is_default") is True:
+            self._clear_default_variant(variant.package_id, keep_variant_id=variant.id)
 
         if "list_price" in update_data:
             update_data["list_price"] = Decimal(str(update_data["list_price"]))

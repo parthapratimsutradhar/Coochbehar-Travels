@@ -166,6 +166,27 @@ def test_tour_package_endpoints_return_default_variant_data():
     create_package_and_variants()
 
     session = TestingSessionLocal()
+    second_default_variant = (
+        session.query(TourVariant)
+        .filter_by(slug="honeymoon-summer")
+        .one()
+    )
+    second_default_variant.is_default = True
+    session.commit()
+
+    duplicate_default_response = client.get(
+        "/api/v1/tour-packages",
+        params={"destination": "Himachal", "type": "DOMESTIC"},
+    )
+    duplicate_default_body = duplicate_default_response.json()
+    listed_ids = [item["id"] for item in duplicate_default_body["data"]]
+    assert duplicate_default_response.status_code == 200
+    assert len(listed_ids) == len(set(listed_ids)) == 1
+    assert duplicate_default_body["pagination"]["total_items"] == 1
+
+    second_default_variant.is_default = False
+    session.commit()
+
     selector_destination = Destination(
         name="Selector Destination",
         slug="selector-destination",
