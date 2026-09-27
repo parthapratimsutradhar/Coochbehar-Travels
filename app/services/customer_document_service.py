@@ -38,7 +38,7 @@ class CustomerDocumentService:
 			file_name=document.file_name,
 			mime_type=document.mime_type,
 			file_size=document.file_size,
-			file_url=f"/api/v1/documents/{document.id}/file",
+			file_url=document.file_url,
 			customer_name=document.customer.name if document.customer else None,
 			customer_profile_pic=document.customer.profile_pic if document.customer else None,
 			uploader_name=uploader.name if uploader else None,

@@ -90,17 +90,17 @@ def create_document(db, customer_id, uploaded_by_id, file_name="passport.pdf", f
     return doc
 
 
-def test_customer_list_returns_proxy_and_download_returns_blob(client, db_session):
+def test_customer_list_returns_full_url_and_download_returns_blob(client, db_session):
     customer = create_account(db_session, AccountRole.CUSTOMER, "cust3@example.com")
     doc = create_document(db_session, customer.id, customer.id)
 
     app.dependency_overrides[get_current_customer] = lambda: customer
     try:
-        # 1. Test listing returns proxy URL
+        # 1. Test listing returns the complete stored file URL
         list_res = client.get("/api/v1/documents")
         assert list_res.status_code == 200
         doc_item = list_res.json()["data"][0]
-        assert doc_item["file_url"] == f"/api/v1/documents/{doc.id}/file"
+        assert doc_item["file_url"] == doc.file_url
 
         # 2. Test download endpoint returns the document blob
         dl_res = client.get(f"/api/v1/documents/{doc.id}/download")
