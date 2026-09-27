@@ -4,7 +4,6 @@ import uuid
 from collections import defaultdict
 from typing import Any
 
-import socketio
 from sqlalchemy import select
 
 from app.db.database import SessionLocal
@@ -12,11 +11,12 @@ from app.models.account import Account
 from app.models.lead import Lead
 from app.models.lead_activity import LeadActivity
 from app.models.visitor import Visitor
+from app.realtime.constants import ANALYTICS_REALTIME_ROOM, ADMIN_REALTIME_ROOM, VISITOR_REALTIME_ROOM_PREFIX
+from app.realtime.presence import ACTIVE_VISITORS, VISITOR_SOCKET_INDEX, VISITOR_SOCKETS, upsert_active_visitor
+from app.realtime.socket_manager import sio
 from app.utils.security import decode_access_token
 
 logger = logging.getLogger(__name__)
-
-sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 
 _connections: dict[str, set[str]] = defaultdict(set)
 _sessions: dict[str, tuple[str, uuid.UUID]] = {}
@@ -595,7 +595,41 @@ async def connect(sid: str, environ: dict, auth: dict | None = None) -> bool:
     actor_type = payload.get("role", "").upper() if payload else ""
     subject = payload.get("sub") if payload else None
     if actor_type not in {"CUSTOMER", "ADMIN", "STAFF"} or not subject:
-        return False
+        visitor_id = (auth or {}).get("visitor_id") or (auth or {}).get("visitorId") or str(uuid.uuid4())
+        session_id = (auth or {}).get("session_id") or (auth or {}).get("sessionId")
+        customer_id = (auth or {}).get("customer_id") or (auth or {}).get("customerId")
+        visitor_key = str(visitor_id)
+        record = upsert_active_visitor(
+            visitor_id=visitor_key,
+            session_id=str(session_id) if session_id else None,
+            customer_id=str(customer_id) if customer_id else None,
+            is_anonymous=customer_id is None,
+            activity="connected",
+            current_url=(auth or {}).get("current_url"),
+            source=(auth or {}).get("source"),
+            device=(auth or {}).get("device"),
+            browser=(auth or {}).get("browser"),
+            os=(auth or {}).get("os"),
+            ip_address=(auth or {}).get("ip_address"),
+            country=(auth or {}).get("country"),
+            city=(auth or {}).get("city"),
+            referrer=(auth or {}).get("referrer"),
+        )
+        VISITOR_SOCKETS[visitor_key].add(sid)
+        VISITOR_SOCKET_INDEX[sid] = visitor_key
+        await sio.save_session(sid, {"visitor_id": visitor_key, "session_id": record.get("session_id")})
+        await sio.enter_room(sid, f"{VISITOR_REALTIME_ROOM_PREFIX}{visitor_key}")
+        payload = {
+            "visitor_id": visitor_key,
+            "session_id": record.get("session_id"),
+            "customer_id": record.get("customer_id"),
+            "is_anonymous": record.get("is_anonymous", True),
+            "page": record.get("page"),
+            "connected_at": record.get("connected_at"),
+        }
+        await sio.emit("visitor_connected", payload, room=ADMIN_REALTIME_ROOM)
+        await sio.emit("visitor_connected", payload, room=ANALYTICS_REALTIME_ROOM)
+        return True
     try:
         actor_id = uuid.UUID(subject)
     except ValueError:
@@ -626,19 +660,37 @@ async def connect(sid: str, environ: dict, auth: dict | None = None) -> bool:
 @sio.event
 async def disconnect(sid: str) -> None:
     session = _sessions.pop(sid, None)
-    if not session:
+    if session:
+        key, actor_id = session
+        sockets = _connections[key]
+        sockets.discard(sid)
+        if not sockets:
+            _connections.pop(key, None)
+            actor_type = key.split(":", 1)[0]
+            await sio.emit(
+                "presence.updated",
+                {"actor_type": actor_type, "actor_id": str(actor_id), "online": False},
+                room=ADMIN_REALTIME_ROOM,
+            )
         return
-    key, actor_id = session
-    sockets = _connections[key]
+
+    visitor_id = VISITOR_SOCKET_INDEX.pop(sid, None)
+    if not visitor_id:
+        return
+    sockets = VISITOR_SOCKETS.get(visitor_id, set())
     sockets.discard(sid)
-    if not sockets:
-        _connections.pop(key, None)
-        actor_type = key.split(":", 1)[0]
-        await sio.emit(
-            "presence.updated",
-            {"actor_type": actor_type, "actor_id": str(actor_id), "online": False},
-            room="ADMIN",
-        )
+    if sockets:
+        return
+    VISITOR_SOCKETS.pop(visitor_id, None)
+    record = ACTIVE_VISITORS.pop(visitor_id, None)
+    if record:
+        payload = {
+            "visitor_id": visitor_id,
+            "session_id": record.get("session_id"),
+            "last_activity": record.get("last_activity"),
+        }
+        await sio.emit("visitor_disconnected", payload, room=ADMIN_REALTIME_ROOM)
+        await sio.emit("visitor_disconnected", payload, room=ANALYTICS_REALTIME_ROOM)
 
 
 @sio.event
@@ -815,4 +867,3 @@ async def publish_notification(item, db: Any | None = None) -> None:
     finally:
         if close_session and session is not None:
             session.close()
-
