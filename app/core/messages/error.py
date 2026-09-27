@@ -40,6 +40,11 @@ class ReviewError(StrEnum):
     CUSTOMER_NOT_FOUND = "Customer not found."
 
 
+class WishlistError(StrEnum):
+    ALREADY_EXISTS = "Tour is already in your wishlist."
+    NOT_FOUND = "Tour is not in your wishlist."
+
+
 class AccessError(StrEnum):
     ADMIN_STAFF_REQUIRED = "Admin/Staff access required."
     ADMIN_REQUIRED = "Administrator access required."

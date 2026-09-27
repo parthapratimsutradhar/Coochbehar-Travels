@@ -39,6 +39,12 @@ class ReviewSuccess(StrEnum):
     DELETED = "Review deleted successfully."
 
 
+class WishlistSuccess(StrEnum):
+    RETRIEVED = "Wishlist fetched successfully."
+    CREATED = "Tour added to wishlist successfully."
+    DELETED = "Tour removed from wishlist successfully."
+
+
 class EnquirySuccess(StrEnum):
     RETRIEVED = "Enquiries fetched successfully."
     LEAD_RETRIEVED = "Enquiry lead retrieved successfully."

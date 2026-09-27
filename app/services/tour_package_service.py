@@ -142,6 +142,28 @@ class TourPackageService:
             ),
         )
 
+    def build_wishlist_package_item(self, package: TourPackage) -> TourPackageListItem:
+        default_variant = self._get_default_variant(package)
+        return TourPackageListItem(
+            id=package.id,
+            tour_code=package.tour_code,
+            slug=package.slug,
+            title=package.title,
+            destination_id=package.destination_id,
+            destination_name=package.destination.name if package.destination else None,
+            type=package.type,
+            description=package.description,
+            season_name=default_variant.season_name if default_variant else None,
+            badge=default_variant.badge if default_variant else None,
+            banner=(
+                self._extract_banner_media(default_variant.details)
+                if default_variant and default_variant.details
+                else None
+            ),
+            is_featured=package.is_featured,
+            is_wishlist=True,
+        )
+
     def get_tour_detail(self, package_slug: str, variant_slug: str) -> TourDetailPayload:
         """Return the content details and departures for an active tour variant."""
         variant = self.repo.get_variant_detail_by_slug(package_slug, variant_slug)
