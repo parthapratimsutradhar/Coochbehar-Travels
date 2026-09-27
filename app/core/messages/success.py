@@ -50,6 +50,12 @@ class WalletSuccess(StrEnum):
     TRANSACTIONS_RETRIEVED = "Customer transactions fetched successfully."
 
 
+class ReferralSuccess(StrEnum):
+    INVITE_VALID = "Referral invite is valid"
+    CODE_RETRIEVED = "Referral code fetched successfully"
+    HISTORY_RETRIEVED = "Items fetched successfully"
+
+
 class EnquirySuccess(StrEnum):
     RETRIEVED = "Enquiries fetched successfully."
     LEAD_RETRIEVED = "Enquiry lead retrieved successfully."

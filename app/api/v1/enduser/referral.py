@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_customer
+from app.core.messages.success import ReferralSuccess
 from app.db.database import get_db
 from app.models.account import Account
-from app.models.customer_profile import CustomerProfile
-from app.models.referral import Referral
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.referral import (
 	ReferralCodeResponse,
@@ -13,6 +12,7 @@ from app.schemas.referral import (
 	ReferralInviteResponse,
 )
 from app.schemas.response import ErrorResponse, SuccessResponse
+from app.services.referral_service import ReferralService
 
 router = APIRouter(
 	prefix="/referrals",
@@ -31,24 +31,9 @@ def validate_referral_invite(
 	referral_code: str,
 	db: Session = Depends(get_db),
 ) -> SuccessResponse[ReferralInviteResponse]:
-	normalized_code = referral_code.strip().upper()
-	referrer_profile = (
-		db.query(CustomerProfile)
-		.options(joinedload(CustomerProfile.account))
-		.filter(CustomerProfile.referral_code == normalized_code)
-		.first()
-	)
-	if referrer_profile is None or referrer_profile.account is None:
-		raise HTTPException(
-			status_code=status.HTTP_404_NOT_FOUND,
-			detail="Invalid referral code.",
-		)
 	return SuccessResponse(
-		message="Referral invite is valid",
-		data=ReferralInviteResponse(
-			referral_code=referrer_profile.referral_code,
-			referrer_name=referrer_profile.account.name,
-		),
+		message=ReferralSuccess.INVITE_VALID,
+		data=ReferralService(db).validate_invite(referral_code),
 	)
 
 
@@ -60,17 +45,11 @@ def validate_referral_invite(
 )
 def get_referral_code(
 	current_customer: Account = Depends(get_current_customer),
+    db: Session = Depends(get_db),
 ) -> SuccessResponse[ReferralCodeResponse]:
-	referral_code = (
-		current_customer.customer_profile.referral_code
-		if current_customer.customer_profile is not None
-		else ""
-	)
 	return SuccessResponse(
-		message="Referral code fetched successfully",
-		data=ReferralCodeResponse(
-			referral_code=referral_code,
-		),
+		message=ReferralSuccess.CODE_RETRIEVED,
+		data=ReferralService(db).get_customer_referral_code(current_customer.id),
 	)
 
 
@@ -86,37 +65,15 @@ def list_referral_history(
 	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> PaginatedResponse[ReferralHistoryItemResponse]:
-	query = (
-		db.query(Referral)
-		.options(
-			joinedload(Referral.referred_customer),
-			joinedload(Referral.referrer).joinedload(Account.customer_profile),
-		)
-		.filter(Referral.referrer_customer_id == current_customer.id)
-		.order_by(Referral.created_at.desc())
+	items, total_items = ReferralService(db).list_customer_history(
+		current_customer.id,
+		page,
+		page_size,
 	)
-	total_items = query.count()
-	referrals = query.offset((page - 1) * page_size).limit(page_size).all()
 	total_pages = (total_items + page_size - 1) // page_size if total_items else 0
 	return PaginatedResponse(
-		message="Referral history fetched successfully",
-		data=[
-			ReferralHistoryItemResponse(
-				id=item.id,
-				referral_code=(
-					item.referrer.customer_profile.referral_code
-					if item.referrer and item.referrer.customer_profile is not None
-					else ""
-				),
-				status=item.status,
-				reward_amount=item.reward_amount,
-				reward_issued_at=item.reward_issued_at,
-				converted_at=item.converted_at,
-				created_at=item.created_at,
-				referred_customer=item.referred_customer,
-			)
-			for item in referrals
-		],
+		message=ReferralSuccess.HISTORY_RETRIEVED,
+		data=items,
 		pagination=PaginationMeta(
 			current_page=page,
 			page_size=page_size,

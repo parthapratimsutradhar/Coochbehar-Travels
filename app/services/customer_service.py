@@ -273,25 +273,21 @@ class CustomerService:
         elif tab == "referral":
             stmt = (
                 select(Referral)
-                .options(joinedload(Referral.referred_customer))
+                .options(
+                    joinedload(Referral.referrer).joinedload(Account.customer_profile),
+                    joinedload(Referral.referred_customer).joinedload(Account.bookings),
+                    joinedload(Referral.reward_history),
+                )
                 .where(Referral.referrer_customer_id == customer_id)
             )
             total_items = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
             records = self.db.execute(
                 stmt.order_by(Referral.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
             ).scalars().all()
-            ref_code = customer.customer_profile.referral_code if customer.customer_profile else ""
+            from app.services.referral_service import ReferralService
+
             items = [
-                ReferralHistoryItemResponse(
-                    id=item.id,
-                    referral_code=ref_code,
-                    status=item.status,
-                    reward_amount=item.reward_amount,
-                    reward_issued_at=item.reward_issued_at,
-                    converted_at=item.converted_at,
-                    created_at=item.created_at,
-                    referred_customer=item.referred_customer,
-                ).model_dump(mode="json")
+                ReferralService.build_customer_history_item(item).model_dump(mode="json")
                 for item in records
             ]
         elif tab == "invoice":

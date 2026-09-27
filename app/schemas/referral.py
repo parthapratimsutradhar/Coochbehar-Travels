@@ -6,6 +6,7 @@ from pydantic import ConfigDict
 from app.schemas.base import SchemaBase
 
 from app.core.enums import ReferralStatus
+from app.core.enums import PaymentMethod
 
 
 class ReferralCodeResponse(SchemaBase):
@@ -25,16 +26,19 @@ class ReferredCustomerResponse(SchemaBase):
     name: str
     email: str | None = None
     mobile: str | None = None
+    booking_id: uuid.UUID | None = None
+    booking_code: str | None = None
+    booking_date: datetime | None = None
 
 
 class ReferralHistoryItemResponse(SchemaBase):
-    model_config = ConfigDict(from_attributes=True)
-
     id: uuid.UUID
     referral_code: str
     status: ReferralStatus
     reward_amount: Decimal | None = None
-    reward_issued_at: datetime | None = None
+    transaction_date: datetime | None = None
+    currency: str = "INR"
+    payment_method: PaymentMethod = PaymentMethod.WALLET
     converted_at: datetime | None = None
     created_at: datetime
     referred_customer: ReferredCustomerResponse

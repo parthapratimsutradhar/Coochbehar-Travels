@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.enums import ReferralStatus
 from app.models.account import Account
+from app.models.customer_profile import CustomerProfile
 from app.models.referral import Referral
 from app.models.referral_config import ReferralRewardConfig
 from app.models.referral_reward_history import ReferralRewardHistory
@@ -15,6 +16,19 @@ from app.models.referral_reward_history import ReferralRewardHistory
 class ReferralRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def get_profile_by_code(self, referral_code: str) -> CustomerProfile | None:
+        return (
+            self.db.query(CustomerProfile)
+            .options(joinedload(CustomerProfile.account))
+            .filter(CustomerProfile.referral_code == referral_code)
+            .first()
+        )
+
+    def get_profile_by_account_id(self, account_id: uuid.UUID) -> CustomerProfile | None:
+        return self.db.query(CustomerProfile).filter(
+            CustomerProfile.account_id == account_id,
+        ).one_or_none()
 
     def get_referral(self, referral_id: uuid.UUID) -> Referral | None:
         return (
@@ -51,6 +65,26 @@ class ReferralRepository:
             term = f"%{search.strip()}%"
             query = query.filter(or_(Referral.notes.ilike(term)))
 
+        total_items = query.count()
+        referrals = query.offset((page - 1) * page_size).limit(page_size).all()
+        return referrals, total_items
+
+    def list_customer_history(
+        self,
+        referrer_customer_id: uuid.UUID,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[Referral], int]:
+        query = (
+            self.db.query(Referral)
+            .options(
+                joinedload(Referral.referrer).joinedload(Account.customer_profile),
+                joinedload(Referral.referred_customer).joinedload(Account.bookings),
+                joinedload(Referral.reward_history),
+            )
+            .filter(Referral.referrer_customer_id == referrer_customer_id)
+            .order_by(Referral.created_at.desc())
+        )
         total_items = query.count()
         referrals = query.offset((page - 1) * page_size).limit(page_size).all()
         return referrals, total_items

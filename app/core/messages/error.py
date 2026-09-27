@@ -45,6 +45,10 @@ class WishlistError(StrEnum):
     NOT_FOUND = "Tour is not in your wishlist."
 
 
+class ReferralError(StrEnum):
+    INVALID_CODE = "Invalid referral code."
+
+
 class AccessError(StrEnum):
     ADMIN_STAFF_REQUIRED = "Admin/Staff access required."
     ADMIN_REQUIRED = "Administrator access required."

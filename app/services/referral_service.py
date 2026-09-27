@@ -5,16 +5,21 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.enums import ReferralStatus
+from app.core.enums import PaymentMethod, ReferralStatus
+from app.core.messages.error import ReferralError
 from app.models.account import Account
 from app.models.referral import Referral
 from app.models.referral_reward_history import ReferralRewardHistory
 from app.repository.referral_repo import ReferralRepository
 from app.schemas.referral import (
+    ReferralHistoryItemResponse,
+    ReferralCodeResponse,
+    ReferralInviteResponse,
     ReferralListItemResponse,
     ReferralManualUpdateRequest,
     ReferralRewardConfigRequest,
     ReferralRewardConfigResponse,
+    ReferredCustomerResponse,
 )
 
 
@@ -23,9 +28,82 @@ class ReferralService:
         self.db = db
         self.repo = ReferralRepository(db)
 
+    def validate_invite(self, referral_code: str) -> ReferralInviteResponse:
+        normalized_code = referral_code.strip().upper()
+        referrer_profile = self.repo.get_profile_by_code(normalized_code)
+        if referrer_profile is None or referrer_profile.account is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ReferralError.INVALID_CODE,
+            )
+        return ReferralInviteResponse(
+            referral_code=referrer_profile.referral_code,
+            referrer_name=referrer_profile.account.name,
+        )
+
+    def get_customer_referral_code(self, customer_id: uuid.UUID) -> ReferralCodeResponse:
+        profile = self.repo.get_profile_by_account_id(customer_id)
+        return ReferralCodeResponse(referral_code=profile.referral_code if profile else "")
+
     @staticmethod
     def _latest_reward_history(referral: Referral) -> ReferralRewardHistory | None:
         return max(referral.reward_history, key=lambda history: history.created_at, default=None)
+
+    @classmethod
+    def build_customer_history_item(cls, referral: Referral) -> ReferralHistoryItemResponse:
+        referred = referral.referred_customer
+        latest_history = cls._latest_reward_history(referral)
+        latest_booking = (
+            max(referred.bookings, key=lambda booking: booking.created_at)
+            if referred and referred.bookings
+            else None
+        )
+        return ReferralHistoryItemResponse(
+            id=referral.id,
+            referral_code=(
+                referral.referrer.customer_profile.referral_code
+                if referral.referrer and referral.referrer.customer_profile
+                else ""
+            ),
+            reward_amount=(
+                latest_history.approved_reward_amount
+                if latest_history
+                else referral.default_reward_amount
+            ),
+            transaction_date=(
+                latest_history.credit_date or latest_history.created_at
+                if latest_history
+                else referral.converted_at
+            ),
+            currency="INR",
+            payment_method=PaymentMethod.WALLET,
+            status=referral.status,
+            converted_at=referral.converted_at,
+            created_at=referral.created_at,
+            referred_customer=ReferredCustomerResponse(
+                id=referred.id,
+                customer_code=referred.account_code,
+                name=referred.name,
+                email=referred.email,
+                mobile=referred.mobile,
+                booking_id=latest_booking.id if latest_booking else None,
+                booking_code=latest_booking.booking_code if latest_booking else None,
+                booking_date=latest_booking.created_at if latest_booking else None,
+            ),
+        )
+
+    def list_customer_history(
+        self,
+        referrer_customer_id: uuid.UUID,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[ReferralHistoryItemResponse], int]:
+        referrals, total_items = self.repo.list_customer_history(
+            referrer_customer_id,
+            page,
+            page_size,
+        )
+        return [self.build_customer_history_item(referral) for referral in referrals], total_items
 
     def _referral_to_list_item(self, referral: Referral) -> ReferralListItemResponse:
         referrer = referral.referrer
