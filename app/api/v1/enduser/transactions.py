@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_customer
+from app.core.enums import FinancialTransactionCategory, FinancialTransactionStatus
 from app.core.messages.success import WalletSuccess
 from app.db.database import get_db
 from app.models.account import Account
@@ -43,11 +44,15 @@ def get_wallet_balance(
 def list_customer_transactions(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    category: FinancialTransactionCategory | None = Query(default=None, description="Filter by transaction category"),
+    status: FinancialTransactionStatus | None = Query(default=None, description="Filter by transaction status"),
     current_customer: Account = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[FinancialTransactionResponse]:
     result = FinancialTransactionService(db).list_transactions(
         customer_id=current_customer.id,
+        category=category,
+        status=status,
         page=page,
         page_size=page_size,
         exclude_vendor_transactions=True,

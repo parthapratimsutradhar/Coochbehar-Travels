@@ -206,6 +206,55 @@ def test_customer_wallet_balance_api_sums_completed_ledger_entries():
         }
 
 
+def test_customer_transactions_endpoint_filters_by_category_and_status():
+    with SessionLocal() as db:
+        customer = CustomerRepository(db).create_customer(name="Filtered Customer", mobile="+919000000004")
+        admin = Account(account_code="ADMIN-FILTER-TEST", name="Filter Admin", role=AccountRole.ADMIN, is_active=True)
+        db.add(admin)
+        db.commit()
+
+        WalletService(db).record_top_up(
+            customer_id=customer.id,
+            amount=Decimal("100.00"),
+            payment_method=PaymentMethod.RAZORPAY,
+            payment_status=PaymentStatus.SUCCESS,
+            gateway="test",
+            gateway_transaction_id="filter-topup-success",
+            external_reference="filter-topup-success",
+            description="successful top-up",
+        )
+        WalletService(db).record_top_up(
+            customer_id=customer.id,
+            amount=Decimal("50.00"),
+            payment_method=PaymentMethod.RAZORPAY,
+            payment_status=PaymentStatus.PENDING,
+            gateway="test",
+            gateway_transaction_id=None,
+            external_reference="filter-topup-pending",
+            description="pending top-up",
+        )
+
+        def override_get_db():
+            yield db
+
+        app.dependency_overrides[get_db] = override_get_db
+        app.dependency_overrides[get_current_customer] = lambda: customer
+        try:
+            with TestClient(app) as client:
+                response = client.get(
+                    "/api/v1/transactions",
+                    params={"page": 1, "page_size": 10, "category": "WALLET_CREDIT", "status": "COMPLETED"},
+                )
+        finally:
+            app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["pagination"]["total_items"] == 1
+        assert body["data"][0]["category"] == "wallet_credit"
+        assert body["data"][0]["status"] == "COMPLETED"
+
+
 def test_vendor_payment_reversal_is_audited_and_reported_as_history():
     with SessionLocal() as db:
         admin = Account(account_code="ADMIN-FIN-TEST", name="Finance Admin", role=AccountRole.ADMIN, is_active=True)
