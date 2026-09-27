@@ -7,7 +7,6 @@ This file is the only place that registers socket event handlers.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -16,7 +15,6 @@ from typing import Any
 import socketio
 from sqlalchemy import select
 
-from app.core.config import settings
 from app.db.database import SessionLocal
 from app.models.account import Account
 from app.realtime.constants import (
@@ -30,7 +28,6 @@ from app.realtime.presence import (
     VISITOR_SOCKET_INDEX,
     VISITOR_SOCKETS,
     get_live_counts,
-    remove_active_visitor,
     upsert_active_visitor,
 )
 from app.utils.security import decode_access_token
@@ -42,6 +39,9 @@ sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 # ── Admin connection tracking (separate from visitor presence) ────────
 # { sid -> {"actor_type": str, "actor_id": str} }
 _admin_sessions: dict[str, dict[str, str]] = {}
+# Track all tabs/windows for each admin or staff account so presence only
+# flips offline after the last socket for that account disconnects.
+_admin_connections: dict[str, set[str]] = {}
 
 
 def _safe_uuid(value: Any) -> uuid.UUID | None:
@@ -119,6 +119,32 @@ async def _broadcast(event_name: str, payload: dict[str, Any]) -> None:
             logger.exception("Failed to emit %s to %s", event_name, room)
 
 
+async def _broadcast_admin_presence(
+    *, actor_type: str, actor_id: str, online: bool
+) -> None:
+    """Notify the admin room when an account's first/last socket changes."""
+    await sio.emit(
+        "presence.updated",
+        {
+            "actor_type": actor_type,
+            "actor_id": actor_id,
+            "online": online,
+            "timestamp": _now_iso(),
+        },
+        room=ADMIN_REALTIME_ROOM,
+    )
+
+
+def _resolve_visitor_id(sid: str, data: dict[str, Any]) -> str:
+    """Resolve the socket's canonical visitor id.
+
+    Once connected, the server-side socket index is authoritative. This keeps
+    a client from changing another visitor's live presence by including an
+    arbitrary visitor_id in a later event payload.
+    """
+    return str(VISITOR_SOCKET_INDEX.get(sid) or data.get("visitor_id") or data.get("visitorId") or uuid.uuid4())
+
+
 # ── Helper: classify traffic source ──────────────────────────────────
 
 def _classify_source(referrer: str | None, utm_source: str | None, utm_medium: str | None) -> str:
@@ -186,11 +212,21 @@ async def connect(sid: str, environ: dict, auth: dict | None = None) -> bool:
         finally:
             db.close()
 
-        _admin_sessions[sid] = {"actor_type": actor_type, "actor_id": str(actor_id)}
+        actor_id_str = str(actor_id)
+        actor_key = f"{actor_type}:{actor_id_str}"
+        first_connection = actor_key not in _admin_connections
+        _admin_sessions[sid] = {"actor_type": actor_type, "actor_id": actor_id_str}
+        _admin_connections.setdefault(actor_key, set()).add(sid)
         await sio.save_session(sid, {"actor_type": actor_type, "actor_id": str(actor_id)})
         await sio.enter_room(sid, ADMIN_REALTIME_ROOM)
         await sio.enter_room(sid, ANALYTICS_REALTIME_ROOM)
         await sio.enter_room(sid, f"{actor_type}:{actor_id}")
+        if first_connection:
+            await _broadcast_admin_presence(
+                actor_type=actor_type,
+                actor_id=actor_id_str,
+                online=True,
+            )
         logger.debug("Admin %s connected (sid=%s)", actor_id, sid)
         # Send current live stats snapshot immediately
         await _broadcast_live_stats()
@@ -279,6 +315,20 @@ async def disconnect(sid: str) -> None:
     # Admin/Staff disconnect
     admin_session = _admin_sessions.pop(sid, None)
     if admin_session:
+        actor_type = admin_session["actor_type"]
+        actor_id = admin_session["actor_id"]
+        actor_key = f"{actor_type}:{actor_id}"
+        connections = _admin_connections.get(actor_key, set())
+        connections.discard(sid)
+        if connections:
+            _admin_connections[actor_key] = connections
+        else:
+            _admin_connections.pop(actor_key, None)
+            await _broadcast_admin_presence(
+                actor_type=actor_type,
+                actor_id=actor_id,
+                online=False,
+            )
         logger.debug("Admin %s disconnected (sid=%s)", admin_session.get("actor_id"), sid)
         return
 
@@ -388,6 +438,15 @@ async def visitor_identify(sid: str, data: dict | None = None) -> None:
         activity="identified",
     )
 
+    current_session = await sio.get_session(sid)
+    await sio.save_session(
+        sid,
+        {
+            **(current_session if isinstance(current_session, dict) else {}),
+            "visitor_id": visitor_id,
+            "session_id": record.get("session_id"),
+        },
+    )
     await sio.enter_room(sid, f"{VISITOR_REALTIME_ROOM_PREFIX}{visitor_id}")
     await _broadcast("visitor_identified", _build_visitor_payload(visitor_id))
     await _broadcast_live_stats()
@@ -397,13 +456,13 @@ async def visitor_identify(sid: str, data: dict | None = None) -> None:
 async def page_view(sid: str, data: dict | None = None) -> None:
     if not data:
         return
-    visitor_id = str(data.get("visitor_id") or VISITOR_SOCKET_INDEX.get(sid) or uuid.uuid4())
+    visitor_id = _resolve_visitor_id(sid, data)
     page = data.get("path") or data.get("page") or data.get("url")
     record = upsert_active_visitor(
         visitor_id=visitor_id,
         session_id=data.get("session_id"),
         page=page,
-        current_url=page,
+        current_url=data.get("current_url") or data.get("currentUrl") or page,
         activity="page_view",
     )
     await _broadcast("page_view", {
@@ -421,13 +480,13 @@ async def page_view(sid: str, data: dict | None = None) -> None:
 async def page_navigation(sid: str, data: dict | None = None) -> None:
     if not data:
         return
-    visitor_id = str(data.get("visitor_id") or VISITOR_SOCKET_INDEX.get(sid) or uuid.uuid4())
+    visitor_id = _resolve_visitor_id(sid, data)
     page = data.get("path") or data.get("page") or data.get("url")
     record = upsert_active_visitor(
         visitor_id=visitor_id,
         session_id=data.get("session_id"),
         page=page,
-        current_url=page,
+        current_url=data.get("current_url") or data.get("currentUrl") or page,
         activity="navigating",
     )
     await _broadcast("page_navigation", {
@@ -444,7 +503,7 @@ async def page_navigation(sid: str, data: dict | None = None) -> None:
 async def activity(sid: str, data: dict | None = None) -> None:
     if not data:
         return
-    visitor_id = str(data.get("visitor_id") or VISITOR_SOCKET_INDEX.get(sid) or uuid.uuid4())
+    visitor_id = _resolve_visitor_id(sid, data)
     label = data.get("label") or data.get("activity") or "activity"
     record = upsert_active_visitor(
         visitor_id=visitor_id,
@@ -466,7 +525,7 @@ async def activity(sid: str, data: dict | None = None) -> None:
 async def click(sid: str, data: dict | None = None) -> None:
     if not data:
         return
-    visitor_id = str(data.get("visitor_id") or VISITOR_SOCKET_INDEX.get(sid) or uuid.uuid4())
+    visitor_id = _resolve_visitor_id(sid, data)
     selector = data.get("selector") or data.get("name") or data.get("element") or "button"
     record = upsert_active_visitor(
         visitor_id=visitor_id,
@@ -488,7 +547,7 @@ async def click(sid: str, data: dict | None = None) -> None:
 async def session_update(sid: str, data: dict | None = None) -> None:
     if not data:
         return
-    visitor_id = str(data.get("visitor_id") or VISITOR_SOCKET_INDEX.get(sid) or uuid.uuid4())
+    visitor_id = _resolve_visitor_id(sid, data)
     record = upsert_active_visitor(
         visitor_id=visitor_id,
         session_id=data.get("session_id"),
@@ -510,7 +569,7 @@ async def session_update(sid: str, data: dict | None = None) -> None:
 async def visitor_location_update(sid: str, data: dict | None = None) -> None:
     if not data:
         return
-    visitor_id = str(data.get("visitor_id") or VISITOR_SOCKET_INDEX.get(sid) or uuid.uuid4())
+    visitor_id = _resolve_visitor_id(sid, data)
     record = upsert_active_visitor(
         visitor_id=visitor_id,
         session_id=data.get("session_id"),

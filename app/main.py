@@ -21,7 +21,6 @@ import socketio
 
 logger = logging.getLogger(__name__)
 
-
 # ── Daily analytics cleanup scheduler ────────────────────────────────
 async def _daily_cleanup_task() -> None:
     """Run the 90-day retention cleanup once per day."""
@@ -85,7 +84,7 @@ app.include_router(admin_router, prefix=API_V1_PREFIX)
 app.include_router(enduser_router, prefix=API_V1_PREFIX)
 app.include_router(public_router, prefix=API_V1_PREFIX)
 
-app.mount("/socket.io", socketio.ASGIApp(sio, other_asgi_app=app))
+
 
 
 # ── Filtered OpenAPI helpers ──────────────────────────────────────────
@@ -143,7 +142,7 @@ def _filter_schema(
 
 def _enduser_openapi() -> dict:
     return _filter_schema(
-        app.openapi(),
+        fastapi_app.openapi(),
         title="Coochbehar Travels — Enduser API",
         description="Customer-facing APIs.",
         include={
@@ -170,7 +169,7 @@ def _enduser_openapi() -> dict:
 
 def _admin_openapi() -> dict:
     return _filter_schema(
-        app.openapi(),
+        fastapi_app.openapi(),
         title="Coochbehar Travels — Admin API",
         description="Administrative APIs.",
         include={
@@ -184,7 +183,7 @@ def _admin_openapi() -> dict:
 
 def _public_openapi() -> dict:
     return _filter_schema(
-        app.openapi(),
+        fastapi_app.openapi(),
         title="Coochbehar Travels — Public API",
         description="Public APIs.",
         include={
@@ -247,6 +246,17 @@ def read_root():
             "public": "/public/docs",
         },
     }
+
+
+# Keep the FastAPI reference for OpenAPI generation after the public ASGI
+# application name is replaced with the Socket.IO wrapper below.
+fastapi_app = app
+
+# Socket.IO wraps the completed FastAPI application so its default
+# `/socket.io/` endpoint is matched before requests are delegated to FastAPI.
+# Mounting ASGIApp at the same `/socket.io` path can strip that prefix before
+# python-socketio receives the scope and prevent the handshake from matching.
+app = socketio.ASGIApp(sio, other_asgi_app=app)
 
 
 if __name__ == "__main__":

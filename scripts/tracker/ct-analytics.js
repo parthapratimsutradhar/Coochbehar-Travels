@@ -281,6 +281,7 @@
   function onUrlChange() {
     const current = window.location.href;
     if (current !== _lastUrl) {
+      const previous = _lastUrl;
       _lastUrl = current;
       trackPageView(current);
       if (socket && socket.connected) {
@@ -288,7 +289,7 @@
           visitor_id:    visitorId,
           session_id:    sessionId,
           path:          current,
-          previous_page: _lastUrl,
+          previous_page: previous,
         });
       }
     }
