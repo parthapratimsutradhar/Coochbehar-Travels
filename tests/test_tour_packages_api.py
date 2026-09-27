@@ -196,7 +196,8 @@ def test_tour_package_endpoints_return_default_variant_data():
                 valid_to=date(2026, 6, 30),
                 duration_days=5,
                 duration_nights=4,
-                base_price=2499,
+                list_price=2499,
+                selling_price=2499,
                 is_default=True,
                 is_active=True,
             )
@@ -223,7 +224,7 @@ def test_tour_package_endpoints_return_default_variant_data():
     }
 
     variants_response = client.get(
-        f"/api/v1/tour-packages/{first_item['id']}/variants",
+        f"/api/v1/tour-packages/{first_item['slug']}/variants",
         params={"page": 1, "page_size": 1},
     )
     assert variants_response.status_code == 200
@@ -248,8 +249,8 @@ def test_tour_package_endpoints_return_default_variant_data():
     }
 
     detail_response = client.get(
-        f"/api/v1/tour-packages/{first_item['id']}/variants/"
-        f"{variants_body['data'][0]['id']}/details"
+        f"/api/v1/tour-packages/{first_item['slug']}/variants/"
+        f"{variants_body['data'][0]['slug']}/details"
     )
     assert detail_response.status_code == 200
     detail_data = detail_response.json()["data"]

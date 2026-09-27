@@ -258,14 +258,14 @@ class TourPackageRepository:
 
     def get_paginated_variants(
         self,
-        package_id,
+        package_slug: str,
         page: int,
         page_size: int,
     ) -> tuple[TourPackage | None, list[TourVariant], int]:
         """Return an active package and its active variants for one page."""
         package = (
             self.db.query(TourPackage)
-            .filter(TourPackage.id == package_id, TourPackage.is_active.is_(True))
+            .filter(TourPackage.slug == package_slug, TourPackage.is_active.is_(True))
             .first()
         )
         if package is None:
@@ -274,7 +274,7 @@ class TourPackageRepository:
         query = (
             self.db.query(TourVariant)
             .filter(
-                TourVariant.package_id == package_id,
+                TourVariant.package_id == package.id,
                 TourVariant.is_active.is_(True),
             )
             .order_by(
@@ -300,6 +300,28 @@ class TourPackageRepository:
                 TourPackage.id == package_id,
                 TourPackage.is_active.is_(True),
                 TourVariant.id == variant_id,
+                TourVariant.is_active.is_(True),
+            )
+            .first()
+        )
+
+    def get_variant_detail_by_slug(
+        self,
+        package_slug: str,
+        variant_slug: str,
+    ) -> TourVariant | None:
+        """Fetch a variant and its detail/departures by package and variant slugs."""
+        return (
+            self.db.query(TourVariant)
+            .join(TourPackage, TourVariant.package_id == TourPackage.id)
+            .options(
+                joinedload(TourVariant.details),
+                joinedload(TourVariant.departures),
+            )
+            .filter(
+                TourPackage.slug == package_slug,
+                TourPackage.is_active.is_(True),
+                TourVariant.slug == variant_slug,
                 TourVariant.is_active.is_(True),
             )
             .first()

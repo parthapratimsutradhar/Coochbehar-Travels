@@ -92,7 +92,7 @@ class TourPackageService:
 
     def list_variants(
         self,
-        package_id,
+        package_slug: str,
         page: int,
         page_size: int,
     ) -> PaginatedResponse[TourPackageVariantListItem]:
@@ -100,7 +100,7 @@ class TourPackageService:
         page = max(1, page)
         page_size = max(1, min(page_size, 100))
         package, variants, total_count = self.repo.get_paginated_variants(
-            package_id,
+            package_slug,
             page,
             page_size,
         )
@@ -142,9 +142,9 @@ class TourPackageService:
             ),
         )
 
-    def get_tour_detail(self, package_id, variant_id) -> TourDetailPayload:
+    def get_tour_detail(self, package_slug: str, variant_slug: str) -> TourDetailPayload:
         """Return the content details and departures for an active tour variant."""
-        variant = self.repo.get_variant_detail(package_id, variant_id)
+        variant = self.repo.get_variant_detail_by_slug(package_slug, variant_slug)
         if variant is None or variant.details is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -219,7 +219,7 @@ class TourPackageService:
 
         return TourDetailPayload(
             id=details.id,
-            tour_id=package_id,
+            tour_id=variant.package_id,
             variant_id=variant.id,
             banner=banner,
             gallery=gallery,

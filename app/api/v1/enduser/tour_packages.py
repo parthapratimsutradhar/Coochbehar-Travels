@@ -5,8 +5,6 @@ retrieval. These endpoints are read-only and do not require
 authentication.
 """
 
-import uuid
-
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -70,35 +68,35 @@ def list_tour_packages(
 
 
 @router.get(
-    "/{tour_id}/variants",
+    "/{tour_slug}/variants",
     response_model=PaginatedResponse[TourPackageVariantListItem],
     summary="List variants for a tour package",
 )
 def list_tour_package_variants(
-    tour_id: uuid.UUID,
+    tour_slug: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[TourPackageVariantListItem]:
     return TourPackageService(db).list_variants(
-        package_id=tour_id,
+        package_slug=tour_slug,
         page=page,
         page_size=page_size,
     )
 
 
 @router.get(
-    "/{tour_id}/variants/{variant_id}/details",
+    "/{tour_slug}/variants/{variant_slug}/details",
     response_model=SuccessResponse[TourDetailPayload],
     summary="Get tour variant details",
 )
 def get_tour_variant_details(
-    tour_id: uuid.UUID,
-    variant_id: uuid.UUID,
+    tour_slug: str,
+    variant_slug: str,
     db: Session = Depends(get_db),
 ) -> SuccessResponse[TourDetailPayload]:
     return SuccessResponse(
         message="Tour details fetched successfully",
-        data=TourPackageService(db).get_tour_detail(tour_id, variant_id),
+        data=TourPackageService(db).get_tour_detail(tour_slug, variant_slug),
     )
 
