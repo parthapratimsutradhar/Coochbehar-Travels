@@ -11,9 +11,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.enums import TourType
-from app.api.deps import get_optional_customer
 from app.db.database import get_db
-from app.models.account import Account
 from app.schemas.pagination import PaginatedResponse
 from app.schemas.response import SuccessResponse, ErrorResponse
 from app.schemas.tour_package import (
@@ -50,7 +48,6 @@ def list_tour_packages(
     search: str | None = Query(None),
     sort_by: str = Query("created_at"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
-    current_customer: Account | None = Depends(get_optional_customer),
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[TourPackageListItem]:
     filters = TourPackageFilterParams(
@@ -69,7 +66,6 @@ def list_tour_packages(
         page=page,
         page_size=page_size,
         filters=filters,
-        customer_id=current_customer.id if current_customer else None,
     )
 
 

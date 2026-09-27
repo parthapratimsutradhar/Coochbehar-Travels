@@ -15,21 +15,6 @@ router = APIRouter(
 )
 
 
-@router.get(
-    "/me",
-    response_model=SuccessResponse[CustomerResponse],
-    summary="Get Authenticated Customer Profile",
-)
-def get_current_customer_profile(
-    current_customer: Account = Depends(get_current_customer),
-    db: Session = Depends(get_db),
-):
-    return SuccessResponse(
-        message="Customer profile fetched successfully.",
-        data=CustomerService(db).get_customer_response(current_customer.id),
-    )
-
-
 @router.patch(
     "/me",
     response_model=SuccessResponse[CustomerResponse],
