@@ -107,7 +107,7 @@ class TourPackageRepository:
         variant_stats = (
             self.db.query(
                 TourVariant.package_id,
-                func.min(TourVariant.base_price).label("starting_price"),
+                func.min(TourVariant.list_price).label("starting_price"),
                 func.count(TourVariant.id).label("variant_count"),
             )
             .filter(TourVariant.is_active == True)  # noqa: E712

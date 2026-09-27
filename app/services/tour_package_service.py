@@ -429,7 +429,7 @@ class TourPackageService:
 
         duration_days = variant.duration_days
         duration_nights = variant.duration_nights
-        price_val = float(variant.base_price) if variant.base_price is not None else 0.0
+        price_val = float(variant.list_price) if variant.list_price is not None else 0.0
 
         route: list[Any] = []
         highlights: list[Any] = []
@@ -531,7 +531,7 @@ class TourPackageService:
         season_type = getattr(variant, "season_type", None)
         currency = getattr(variant, "currency", None) or "INR"
         availability = getattr(variant, "availability", None) or "AVAILABLE"
-        price_val = float(variant.base_price) if variant.base_price is not None else 0.0
+        price_val = float(variant.list_price) if variant.list_price is not None else 0.0
         starting_price = price_val if price_val > 0 else None
 
         cover_image: str | None = None
