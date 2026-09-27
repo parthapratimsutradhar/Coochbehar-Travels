@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.enums import BookingSource, BookingStatus, EnquiryStatus, QuotationStatus
+from app.core.enums import BookingSource, BookingStatus, EnquiryStatus, QuotationStatus, TourType
 from app.models.account import Account
 from app.models.quotation import Quotation
 from app.repository.enquiry_repo import EnquiryRepository
@@ -334,18 +334,71 @@ class QuotationService:
         quotation.sent_at = datetime.now(timezone.utc)
         return self.quotation_repo.update_status(quotation, QuotationStatus.SENT)
 
-    def accept_quotation(self, quotation_id: uuid.UUID, customer: Account) -> Quotation:
-        quotation = self.get_quotation(quotation_id)
-        if quotation.customer_id and quotation.customer_id != customer.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only accept your own quotation.")
-        quotation.accepted_at = datetime.now(timezone.utc)
-        return self.quotation_repo.update_status(quotation, QuotationStatus.ACCEPTED)
+    def accept_quotation(
+        self,
+        quotation_id: uuid.UUID,
+        customer: Account,
+        travellers: list[dict],
+    ) -> Booking:
+        from app.repository.booking_repo import BookingRepository
 
-    def reject_quotation(self, quotation_id: uuid.UUID, customer: Account) -> Quotation:
         quotation = self.get_quotation(quotation_id)
-        if quotation.customer_id and quotation.customer_id != customer.id:
+        if quotation.customer_id != customer.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only accept your own quotation.")
+
+        if quotation.status not in {QuotationStatus.SENT, QuotationStatus.VIEWED}:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only a sent quotation can be accepted.",
+            )
+
+        quotation.accepted_at = datetime.now(timezone.utc)
+        quotation.status = QuotationStatus.ACCEPTED
+
+        enquiry = quotation.enquiry
+        booking_data = {
+            "booking_code": f"BK-{uuid.uuid4().hex[:8].upper()}",
+            "customer_id": customer.id,
+            "enquiry_id": quotation.enquiry_id,
+            "package_id": quotation.package_id,
+            "variant_id": quotation.variant_id,
+            "quotation_id": quotation.id,
+            "booking_type": TourType.DOMESTIC,
+            "source": BookingSource.WEBSITE,
+            "status": BookingStatus.CONFIRMED,
+            "departure_date": quotation.travel_date.date() if quotation.travel_date else None,
+            "return_date": quotation.return_date.date() if quotation.return_date else None,
+            "adult_count": (enquiry.adult_count if enquiry and enquiry.adult_count else len(travellers)),
+            "child_count": enquiry.child_count if enquiry and enquiry.child_count else 0,
+            "senior_count": enquiry.senior_count if enquiry and enquiry.senior_count else 0,
+            "subtotal": quotation.subtotal,
+            "discount_amount": quotation.discount_amount,
+            "total_amount": quotation.total_amount,
+            "paid_amount": Decimal(0),
+            "due_amount": quotation.total_amount,
+            "notes": None,
+            "created_by": customer.id,
+        }
+        return BookingRepository(self.db).create(booking_data, travellers=travellers)
+
+    def reject_quotation(
+        self,
+        quotation_id: uuid.UUID,
+        customer: Account,
+        reason: str,
+    ) -> Quotation:
+        quotation = self.get_quotation(quotation_id)
+        if quotation.customer_id != customer.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only reject your own quotation.")
+
+        if quotation.status in {QuotationStatus.ACCEPTED, QuotationStatus.REJECTED, QuotationStatus.CANCELLED}:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This quotation can no longer be rejected.",
+            )
+
         quotation.rejected_at = datetime.now(timezone.utc)
+        quotation.rejected_reason = reason.strip()
         return self.quotation_repo.update_status(quotation, QuotationStatus.REJECTED)
 
     def convert_quotation_to_booking(

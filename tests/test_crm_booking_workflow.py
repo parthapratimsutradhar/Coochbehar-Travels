@@ -21,6 +21,7 @@ from app.db.database import get_db
 from app.main import app
 from app.models.base import Base
 from app.models.account import Account
+from app.models.booking import Booking
 from app.models.destination import Destination
 from app.models.enquiry import Enquiry
 from app.models.quotation import Quotation
@@ -913,6 +914,142 @@ def test_quotation_and_booking_pipeline(client, superadmin_auth_header, test_cus
     assert "current_month" in dash_data
     assert dash_data["today"]["new_bookings"] == 1
     assert float(dash_data["today"]["revenue"]) == 47250.0
+
+
+def test_customer_can_reject_owned_sent_quotation_with_reason(client, test_customer, db_session):
+    other_customer = Account(
+        account_code="CUST-REJECT-OTHER",
+        name="Other Traveler",
+        email="other-traveler@example.com",
+        mobile="+919876543211",
+        role=AccountRole.CUSTOMER,
+        is_active=True,
+    )
+    db_session.add(other_customer)
+    db_session.flush()
+
+    quotations = []
+    for index, customer in enumerate((test_customer, other_customer), start=1):
+        enquiry = Enquiry(
+            enquiry_code=f"ENQ-REJECT-{index:03d}",
+            customer_id=customer.id,
+            enquiry_type=EnquiryType.FIXED_TOUR,
+            channel=EnquiryChannel.WHATSAPP,
+            status=EnquiryStatus.QUOTED,
+            enquirer_name=customer.name,
+            enquirer_phone=customer.mobile,
+            enquirer_email=customer.email,
+        )
+        db_session.add(enquiry)
+        db_session.flush()
+        quotation = Quotation(
+            quotation_code=f"QT-REJECT-{index:03d}",
+            version=1,
+            enquiry_id=enquiry.id,
+            customer_id=customer.id,
+            tour_name="Sikkim Escape",
+            subtotal=1000,
+            discount_amount=0,
+            tax_amount=0,
+            total_amount=1000,
+            status=QuotationStatus.SENT,
+        )
+        db_session.add(quotation)
+        quotations.append(quotation)
+    db_session.commit()
+
+    token = create_access_token(subject=test_customer.id, role=AccountRole.CUSTOMER.value)
+    headers = {"Authorization": f"Bearer {token}"}
+    reason = "  The travel dates do not work for me.  "
+    response = client.post(
+        f"/api/v1/quotations/{quotations[0].id}/reject",
+        headers=headers,
+        json={"reason": reason},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["message"] == "Quotation rejected successfully."
+    db_session.refresh(quotations[0])
+    assert quotations[0].status == QuotationStatus.REJECTED
+    assert quotations[0].rejected_reason == reason.strip()
+    assert quotations[0].rejected_at is not None
+
+    foreign_response = client.post(
+        f"/api/v1/quotations/{quotations[1].id}/reject",
+        headers=headers,
+        json={"reason": "Not mine."},
+    )
+    assert foreign_response.status_code == 403
+
+    invalid_reason_response = client.post(
+        f"/api/v1/quotations/{quotations[1].id}/reject",
+        headers=headers,
+        json={"reason": "   "},
+    )
+    assert invalid_reason_response.status_code == 422
+
+
+def test_customer_accepts_quotation_with_traveller_form(client, test_customer, db_session):
+    enquiry = Enquiry(
+        enquiry_code="ENQ-ACCEPT-001",
+        customer_id=test_customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WHATSAPP,
+        status=EnquiryStatus.QUOTED,
+        enquirer_name=test_customer.name,
+        enquirer_phone=test_customer.mobile,
+        enquirer_email=test_customer.email,
+        adult_count=1,
+        child_count=0,
+        senior_count=0,
+    )
+    db_session.add(enquiry)
+    db_session.flush()
+    quotation = Quotation(
+        quotation_code="QT-ACCEPT-001",
+        version=1,
+        enquiry_id=enquiry.id,
+        customer_id=test_customer.id,
+        tour_name="Sikkim Escape",
+        subtotal=1000,
+        discount_amount=0,
+        tax_amount=0,
+        total_amount=1000,
+        status=QuotationStatus.SENT,
+    )
+    db_session.add(quotation)
+    db_session.commit()
+
+    token = create_access_token(subject=test_customer.id, role=AccountRole.CUSTOMER.value)
+    response = client.post(
+        f"/api/v1/quotations/{quotation.id}/accept",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "travellers": [
+                {
+                    "full_name": "John Traveler",
+                    "gender": "MALE",
+                    "date_of_birth": "1990-01-02",
+                    "mobile": "+919876543210",
+                    "email": "john@example.com",
+                    "relationship_to_customer": "SELF",
+                    "is_primary": True,
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["message"] == "Quotation accepted and booking created successfully."
+    db_session.refresh(quotation)
+    assert quotation.status == QuotationStatus.ACCEPTED
+    assert quotation.accepted_at is not None
+
+    booking = db_session.query(Booking).filter_by(quotation_id=quotation.id).one()
+    assert booking.customer_id == test_customer.id
+    assert len(booking.travellers) == 1
+    assert booking.travellers[0].full_name == "John Traveler"
+    assert booking.travellers[0].is_primary is True
 
 
 def test_admin_quotation_send_marks_status_sent(client, superadmin_auth_header, test_customer, db_session, monkeypatch):

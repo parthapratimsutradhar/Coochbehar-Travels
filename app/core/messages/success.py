@@ -67,9 +67,11 @@ class EnquirySuccess(StrEnum):
 class QuotationSuccess(StrEnum):
     RETRIEVED = "Quotations fetched successfully."
     CREATED = "Quotation created successfully."
+    ACCEPTED = "Quotation accepted and booking created successfully."
     VERSION_CREATED = "New quotation version created successfully."
     UPDATED = "Quotation updated successfully."
     DELETED = "Quotation deleted successfully."
+    REJECTED = "Quotation rejected successfully."
     PDF_GENERATED = "Quotation PDF generated successfully."
     SENT = "Quotation sent successfully."
 
