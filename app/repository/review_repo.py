@@ -1,8 +1,13 @@
 import uuid
 
-from sqlalchemy import func, select
+from datetime import date
+
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.enums import BookingStatus, EnquiryStatus
+from app.models.booking import Booking
+from app.models.enquiry import Enquiry
 from app.models.review import Review
 
 
@@ -52,6 +57,98 @@ class ReviewRepository:
             .limit(page_size)
         ).scalars().unique().all()
         return list(reviews), total
+
+    def list_published_for_package(
+        self,
+        package_id: uuid.UUID,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[Review], int]:
+        stmt = (
+            select(Review)
+            .options(joinedload(Review.customer))
+            .where(
+                Review.package_id == package_id,
+                Review.is_published.is_(True),
+                Review.is_active.is_(True),
+            )
+        )
+        total = self.db.execute(
+            select(func.count()).select_from(stmt.order_by(None).subquery())
+        ).scalar_one()
+        reviews = self.db.execute(
+            stmt.order_by(Review.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).scalars().unique().all()
+        return list(reviews), total
+
+    def get_customer_review(
+        self,
+        customer_id: uuid.UUID,
+        package_id: uuid.UUID,
+    ) -> Review | None:
+        return self.db.execute(
+            select(Review)
+            .options(joinedload(Review.customer))
+            .where(
+                Review.customer_id == customer_id,
+                Review.package_id == package_id,
+                Review.is_active.is_(True),
+            )
+        ).scalars().first()
+
+    def has_customer_review(self, customer_id: uuid.UUID, package_id: uuid.UUID) -> bool:
+        return self.db.execute(
+            select(Review.id)
+            .where(
+                Review.customer_id == customer_id,
+                Review.package_id == package_id,
+            )
+            .limit(1)
+        ).scalar_one_or_none() is not None
+
+    def get_customer_owned_review(
+        self,
+        review_id: uuid.UUID,
+        customer_id: uuid.UUID,
+    ) -> Review | None:
+        return self.db.execute(
+            select(Review).where(
+                Review.id == review_id,
+                Review.customer_id == customer_id,
+                Review.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+
+    def has_eligible_enquiry(
+        self,
+        customer_id: uuid.UUID,
+        package_id: uuid.UUID,
+        today: date,
+    ) -> bool:
+        eligible_enquiry = self.db.query(Enquiry.id).filter(
+            Enquiry.customer_id == customer_id,
+            Enquiry.package_id == package_id,
+            Enquiry.status != EnquiryStatus.CANCELLED,
+            or_(
+                Enquiry.status == EnquiryStatus.CONVERTED,
+                and_(Enquiry.travel_date.is_not(None), Enquiry.travel_date < today),
+            ),
+        )
+        return eligible_enquiry.first() is not None
+
+    def has_completed_customer_tour(self, customer_id: uuid.UUID, package_id: uuid.UUID) -> bool:
+        return (
+            self.db.query(Booking.id)
+            .filter(
+                Booking.customer_id == customer_id,
+                Booking.package_id == package_id,
+                Booking.status.in_([BookingStatus.COMPLETED, BookingStatus.TRAVELLED]),
+            )
+            .first()
+            is not None
+        )
 
     def create(self, **kwargs) -> Review:
         review = Review(**kwargs)

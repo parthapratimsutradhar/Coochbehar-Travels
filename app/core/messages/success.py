@@ -33,6 +33,7 @@ class TourDetailSuccess(StrEnum):
 
 class ReviewSuccess(StrEnum):
     RETRIEVED = "Package reviews fetched successfully."
+    ELIGIBILITY_RETRIEVED = "Review eligibility fetched successfully."
     CREATED = "Review created successfully."
     UPDATED = "Review updated successfully."
     DELETED = "Review deleted successfully."

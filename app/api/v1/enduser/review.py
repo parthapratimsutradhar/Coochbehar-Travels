@@ -1,21 +1,12 @@
-from datetime import date
-from math import ceil
-from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, or_
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_customer
-from app.core.messages.error import PackageError, ReviewError
-from app.core.enums import BookingStatus, EnquiryStatus
+from app.core.messages.success import ReviewSuccess
 from app.db.database import get_db
 from app.models.account import Account
-from app.models.booking import Booking
-from app.models.enquiry import Enquiry
-from app.models.review import Review
-from app.models.tour_package import TourPackage
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.response import ActionResponse, ErrorResponse
 from app.schemas.response import SuccessResponse
@@ -25,37 +16,13 @@ from app.schemas.review import (
 	ReviewResponse,
 	ReviewUpdate,
 )
-from app.services.cloudinary_service import promote_cloudinary_asset
 from app.schemas.tour_package import ReviewItemResponse
-from app.services.notification_service import NotificationService
+from app.services.review_service import ReviewService
 
 router = APIRouter(
 	prefix="/reviews",
 	tags=["Reviews"],
 )
-
-
-def _eligible_enquiry_query(db: Session, customer_id: UUID, package_id: UUID):
-	return db.query(Enquiry.id).filter(
-		Enquiry.customer_id == customer_id,
-		Enquiry.package_id == package_id,
-		Enquiry.status != EnquiryStatus.CANCELLED,
-		or_(
-			Enquiry.status == EnquiryStatus.CONVERTED,
-			and_(
-				Enquiry.travel_date.is_not(None),
-				Enquiry.travel_date < date.today(),
-			),
-		),
-	)
-
-
-def _has_completed_customer_tour(db: Session, customer_id: UUID, package_id: UUID) -> bool:
-	return db.query(Booking.id).filter(
-		Booking.customer_id == customer_id,
-		Booking.package_id == package_id,
-		Booking.status.in_([BookingStatus.COMPLETED, BookingStatus.TRAVELLED]),
-	).first() is not None
 
 
 @router.get(
@@ -72,55 +39,17 @@ def list_package_reviews(
 	page_size: int = Query(10, ge=1, le=100),
 	db: Session = Depends(get_db),
 ) -> PaginatedResponse[ReviewItemResponse]:
-	package = None
-	try:
-		pkg_uuid = UUID(package_slug)
-		package = db.query(TourPackage).filter(TourPackage.id == pkg_uuid).first()
-	except (ValueError, TypeError):
-		pass
-	if package is None:
-		package = db.query(TourPackage).filter(TourPackage.slug == package_slug).first()
-	if package is None:
-		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PackageError.PACKAGE_NOT_FOUND)
-	package_id = package.id
-
-
-	query = (
-		db.query(Review)
-		.outerjoin(Review.customer)
-		.filter(
-			Review.package_id == package_id,
-			Review.is_published.is_(True),
-			Review.is_active.is_(True),
-		)
-		.order_by(Review.created_at.desc())
-	)
-	total_items = query.count()
-	reviews = query.offset((page - 1) * page_size).limit(page_size).all()
-	data = [
-		ReviewItemResponse(
-			id=review.id,
-			reviewer_by=review.customer.name if review.customer else review.name,
-			reviewer_pic=review.customer.profile_pic if review.customer else None,
-			name=review.name,
-			rating=review.rating,
-			review=review.review,
-			review_gallery=review.review_gallery or [],
-			created_at=review.created_at,
-		)
-		for review in reviews
-	]
-	total_pages = ceil(total_items / page_size) if total_items else 0
+	result = ReviewService(db).list_published_reviews(package_slug, page, page_size)
 	return PaginatedResponse(
-		message="Package reviews fetched successfully",
-		data=data,
+		message=ReviewSuccess.RETRIEVED,
+		data=result["items"],
 		pagination=PaginationMeta(
-			current_page=page,
-			page_size=page_size,
-			total_items=total_items,
-			total_pages=total_pages,
-			has_next=page < total_pages,
-			has_previous=page > 1,
+			current_page=result["page"],
+			page_size=result["page_size"],
+			total_items=result["total_items"],
+			total_pages=result["total_pages"],
+			has_next=result["page"] < result["total_pages"],
+			has_previous=result["page"] > 1,
 		),
 	)
 
@@ -136,45 +65,10 @@ def get_review_eligibility(
 	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> SuccessResponse[ReviewEligibilityResponse]:
-	package = db.query(TourPackage).filter(TourPackage.slug == package_slug).first()
-	if package is None:
-		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PackageError.PACKAGE_NOT_FOUND)
-	package_id = package.id
-
-	customer_review = db.query(Review).filter(
-		Review.customer_id == current_customer.id,
-		Review.package_id == package_id,
-		Review.is_active.is_(True),
-	).first()
-	has_reviewed = customer_review is not None
-	is_eligible = (
-		_eligible_enquiry_query(db, current_customer.id, package_id).first() is not None
-		or _has_completed_customer_tour(db, current_customer.id, package_id)
-	)
 	return SuccessResponse(
-		message="Review eligibility fetched successfully",
-		data=ReviewEligibilityResponse(
-			package_id=package_id,
-			can_review=is_eligible and not has_reviewed,
-			has_reviewed=has_reviewed,
-			review=ReviewResponse.model_validate(customer_review) if customer_review else None,
-		),
+		message=ReviewSuccess.ELIGIBILITY_RETRIEVED,
+		data=ReviewService(db).get_customer_eligibility(package_slug, current_customer.id),
 	)
-
-
-async def _promote_review_gallery(gallery_items: list[Any] | None) -> list[dict[str, Any]]:
-	if not gallery_items:
-		return []
-	promoted_items: list[dict[str, Any]] = []
-	for item in gallery_items:
-		item_dict = item.model_dump() if hasattr(item, "model_dump") else (item if isinstance(item, dict) else {"url": str(item)})
-		url = item_dict.get("url")
-		media_type = item_dict.get("type") or "image"
-		if url:
-			promoted = await promote_cloudinary_asset(url, "review-gallery", resource_type=media_type)
-			item_dict["url"] = promoted["url"]
-		promoted_items.append(item_dict)
-	return promoted_items
 
 
 @router.post(
@@ -196,77 +90,9 @@ async def create_review(
 	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> ActionResponse:
-	package = db.query(TourPackage).filter(TourPackage.id == payload.package_id).first()
-	if package is None:
-		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PackageError.PACKAGE_NOT_FOUND)
+	await ReviewService(db).create_customer_review(current_customer, payload)
 
-	has_completed_enquiry = _eligible_enquiry_query(
-		db,
-		current_customer.id,
-		payload.package_id,
-	).first() is not None
-	if not has_completed_enquiry and not _has_completed_customer_tour(
-		db,
-		current_customer.id,
-		payload.package_id,
-	):
-		raise HTTPException(
-			status_code=status.HTTP_403_FORBIDDEN,
-			detail=ReviewError.TOUR_NOT_COMPLETED,
-		)
-
-	existing_review = (
-		db.query(Review.id)
-		.filter(
-			Review.customer_id == current_customer.id,
-			Review.package_id == payload.package_id,
-		)
-		.first()
-	)
-	if existing_review is not None:
-		raise HTTPException(
-			status_code=status.HTTP_409_CONFLICT,
-			detail=ReviewError.ALREADY_REVIEWED,
-		)
-
-	promoted_gallery = await _promote_review_gallery(payload.review_gallery)
-	review = Review(
-		package_id=payload.package_id,
-		customer_id=current_customer.id,
-		name=current_customer.name,
-		rating=payload.rating,
-		review=payload.review,
-		review_gallery=promoted_gallery,
-		is_verified=True,
-		is_published=True,
-	)
-	db.add(review)
-	db.commit()
-	review_date = review.created_at.isoformat() if review.created_at else None
-	service = NotificationService(db)
-	await service.notify_admins(
-		notification_type="REVIEW_SUBMITTED",
-		title="New tour review",
-		message=f"{current_customer.name} reviewed {package.title} with a rating of {payload.rating}/5 on {review_date}.",
-		data={
-			"customer_id": str(current_customer.id),
-			"customer_name": current_customer.name,
-			"tour_name": package.title,
-			"rating": payload.rating,
-			"review_id": str(review.id),
-			"review_date": review_date,
-		},
-	)
-	if review.is_published:
-		await service.notify_customer(
-			current_customer.id,
-			notification_type="REVIEW_PUBLISHED",
-			title="Thank you for your review",
-			message=f"Thank you for reviewing {package.title}. You gave it a rating of {payload.rating}/5.",
-			data={"tour_name": package.title, "rating": payload.rating, "review_id": str(review.id)},
-		)
-
-	return ActionResponse(message="Review added successfully")
+	return ActionResponse(message=ReviewSuccess.CREATED)
 
 
 @router.patch(
@@ -282,28 +108,10 @@ async def update_review(
 	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> SuccessResponse[ReviewResponse]:
-	review = db.query(Review).filter(
-		Review.id == review_id,
-		Review.customer_id == current_customer.id,
-		Review.is_active.is_(True),
-	).first()
-	if review is None:
-		raise HTTPException(
-			status_code=status.HTTP_404_NOT_FOUND,
-			detail="Review not found.",
-		)
-
-	update_data = payload.model_dump(exclude_unset=True)
-	if "review_gallery" in update_data and update_data["review_gallery"] is not None:
-		update_data["review_gallery"] = await _promote_review_gallery(update_data["review_gallery"])
-
-	for field, value in update_data.items():
-		setattr(review, field, value)
-	db.commit()
-	db.refresh(review)
+	review = await ReviewService(db).update_customer_review(review_id, current_customer.id, payload)
 
 	return SuccessResponse(
-		message="Review updated successfully",
+		message=ReviewSuccess.UPDATED,
 		data=ReviewResponse.model_validate(review),
 	)
 
@@ -320,19 +128,6 @@ def delete_review(
 	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
 ) -> ActionResponse:
-	review = db.query(Review).filter(
-		Review.id == review_id,
-		Review.customer_id == current_customer.id,
-		Review.is_active.is_(True),
-	).first()
-	if review is None:
-		raise HTTPException(
-			status_code=status.HTTP_404_NOT_FOUND,
-			detail="Review not found.",
-		)
+	ReviewService(db).delete_customer_review(review_id, current_customer.id)
 
-	review.is_active = False
-	review.is_published = False
-	db.commit()
-
-	return ActionResponse(message="Review deleted successfully")
+	return ActionResponse(message=ReviewSuccess.DELETED)
