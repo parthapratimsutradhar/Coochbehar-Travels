@@ -255,6 +255,160 @@ def test_offline_booking_service_accepts_actual_schema_contract(db_session, test
     assert booking.travellers[0].full_name == "Jane Traveler"
 
 
+def test_booking_primary_traveller_matches_customer_mobile_then_email(
+    db_session,
+    test_customer,
+    superadmin_user,
+):
+    payload = OfflineBookingCreate(
+        customer_id=test_customer.id,
+        total_selling_price=1000,
+        travellers=[
+            {
+                "full_name": "Email Match",
+                "mobile": "+10000000001",
+                "email": test_customer.email,
+                "is_primary": True,
+            },
+            {
+                "full_name": "Mobile Match",
+                "mobile": test_customer.mobile,
+                "email": "not-the-customer@example.com",
+                "is_primary": True,
+            },
+            {
+                "full_name": "Unmatched Traveller",
+                "mobile": "+10000000003",
+                "email": "other@example.com",
+                "is_primary": True,
+            },
+        ],
+    )
+
+    service = BookingService(db_session)
+    booking = service.create_offline_booking(payload, superadmin_user)
+    assert {
+        traveller.full_name
+        for traveller in booking.travellers
+        if traveller.is_primary
+    } == {"Mobile Match"}
+
+    mobile_match = next(
+        traveller
+        for traveller in booking.travellers
+        if traveller.full_name == "Mobile Match"
+    )
+    service.update_traveller(
+        booking.id,
+        mobile_match.id,
+        BookingTravelerUpdate(mobile="+10000000002"),
+    )
+    db_session.expire_all()
+    updated_booking = service.get_booking(booking.id)
+    assert {
+        traveller.full_name
+        for traveller in updated_booking.travellers
+        if traveller.is_primary
+    } == {"Email Match"}
+
+    email_match = next(
+        traveller
+        for traveller in updated_booking.travellers
+        if traveller.full_name == "Email Match"
+    )
+    service.update_traveller(
+        booking.id,
+        email_match.id,
+        BookingTravelerUpdate(is_primary=False),
+    )
+    service.add_traveller(
+        booking.id,
+        BookingTravelerCreate(
+            full_name="Forged Primary",
+            mobile="+10000000004",
+            email="forged@example.com",
+            is_primary=True,
+        ),
+        customer_id=test_customer.id,
+    )
+    db_session.expire_all()
+    final_booking = service.get_booking(booking.id)
+    assert {
+        traveller.full_name
+        for traveller in final_booking.travellers
+        if traveller.is_primary
+    } == {"Email Match"}
+
+
+def test_duplicate_travellers_cannot_be_saved_in_one_booking(
+    db_session,
+    test_customer,
+    superadmin_user,
+):
+    duplicate_payload = OfflineBookingCreate(
+        customer_id=test_customer.id,
+        total_selling_price=1000,
+        travellers=[
+            {
+                "full_name": "Alex Traveler",
+                "mobile": "+10000000011",
+                "email": "alex-one@example.com",
+            },
+            {
+                "full_name": " alex  traveler ",
+                "mobile": "+10000000011",
+                "email": "alex-two@example.com",
+            },
+        ],
+    )
+    service = BookingService(db_session)
+    with pytest.raises(HTTPException) as create_error:
+        service.create_offline_booking(duplicate_payload, superadmin_user)
+    assert create_error.value.status_code == 409
+
+    valid_payload = OfflineBookingCreate(
+        customer_id=test_customer.id,
+        total_selling_price=1000,
+        travellers=[
+            {
+                "full_name": "Alex Traveler",
+                "mobile": "+10000000011",
+                "email": "family@example.com",
+            },
+            {
+                "full_name": "Jamie Traveler",
+                "mobile": "+10000000012",
+                "email": "family@example.com",
+            },
+        ],
+    )
+    booking = service.create_offline_booking(valid_payload, superadmin_user)
+    second_traveller = next(
+        traveller
+        for traveller in booking.travellers
+        if traveller.full_name == "Jamie Traveler"
+    )
+
+    with pytest.raises(HTTPException) as add_error:
+        service.add_traveller(
+            booking.id,
+            BookingTravelerCreate(
+                full_name="Alex Traveler",
+                mobile="+10000000013",
+                email="family@example.com",
+            ),
+        )
+    assert add_error.value.status_code == 409
+
+    with pytest.raises(HTTPException) as update_error:
+        service.update_traveller(
+            booking.id,
+            second_traveller.id,
+            BookingTravelerUpdate(full_name="Alex Traveler"),
+        )
+    assert update_error.value.status_code == 409
+
+
 def test_customer_tours_uses_booking_itinerary_dates(db_session, test_customer, superadmin_user):
     payload = OfflineBookingCreate(
         customer_id=test_customer.id,

@@ -12,6 +12,7 @@ from app.repository.customer_repo import CustomerRepository
 from app.services.financial_service import FinancialService
 from app.services.email_service import EmailService
 from app.services.booking_pdf_service import build_booking_pdf, generate_and_upload_booking_pdf
+from app.utils.booking_traveller import ensure_unique_booking_travellers
 from app.schemas.booking import (
     BookingDetailResponse,
     BookingResponse,
@@ -349,9 +350,11 @@ class BookingService:
     ) -> dict:
         booking = self.get_booking(booking_id)
         self._ensure_booking_customer(booking, customer_id)
+        ensure_unique_booking_travellers([payload.model_dump()], existing=booking.travellers)
         from app.models.booking_traveler import BookingTraveler
-        traveler = BookingTraveler(booking_id=booking.id, **payload.model_dump())
+        traveler = BookingTraveler(booking=booking, **payload.model_dump())
         self.db.add(traveler)
+        self.booking_repo.sync_primary_travellers(booking)
         self.db.commit()
         self.db.refresh(traveler)
         return traveler

@@ -2,6 +2,7 @@ from decimal import Decimal
 import uuid
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
+from app.models.account import Account
 from app.core.enums import BookingSource, BookingStatus
 from app.models.booking import Booking
 from app.models.booking_status_history import BookingStatusHistory
@@ -14,11 +15,63 @@ from app.models.trip_vehicle import TripVehicle
 from app.models.tour_departure import TourDeparture
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
+from app.utils.booking_traveller import ensure_unique_booking_travellers
 
 
 class BookingRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    @staticmethod
+    def _contact_matches(value: str | None, expected: str | None) -> bool:
+        return bool(
+            value
+            and expected
+            and value.strip().casefold() == expected.strip().casefold()
+        )
+
+    def _apply_primary_traveller_flags(self, customer_id, travellers) -> None:
+        customer = self.db.get(Account, customer_id)
+        primary_index = None
+
+        if customer is not None and customer.mobile:
+            primary_index = next(
+                (
+                    index
+                    for index, traveller in enumerate(travellers)
+                    if self._contact_matches(
+                        traveller.get("mobile")
+                        if isinstance(traveller, dict)
+                        else traveller.mobile,
+                        customer.mobile,
+                    )
+                ),
+                None,
+            )
+
+        if primary_index is None and customer is not None and customer.email:
+            primary_index = next(
+                (
+                    index
+                    for index, traveller in enumerate(travellers)
+                    if self._contact_matches(
+                        traveller.get("email")
+                        if isinstance(traveller, dict)
+                        else traveller.email,
+                        customer.email,
+                    )
+                ),
+                None,
+            )
+
+        for index, traveller in enumerate(travellers):
+            if isinstance(traveller, dict):
+                traveller["is_primary"] = index == primary_index
+            else:
+                traveller.is_primary = index == primary_index
+
+    def sync_primary_travellers(self, booking: Booking) -> None:
+        self._apply_primary_traveller_flags(booking.customer_id, booking.travellers)
 
     def get_by_id(self, booking_id: uuid.UUID) -> Booking | None:
         stmt = (
@@ -227,6 +280,9 @@ class BookingRepository:
         itinerary: list[dict] | None = None,
     ) -> Booking:
         booking = Booking(**booking_data)
+        travellers = [dict(traveller) for traveller in travellers or []]
+        ensure_unique_booking_travellers(travellers)
+        self._apply_primary_traveller_flags(booking.customer_id, travellers)
         self.db.add(booking)
         self.db.flush()
 
@@ -302,9 +358,30 @@ class BookingRepository:
         self.db.commit()
 
     def update_traveller(self, traveller: BookingTraveler, data: dict) -> BookingTraveler:
+        identity_fields = ("full_name", "mobile", "email")
+        updated_identity = {
+            field: getattr(traveller, field)
+            for field in identity_fields
+        }
+        updated_identity.update(
+            {
+                field: value
+                for field, value in data.items()
+                if field in identity_fields and value is not None
+            }
+        )
+        ensure_unique_booking_travellers(
+            [updated_identity],
+            existing=(
+                saved
+                for saved in traveller.booking.travellers
+                if saved.id != traveller.id
+            ),
+        )
         for key, value in data.items():
             if value is not None:
                 setattr(traveller, key, value)
+        self.sync_primary_travellers(traveller.booking)
         self.db.commit()
         self.db.refresh(traveller)
         return traveller
