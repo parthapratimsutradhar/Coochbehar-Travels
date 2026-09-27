@@ -334,14 +334,36 @@ class QuotationService:
         quotation.sent_at = datetime.now(timezone.utc)
         return self.quotation_repo.update_status(quotation, QuotationStatus.SENT)
 
+    def _create_booking_from_quotation(
+        self,
+        quotation: Quotation,
+        booking_fields: dict,
+        travellers: list[dict] | None = None,
+    ) -> Booking:
+        from app.repository.booking_repo import BookingRepository
+
+        booking_data = {
+            "booking_code": f"BK-{uuid.uuid4().hex[:8].upper()}",
+            "customer_id": quotation.customer_id,
+            "enquiry_id": quotation.enquiry_id,
+            "package_id": quotation.package_id,
+            "variant_id": quotation.variant_id,
+            "quotation_id": quotation.id,
+            "subtotal": quotation.subtotal,
+            "discount_amount": quotation.discount_amount,
+            "total_amount": quotation.total_amount,
+            "paid_amount": Decimal(0),
+            "due_amount": quotation.total_amount,
+        }
+        booking_data.update(booking_fields)
+        return BookingRepository(self.db).create(booking_data, travellers=travellers)
+
     def accept_quotation(
         self,
         quotation_id: uuid.UUID,
         customer: Account,
         travellers: list[dict],
     ) -> Booking:
-        from app.repository.booking_repo import BookingRepository
-
         quotation = self.get_quotation(quotation_id)
         if quotation.customer_id != customer.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only accept your own quotation.")
@@ -356,30 +378,22 @@ class QuotationService:
         quotation.status = QuotationStatus.ACCEPTED
 
         enquiry = quotation.enquiry
-        booking_data = {
-            "booking_code": f"BK-{uuid.uuid4().hex[:8].upper()}",
-            "customer_id": customer.id,
-            "enquiry_id": quotation.enquiry_id,
-            "package_id": quotation.package_id,
-            "variant_id": quotation.variant_id,
-            "quotation_id": quotation.id,
-            "booking_type": TourType.DOMESTIC,
-            "source": BookingSource.WEBSITE,
-            "status": BookingStatus.CONFIRMED,
-            "departure_date": quotation.travel_date.date() if quotation.travel_date else None,
-            "return_date": quotation.return_date.date() if quotation.return_date else None,
-            "adult_count": (enquiry.adult_count if enquiry and enquiry.adult_count else len(travellers)),
-            "child_count": enquiry.child_count if enquiry and enquiry.child_count else 0,
-            "senior_count": enquiry.senior_count if enquiry and enquiry.senior_count else 0,
-            "subtotal": quotation.subtotal,
-            "discount_amount": quotation.discount_amount,
-            "total_amount": quotation.total_amount,
-            "paid_amount": Decimal(0),
-            "due_amount": quotation.total_amount,
-            "notes": None,
-            "created_by": customer.id,
-        }
-        return BookingRepository(self.db).create(booking_data, travellers=travellers)
+        return self._create_booking_from_quotation(
+            quotation,
+            {
+                "booking_type": TourType.DOMESTIC,
+                "source": BookingSource.WEBSITE,
+                "status": BookingStatus.CONFIRMED,
+                "departure_date": quotation.travel_date.date() if quotation.travel_date else None,
+                "return_date": quotation.return_date.date() if quotation.return_date else None,
+                "adult_count": (enquiry.adult_count if enquiry and enquiry.adult_count else len(travellers)),
+                "child_count": enquiry.child_count if enquiry and enquiry.child_count else 0,
+                "senior_count": enquiry.senior_count if enquiry and enquiry.senior_count else 0,
+                "notes": None,
+                "created_by": customer.id,
+            },
+            travellers=travellers,
+        )
 
     def reject_quotation(
         self,
@@ -408,9 +422,6 @@ class QuotationService:
         booking_type: str = "PACKAGE",
         notes: str | None = None,
     ) -> Booking:
-        from app.repository.booking_repo import BookingRepository
-
-        booking_repo = BookingRepository(self.db)
         quotation = self.get_quotation(quotation_id)
         if quotation.status != QuotationStatus.ACCEPTED:
             # Allow conversion with a note if admin chooses
@@ -422,29 +433,17 @@ class QuotationService:
                 detail="Quotation must be linked to a customer account before converting to a booking.",
             )
 
-        booking_code = f"BK-{uuid.uuid4().hex[:8].upper()}"
-        booking_data = {
-            "booking_code": booking_code,
-            "customer_id": quotation.customer_id,
-            "enquiry_id": quotation.enquiry_id,
-            "package_id": getattr(quotation, "package_id", None),
-            "variant_id": getattr(quotation, "variant_id", None),
-            "booking_type": booking_type,
-            "quotation_id": quotation.id,
-            "source": BookingSource.OFFLINE,
-            "sales_account_id": staff_user.id,
-            "status": BookingStatus.CONFIRMED,
-            "adult_count": quotation.enquiry.adult_count or 1,
-            "child_count": quotation.enquiry.child_count or 0,
-            "senior_count": quotation.enquiry.senior_count or 0,
-            "subtotal": quotation.subtotal,
-            "discount_amount": quotation.discount_amount,
-            "total_amount": quotation.total_amount,
-            "paid_amount": Decimal(0),
-            "due_amount": quotation.total_amount,
-            "notes": notes,
-            "created_by": staff_user.id,
-        }
-
-        booking = booking_repo.create(booking_data)
-        return booking
+        return self._create_booking_from_quotation(
+            quotation,
+            {
+                "booking_type": booking_type,
+                "source": BookingSource.OFFLINE,
+                "sales_account_id": staff_user.id,
+                "status": BookingStatus.CONFIRMED,
+                "adult_count": quotation.enquiry.adult_count or 1,
+                "child_count": quotation.enquiry.child_count or 0,
+                "senior_count": quotation.enquiry.senior_count or 0,
+                "notes": notes,
+                "created_by": staff_user.id,
+            },
+        )
