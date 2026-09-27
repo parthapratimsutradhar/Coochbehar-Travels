@@ -62,6 +62,55 @@ class CustomerRepository:
             return self.get_by_email(cleaned)
         return self.get_by_mobile(cleaned)
 
+    def has_active_account_with_identifier(self, identifier: str) -> bool:
+        """Check whether any active account already uses this email or mobile."""
+        cleaned = identifier.strip()
+        contact_filter = (
+            Account.email.ilike(cleaned)
+            if "@" in cleaned
+            else Account.mobile == cleaned
+        )
+        return self.db.execute(
+            select(Account.id)
+            .where(contact_filter, Account.is_active.is_(True))
+            .limit(1)
+        ).scalar_one_or_none() is not None
+
+    def has_active_customer_with_identifier(self, identifier: str) -> bool:
+        """Check whether an active customer already uses this email or mobile."""
+        cleaned = identifier.strip()
+        contact_filter = (
+            Account.email.ilike(cleaned)
+            if "@" in cleaned
+            else Account.mobile == cleaned
+        )
+        return self.db.execute(
+            select(Account.id)
+            .where(
+                contact_filter,
+                Account.role == AccountRole.CUSTOMER,
+                Account.is_active.is_(True),
+            )
+            .limit(1)
+        ).scalar_one_or_none() is not None
+
+    def has_inactive_customer_with_identifier(self, identifier: str) -> bool:
+        """Check whether a deactivated customer previously used this contact."""
+        cleaned = identifier.strip()
+        contact_filter = (
+            Account.email.ilike(cleaned)
+            if "@" in cleaned
+            else Account.mobile == cleaned
+        )
+        return self.db.execute(
+            select(Account.id)
+            .where(
+                contact_filter,
+                Account.role == AccountRole.CUSTOMER,
+                Account.is_active.is_(False),
+            )
+            .limit(1)
+        ).scalar_one_or_none() is not None
     def create_customer(
         self,
         name: str = "Valued Traveler",

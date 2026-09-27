@@ -350,6 +350,7 @@ class AuthService:
             )
 
         cleaned, id_type = self.normalize_identifier(identifier)
+        self._validate_customer_auth_identifier(cleaned, purpose)
 
         raw_otp = generate_otp(6)
         hashed = hash_otp(raw_otp)
@@ -418,12 +419,8 @@ class AuthService:
                 detail=f"Invalid OTP. {remaining} attempt(s) remaining.",
             )
 
+        self._validate_customer_auth_identifier(cleaned, purpose)
         customer = self.customer_repo.get_by_identifier(cleaned)
-        if customer and purpose == CustomerOtpPurpose.SIGNUP.value:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=AuthError.CUSTOMER_ALREADY_EXISTS,
-            )
 
         if not customer:
             referrer = self._resolve_referrer(referral_code)
@@ -482,6 +479,33 @@ class AuthService:
 
         return access_token, raw_refresh_token
 
+    def _validate_customer_auth_identifier(self, identifier: str, purpose: str) -> None:
+        if purpose not in {CustomerOtpPurpose.LOGIN.value, CustomerOtpPurpose.SIGNUP.value}:
+            return
+
+        if purpose == CustomerOtpPurpose.SIGNUP.value:
+            if not self.customer_repo.has_active_customer_with_identifier(identifier):
+                return
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=AuthError.IDENTIFIER_ALREADY_USED,
+            )
+
+        customer = self.customer_repo.get_by_identifier(identifier)
+        if customer:
+            return
+
+        if purpose == CustomerOtpPurpose.LOGIN.value:
+            if (
+                self.customer_repo.has_inactive_customer_with_identifier(identifier)
+                or self.customer_repo.has_active_account_with_identifier(identifier)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=AuthError.CUSTOMER_LOGIN_NOT_FOUND,
+                )
+            return
+
     # ── CUSTOMER GOOGLE OAUTH FLOW ────────────────────────────────────
     async def google_login_customer(
         self,
@@ -505,6 +529,7 @@ class AuthService:
 
         customer = self.customer_repo.get_by_email(email)
         if not customer:
+            self._validate_customer_auth_identifier(email, CustomerOtpPurpose.LOGIN.value)
             referrer = self._resolve_referrer(referral_code)
             customer = self.customer_repo.create_customer(
                 name=name,

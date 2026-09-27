@@ -290,7 +290,10 @@ def test_2_customer_pure_otp_login_and_autoregistration(client: TestClient, db_s
     assert customer.account_code.startswith("CUS-")
 
 
-def test_customer_otp_login_creates_new_account_for_inactive_mobile(client: TestClient, db_session):
+def test_customer_inactive_mobile_requires_signup_then_creates_new_account(
+    client: TestClient,
+    db_session,
+):
     old_customer = Account(
         account_code="CUS-OLD-MOBILE",
         name="Former Traveler",
@@ -298,17 +301,40 @@ def test_customer_otp_login_creates_new_account_for_inactive_mobile(client: Test
         role=AccountRole.CUSTOMER,
         is_active=False,
     )
-    db_session.add(old_customer)
+    admin = Account(
+        account_code="USR-OLD-MOBILE",
+        name="Phone Contact Owner",
+        email="phone-contact-owner@example.com",
+        mobile=old_customer.mobile,
+        role=AccountRole.ADMIN,
+        is_active=True,
+    )
+    db_session.add_all([old_customer, admin])
     db_session.commit()
 
     req_res = client.post(
         "/api/v1/auth/otp/request",
         json={"identifier": old_customer.mobile},
     )
+    assert req_res.status_code == 404
+    assert req_res.json()["message"] == (
+        "No active customer account exists for this email or phone number. Please sign up."
+    )
+
+    req_res = client.post(
+        "/api/v1/auth/otp/request",
+        json={"identifier": old_customer.mobile, "purpose": "SIGNUP"},
+    )
+    assert req_res.status_code == 200
     otp = req_res.json()["data"]["dev_otp"]
     verify_res = client.post(
         "/api/v1/auth/otp/verify",
-        json={"identifier": old_customer.mobile, "otp": otp, "name": "New Traveler"},
+        json={
+            "identifier": old_customer.mobile,
+            "otp": otp,
+            "name": "New Traveler",
+            "purpose": "SIGNUP",
+        },
     )
 
     assert verify_res.status_code == 200
@@ -773,7 +799,7 @@ def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClien
     assert visitor.customer_id == cust_id
 
 
-def test_customer_google_login_creates_new_account_for_inactive_email(
+def test_customer_google_login_rejects_inactive_email(
     client: TestClient,
     db_session,
     monkeypatch,
@@ -787,6 +813,14 @@ def test_customer_google_login_creates_new_account_for_inactive_email(
         is_active=False,
     )
     db_session.add(old_customer)
+    admin = Account(
+        account_code="USR-INACTIVE-CONTACT",
+        name="Contact Owner",
+        email=email,
+        role=AccountRole.ADMIN,
+        is_active=True,
+    )
+    db_session.add(admin)
     db_session.commit()
 
     async def fake_upload_google_profile_picture(picture_url: str) -> str:
@@ -799,18 +833,119 @@ def test_customer_google_login_creates_new_account_for_inactive_email(
     google_token = make_mock_google_id_token(email=email, name="New Traveler")
     response = client.post("/api/v1/auth/google", json={"id_token": google_token})
 
-    assert response.status_code == 200
+    assert response.status_code == 404
+    assert response.json()["message"] == (
+        "No active customer account exists for this email or phone number. Please sign up."
+    )
     customers = (
         db_session.query(Account)
         .filter(Account.email == email, Account.role == AccountRole.CUSTOMER)
-        .order_by(Account.created_at)
+        .all()
+    )
+    assert customers == [old_customer]
+    assert old_customer.is_active is False
+
+
+def test_customer_signup_allows_contact_shared_with_active_admin(
+    client: TestClient,
+    db_session,
+):
+    email = "contact-owner@example.com"
+    old_customer = Account(
+        account_code="CUS-INACTIVE-CONTACT",
+        name="Former Traveler",
+        email=email,
+        role=AccountRole.CUSTOMER,
+        is_active=False,
+    )
+    admin = Account(
+        account_code="USR-CONTACT-OWNER",
+        name="Contact Owner",
+        email=email,
+        mobile="+919900112244",
+        role=AccountRole.ADMIN,
+        is_active=True,
+    )
+    db_session.add_all([old_customer, admin])
+    db_session.commit()
+
+    login_otp_response = client.post(
+        "/api/v1/auth/otp/request",
+        json={"identifier": email},
+    )
+    assert login_otp_response.status_code == 404
+    assert login_otp_response.json()["message"] == (
+        "No active customer account exists for this email or phone number. Please sign up."
+    )
+
+    google_token = make_mock_google_id_token(email=email, name="Contact Owner")
+    google_response = client.post("/api/v1/auth/google", json={"id_token": google_token})
+    assert google_response.status_code == 404
+    assert google_response.json()["message"] == (
+        "No active customer account exists for this email or phone number. Please sign up."
+    )
+
+    otp_response = client.post(
+        "/api/v1/auth/otp/request",
+        json={"identifier": email, "purpose": "SIGNUP", "visitor_id": ""},
+    )
+    assert otp_response.status_code == 200
+    verify_response = client.post(
+        "/api/v1/auth/otp/verify",
+        json={
+            "identifier": email,
+            "otp": otp_response.json()["data"]["dev_otp"],
+            "purpose": "SIGNUP",
+            "name": "New Traveler",
+        },
+    )
+    assert verify_response.status_code == 200
+
+    customers = (
+        db_session.query(Account)
+        .filter(Account.email == email, Account.role == AccountRole.CUSTOMER)
         .all()
     )
     assert len(customers) == 2
-    assert customers[0].id == old_customer.id
-    assert customers[0].is_active is False
-    assert customers[1].is_active is True
-    assert customers[1].id != customers[0].id
+    assert old_customer in customers
+    assert old_customer.is_active is False
+    assert next(customer for customer in customers if customer.id != old_customer.id).is_active is True
+
+
+@pytest.mark.parametrize(
+    ("contact_field", "contact_value"),
+    [
+        ("email", "active-traveler@example.com"),
+        ("mobile", "+919900112255"),
+    ],
+)
+def test_customer_signup_rejects_existing_active_customer(
+    client: TestClient,
+    db_session,
+    contact_field: str,
+    contact_value: str,
+):
+    contact = {"email": None, "mobile": None}
+    contact[contact_field] = contact_value
+    customer = Account(
+        account_code="CUS-ACTIVE-EMAIL",
+        name="Active Traveler",
+        role=AccountRole.CUSTOMER,
+        is_active=True,
+        **contact,
+    )
+    db_session.add(customer)
+    db_session.commit()
+
+    response = client.post(
+        "/api/v1/auth/otp/request",
+        json={"identifier": contact_value, "purpose": "SIGNUP"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["message"] == (
+        "Email or Phone number is already used by another account."
+    )
 
 
 def test_existing_customer_google_login_adds_missing_profile_pic(

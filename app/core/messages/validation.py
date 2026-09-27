@@ -19,6 +19,8 @@ class AuthError(StrEnum):
     GOOGLE_ADMIN_NOT_FOUND = "No active Admin account found for this Google email."
     INVALID_OTP_PURPOSE = "Customer OTP purpose must be LOGIN or SIGNUP."
     CUSTOMER_ALREADY_EXISTS = "A customer account already exists for this identifier. Please use LOGIN."
+    CUSTOMER_LOGIN_NOT_FOUND = "No active customer account exists for this email or phone number. Please sign up."
+    IDENTIFIER_ALREADY_USED = "Email or Phone number is already used by another account."
     REFRESH_MISSING = "Refresh token is missing."
     REFRESH_INVALID = "Invalid refresh token."
     REFRESH_REUSE = "Refresh token reuse detected. All active sessions have been revoked for security."
