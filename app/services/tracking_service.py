@@ -19,7 +19,14 @@ from app.models.visitor_event import VisitorEvent
 from app.models.visitor_session import VisitorSession
 from app.repository.visitor_repo import VisitorRepository
 from app.services.lead_scoring_service import LeadScoringService
-from app.services.socket_service import emit_lead_score_updated
+from app.services.socket_service import (
+    emit_lead_score_updated,
+    emit_session_started,
+    emit_session_ended,
+    emit_session_heartbeat,
+    emit_visitor_event,
+    emit_visitor_identified,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +54,7 @@ class TrackingService:
         device: str | None = None,
         customer_id: uuid.UUID | None = None,
     ) -> tuple[Visitor, bool]:
-        """Identify (upsert) a visitor by fingerprint.
-
-        Returns ``(visitor, is_new)``.
-        """
-        return self.repo.get_or_create(
+        visitor, is_new = self.repo.get_or_create(
             fingerprint,
             ip_address=ip_address,
             country=country,
@@ -62,6 +65,9 @@ class TrackingService:
             device=device,
             customer_id=customer_id,
         )
+        # Broadcast to admin in real time
+        emit_visitor_identified(visitor, is_new=is_new)
+        return visitor, is_new
 
     # ── Session lifecycle ─────────────────────────────────────────────
 
@@ -75,8 +81,20 @@ class TrackingService:
         utm_medium: str | None = None,
         utm_campaign: str | None = None,
         utm_term: str | None = None,
+        utm_content: str | None = None,
     ) -> VisitorSession:
         """Start a new browsing session and log a ``session_start`` event."""
+        # Store utm_content in event metadata since visitor_sessions table doesn't have that column
+        metadata: dict[str, Any] = {
+            "referrer": referrer,
+            "utm_source": utm_source,
+            "utm_medium": utm_medium,
+            "utm_campaign": utm_campaign,
+            "utm_term": utm_term,
+        }
+        if utm_content:
+            metadata["utm_content"] = utm_content
+
         session = self.repo.create_session(
             visitor_id,
             landing_page=landing_page,
@@ -86,19 +104,14 @@ class TrackingService:
             utm_campaign=utm_campaign,
             utm_term=utm_term,
         )
-        # Log a synthetic session-start event
         self.repo.create_event(
             visitor_id,
             session.id,
             event_name="session_start",
             page=landing_page,
-            event_metadata={
-                "referrer": referrer,
-                "utm_source": utm_source,
-                "utm_medium": utm_medium,
-                "utm_campaign": utm_campaign,
-            },
+            event_metadata=metadata,
         )
+        emit_session_started(session)
         return session
 
     def heartbeat(
@@ -109,11 +122,14 @@ class TrackingService:
         page_views_delta: int = 0,
     ) -> VisitorSession | None:
         """Keep a session alive — update exit page and pageview count."""
-        return self.repo.heartbeat_session(
+        session = self.repo.heartbeat_session(
             session_id,
             current_page=current_page,
             page_views_delta=page_views_delta,
         )
+        if session:
+            emit_session_heartbeat(session)
+        return session
 
     def end_session(
         self,
@@ -134,6 +150,7 @@ class TrackingService:
                     "page_views": session.page_views,
                 },
             )
+            emit_session_ended(session)
         return session
 
     # ── Event tracking & Dynamic Lead Scoring ─────────────────────────
@@ -156,13 +173,18 @@ class TrackingService:
             event_metadata=metadata,
         )
 
+        # Broadcast event to admin in real time
+        emit_visitor_event(event)
+
         # Update session pageview count for page_view events
         if event_name == "page_view":
-            self.repo.heartbeat_session(
+            updated_session = self.repo.heartbeat_session(
                 session_id,
                 current_page=page,
                 page_views_delta=1,
             )
+            if updated_session:
+                emit_session_heartbeat(updated_session)
 
         # Connect visitor event to associated Lead (if enquiry submitted)
         lead = self.scoring_service.find_lead_for_visitor(visitor_id=visitor_id)

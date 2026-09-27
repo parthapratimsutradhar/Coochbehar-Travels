@@ -1,5 +1,8 @@
+import asyncio
 import copy
+import logging
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,8 +14,47 @@ from app.api.v1.admin.urls import router as admin_router
 from app.api.v1.enduser.urls import router as enduser_router
 from app.api.v1.public.urls import router as public_router
 from app.api.v1.shared.urls import router as shared_router
-from app.realtime.socket_manager import sio
+# IMPORTANT: socket_manager MUST be imported before any module that imports
+# socket_service, to ensure event handlers are registered on sio first.
+from app.realtime.socket_manager import sio  # noqa: E402
 import socketio
+
+logger = logging.getLogger(__name__)
+
+
+# ── Daily analytics cleanup scheduler ────────────────────────────────
+async def _daily_cleanup_task() -> None:
+    """Run the 90-day retention cleanup once per day."""
+    from app.services.cleanup_service import run_cleanup
+    while True:
+        try:
+            await asyncio.sleep(24 * 60 * 60)  # wait 24 h
+            summary = await run_cleanup()
+            logger.info("Daily cleanup ran: %s", summary)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception("Daily cleanup task error")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Run cleanup once at startup (catches up on stale data)
+    from app.services.cleanup_service import run_cleanup
+    try:
+        summary = await run_cleanup()
+        logger.info("Startup cleanup ran: %s", summary)
+    except Exception:
+        logger.exception("Startup cleanup failed")
+
+    # Schedule daily background cleanup
+    task = asyncio.create_task(_daily_cleanup_task())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(
@@ -21,6 +63,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url=None,
     redoc_url=None,
+    lifespan=lifespan,
 )
 
 app.add_middleware(

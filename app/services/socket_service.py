@@ -1,3 +1,13 @@
+﻿"""Socket broadcast helpers — analytics, leads, enquiries, notifications.
+
+CRITICAL: This file must NOT define any @sio.event handlers.
+All socket event handlers live exclusively in app/realtime/socket_manager.py.
+Previously, having @sio.event in both files caused handler-overwrite bugs
+because importing socket_service (e.g. via tracking_service) re-registered
+connect/disconnect, silently replacing the socket_manager handlers.
+"""
+from __future__ import annotations
+
 import asyncio
 import logging
 import uuid
@@ -8,22 +18,10 @@ from sqlalchemy import select
 
 from app.db.database import SessionLocal
 from app.models.account import Account
-from app.models.lead import Lead
-from app.models.lead_activity import LeadActivity
-from app.models.visitor import Visitor
-from app.realtime.constants import ANALYTICS_REALTIME_ROOM, ADMIN_REALTIME_ROOM, VISITOR_REALTIME_ROOM_PREFIX
-from app.realtime.presence import ACTIVE_VISITORS, VISITOR_SOCKET_INDEX, VISITOR_SOCKETS, upsert_active_visitor
+from app.realtime.constants import ANALYTICS_REALTIME_ROOM, ADMIN_REALTIME_ROOM
 from app.realtime.socket_manager import sio
-from app.utils.security import decode_access_token
 
 logger = logging.getLogger(__name__)
-
-_connections: dict[str, set[str]] = defaultdict(set)
-_sessions: dict[str, tuple[str, uuid.UUID]] = {}
-
-
-def _actor_key(actor_type: str, actor_id: uuid.UUID) -> str:
-    return f"{actor_type}:{actor_id}"
 
 
 def _safe_broadcast(
@@ -31,8 +29,10 @@ def _safe_broadcast(
     payload: dict[str, Any],
     rooms: list[str],
 ) -> None:
-    """Helper to broadcast events across multiple rooms asynchronously."""
-
+    """Fire-and-forget broadcast to multiple rooms.
+    Safe to call from sync code — schedules a task if a loop is running,
+    otherwise uses asyncio.run().
+    """
     async def _emit() -> None:
         for room in rooms:
             for event_name in event_names:
@@ -55,10 +55,13 @@ def _safe_broadcast(
             logger.exception("Failed to schedule broadcast task for %s", event_names)
 
 
-# ── Real-Time Sales Lead Broadcasts ───────────────────────────────────
+def _actor_key(actor_type: str, actor_id: uuid.UUID) -> str:
+    return f"{actor_type}:{actor_id}"
 
-def emit_lead_created(lead: Lead) -> None:
-    """Emit lead:created event to admin sockets upon committed lead creation."""
+
+# ── Lead Broadcasts ────────────────────────────────────────────────────
+
+def emit_lead_created(lead: Any) -> None:
     payload = {
         "lead_id": str(lead.id),
         "lead_code": lead.lead_code,
@@ -67,18 +70,17 @@ def emit_lead_created(lead: Lead) -> None:
         "enquiry_id": str(lead.enquiry_id) if lead.enquiry_id else None,
         "created_at": lead.created_at.isoformat() if lead.created_at else None,
     }
-    _safe_broadcast(["lead:created", "lead.created"], payload, rooms=["ADMIN"])
+    _safe_broadcast(["lead:created", "lead.created"], payload, rooms=[ADMIN_REALTIME_ROOM])
 
 
 def emit_lead_score_updated(
-    lead: Lead,
+    lead: Any,
     *,
     previous_score: int,
     new_score: int,
     delta: int,
     reason: str,
 ) -> None:
-    """Emit lead:score_updated to admin sockets and lead-specific room."""
     payload = {
         "lead_id": str(lead.id),
         "lead_code": lead.lead_code,
@@ -91,17 +93,16 @@ def emit_lead_score_updated(
     _safe_broadcast(
         ["lead:score_updated", "lead.score_updated", "lead_score.updated"],
         payload,
-        rooms=["ADMIN", f"lead:{lead.id}", f"sales:lead:{lead.id}"],
+        rooms=[ADMIN_REALTIME_ROOM, f"lead:{lead.id}", f"sales:lead:{lead.id}"],
     )
 
 
 def emit_lead_status_updated(
-    lead: Lead,
+    lead: Any,
     *,
     previous_status: str,
     new_status: str,
 ) -> None:
-    """Emit lead:status_updated to admin sockets and lead-specific room."""
     payload = {
         "lead_id": str(lead.id),
         "lead_code": lead.lead_code,
@@ -112,15 +113,11 @@ def emit_lead_status_updated(
     _safe_broadcast(
         ["lead:status_updated", "lead.status_updated"],
         payload,
-        rooms=["ADMIN", f"lead:{lead.id}", f"sales:lead:{lead.id}"],
+        rooms=[ADMIN_REALTIME_ROOM, f"lead:{lead.id}", f"sales:lead:{lead.id}"],
     )
 
 
-def emit_lead_activity_created(
-    lead: Lead,
-    activity: LeadActivity,
-) -> None:
-    """Emit lead:activity_created to admin sockets upon logging activity."""
+def emit_lead_activity_created(lead: Any, activity: Any) -> None:
     payload = {
         "lead_id": str(lead.id),
         "lead_code": lead.lead_code,
@@ -135,14 +132,13 @@ def emit_lead_activity_created(
     _safe_broadcast(
         ["lead:activity_created", "lead.activity_created"],
         payload,
-        rooms=["ADMIN", f"lead:{lead.id}", f"sales:lead:{lead.id}"],
+        rooms=[ADMIN_REALTIME_ROOM, f"lead:{lead.id}", f"sales:lead:{lead.id}"],
     )
 
 
 # ── Enquiry Broadcasts ────────────────────────────────────────────────
 
 def emit_enquiry_created(enquiry: Any) -> None:
-    """Emit enquiry:created when a new enquiry is submitted by enduser."""
     payload = {
         "enquiry_id": str(enquiry.id),
         "enquiry_code": enquiry.enquiry_code,
@@ -156,14 +152,13 @@ def emit_enquiry_created(enquiry: Any) -> None:
         "package_id": str(enquiry.package_id) if enquiry.package_id else None,
         "created_at": enquiry.created_at.isoformat() if enquiry.created_at else None,
     }
-    rooms = ["ADMIN"]
+    rooms = [ADMIN_REALTIME_ROOM]
     if enquiry.customer_id:
         rooms.append(f"CUSTOMER:{enquiry.customer_id}")
     _safe_broadcast(["enquiry:created", "enquiry.created"], payload, rooms=rooms)
 
 
 def emit_enquiry_updated(enquiry: Any) -> None:
-    """Emit enquiry:updated when admin updates enquiry fields."""
     payload = {
         "enquiry_id": str(enquiry.id),
         "enquiry_code": enquiry.enquiry_code,
@@ -172,7 +167,7 @@ def emit_enquiry_updated(enquiry: Any) -> None:
         "message": enquiry.message,
         "updated_at": enquiry.updated_at.isoformat() if hasattr(enquiry, "updated_at") and enquiry.updated_at else None,
     }
-    rooms = ["ADMIN", f"enquiry:{enquiry.id}"]
+    rooms = [ADMIN_REALTIME_ROOM, f"enquiry:{enquiry.id}"]
     if enquiry.customer_id:
         rooms.append(f"CUSTOMER:{enquiry.customer_id}")
     _safe_broadcast(["enquiry:updated", "enquiry.updated"], payload, rooms=rooms)
@@ -184,20 +179,19 @@ def emit_enquiry_status_updated(
     previous_status: str,
     new_status: str,
 ) -> None:
-    """Emit enquiry:status_updated with before/after state."""
     payload = {
         "enquiry_id": str(enquiry.id),
         "enquiry_code": enquiry.enquiry_code,
         "previous_status": previous_status,
         "new_status": new_status,
     }
-    rooms = ["ADMIN", f"enquiry:{enquiry.id}"]
+    rooms = [ADMIN_REALTIME_ROOM, f"enquiry:{enquiry.id}"]
     if enquiry.customer_id:
         rooms.append(f"CUSTOMER:{enquiry.customer_id}")
     _safe_broadcast(["enquiry:status_updated", "enquiry.status_updated"], payload, rooms=rooms)
 
 
-# ── Notification Broadcasts ───────────────────────────────────────────
+# ── Notification Broadcasts ────────────────────────────────────────────
 
 def emit_notification_read(
     *,
@@ -205,11 +199,7 @@ def emit_notification_read(
     actor_id: uuid.UUID,
     notification_id: uuid.UUID,
 ) -> None:
-    """Emit notification:read to sync read-state across devices/tabs."""
-    payload = {
-        "notification_id": str(notification_id),
-        "is_read": True,
-    }
+    payload = {"notification_id": str(notification_id), "is_read": True}
     _safe_broadcast(
         ["notification:read", "notification.read"],
         payload,
@@ -223,11 +213,7 @@ def emit_notification_read_all(
     actor_id: uuid.UUID,
     count: int,
 ) -> None:
-    """Emit notification:read_all when bulk-marking notifications as read."""
-    payload = {
-        "count": count,
-        "unread_count": 0,
-    }
+    payload = {"count": count, "unread_count": 0}
     _safe_broadcast(
         ["notification:read_all", "notification.read_all"],
         payload,
@@ -238,9 +224,9 @@ def emit_notification_read_all(
 # ── Visitor Analytics Broadcasts ──────────────────────────────────────
 
 def emit_visitor_identified(visitor: Any, *, is_new: bool) -> None:
-    """Emit analytics:visitor_identified to live admin analytics dashboard."""
     payload = {
         "visitor_id": str(visitor.id),
+        "visitor_code": visitor.visitor_code,
         "fingerprint": visitor.fingerprint,
         "ip_address": visitor.ip_address,
         "country": visitor.country,
@@ -248,18 +234,18 @@ def emit_visitor_identified(visitor: Any, *, is_new: bool) -> None:
         "browser": visitor.browser,
         "os": visitor.os,
         "device": visitor.device,
+        "customer_id": str(visitor.customer_id) if visitor.customer_id else None,
         "is_new": is_new,
         "first_seen": visitor.first_seen.isoformat() if visitor.first_seen else None,
     }
     _safe_broadcast(
         ["analytics:visitor_identified", "analytics.visitor_identified"],
         payload,
-        rooms=["ADMIN", "analytics:live"],
+        rooms=[ADMIN_REALTIME_ROOM, ANALYTICS_REALTIME_ROOM],
     )
 
 
 def emit_session_started(session: Any) -> None:
-    """Emit analytics:session_started when a new visitor session begins."""
     payload = {
         "session_id": str(session.id),
         "visitor_id": str(session.visitor_id),
@@ -268,32 +254,32 @@ def emit_session_started(session: Any) -> None:
         "utm_source": session.utm_source,
         "utm_medium": session.utm_medium,
         "utm_campaign": session.utm_campaign,
+        "utm_term": session.utm_term,
         "started_at": session.started_at.isoformat() if session.started_at else None,
     }
     _safe_broadcast(
         ["analytics:session_started", "analytics.session_started"],
         payload,
-        rooms=["ADMIN", "analytics:live"],
+        rooms=[ADMIN_REALTIME_ROOM, ANALYTICS_REALTIME_ROOM],
     )
 
 
 def emit_session_heartbeat(session: Any) -> None:
-    """Emit analytics:session_heartbeat with current page and page view delta."""
     payload = {
         "session_id": str(session.id),
         "visitor_id": str(session.visitor_id),
         "exit_page": session.exit_page,
         "page_views": session.page_views,
+        "duration_seconds": session.duration_seconds,
     }
     _safe_broadcast(
         ["analytics:session_heartbeat", "analytics.session_heartbeat"],
         payload,
-        rooms=["ADMIN", "analytics:live"],
+        rooms=[ADMIN_REALTIME_ROOM, ANALYTICS_REALTIME_ROOM],
     )
 
 
 def emit_session_ended(session: Any) -> None:
-    """Emit analytics:session_ended when a visitor session is finalised."""
     payload = {
         "session_id": str(session.id),
         "visitor_id": str(session.visitor_id),
@@ -305,12 +291,11 @@ def emit_session_ended(session: Any) -> None:
     _safe_broadcast(
         ["analytics:session_ended", "analytics.session_ended"],
         payload,
-        rooms=["ADMIN", "analytics:live"],
+        rooms=[ADMIN_REALTIME_ROOM, ANALYTICS_REALTIME_ROOM],
     )
 
 
 def emit_visitor_event(event: Any) -> None:
-    """Emit analytics:visitor_event for each tracked visitor interaction."""
     payload = {
         "event_id": str(event.id),
         "visitor_id": str(event.visitor_id),
@@ -322,14 +307,13 @@ def emit_visitor_event(event: Any) -> None:
     _safe_broadcast(
         ["analytics:visitor_event", "analytics.visitor_event"],
         payload,
-        rooms=["ADMIN", "analytics:live"],
+        rooms=[ADMIN_REALTIME_ROOM, ANALYTICS_REALTIME_ROOM],
     )
 
 
-# ── Tour Catalog Broadcasts ──────────────────────────────────────────
+# ── Tour Catalog Broadcasts ───────────────────────────────────────────
 
 def emit_tour_package_created(package: Any) -> None:
-    """Emit tour:package_created to admin and enduser consumers."""
     payload = {
         "package_id": str(package.id),
         "tour_code": package.tour_code,
@@ -339,11 +323,10 @@ def emit_tour_package_created(package: Any) -> None:
         "is_active": package.is_active,
         "is_featured": package.is_featured,
     }
-    _safe_broadcast(["tour:package_created", "tour.package_created"], payload, rooms=["ADMIN"])
+    _safe_broadcast(["tour:package_created", "tour.package_created"], payload, rooms=[ADMIN_REALTIME_ROOM])
 
 
 def emit_tour_package_updated(package: Any) -> None:
-    """Emit tour:package_updated for live catalog sync."""
     payload = {
         "package_id": str(package.id),
         "tour_code": package.tour_code,
@@ -356,22 +339,20 @@ def emit_tour_package_updated(package: Any) -> None:
     _safe_broadcast(
         ["tour:package_updated", "tour.package_updated"],
         payload,
-        rooms=["ADMIN", f"package:{package.id}"],
+        rooms=[ADMIN_REALTIME_ROOM, f"package:{package.id}"],
     )
 
 
 def emit_tour_package_deleted(package_id: uuid.UUID) -> None:
-    """Emit tour:package_deleted when a tour package is removed."""
     payload = {"package_id": str(package_id)}
     _safe_broadcast(
         ["tour:package_deleted", "tour.package_deleted"],
         payload,
-        rooms=["ADMIN", f"package:{package_id}"],
+        rooms=[ADMIN_REALTIME_ROOM, f"package:{package_id}"],
     )
 
 
 def emit_tour_variant_created(variant: Any) -> None:
-    """Emit tour:variant_created for variant management live sync."""
     payload = {
         "variant_id": str(variant.id),
         "package_id": str(variant.package_id),
@@ -383,12 +364,11 @@ def emit_tour_variant_created(variant: Any) -> None:
     _safe_broadcast(
         ["tour:variant_created", "tour.variant_created"],
         payload,
-        rooms=["ADMIN", f"package:{variant.package_id}"],
+        rooms=[ADMIN_REALTIME_ROOM, f"package:{variant.package_id}"],
     )
 
 
 def emit_tour_variant_updated(variant: Any) -> None:
-    """Emit tour:variant_updated when variant details change."""
     payload = {
         "variant_id": str(variant.id),
         "package_id": str(variant.package_id),
@@ -400,40 +380,34 @@ def emit_tour_variant_updated(variant: Any) -> None:
     _safe_broadcast(
         ["tour:variant_updated", "tour.variant_updated"],
         payload,
-        rooms=["ADMIN", f"package:{variant.package_id}"],
+        rooms=[ADMIN_REALTIME_ROOM, f"package:{variant.package_id}"],
     )
 
 
 def emit_tour_variant_deleted(variant_id: uuid.UUID, package_id: uuid.UUID) -> None:
-    """Emit tour:variant_deleted on variant removal."""
-    payload = {
-        "variant_id": str(variant_id),
-        "package_id": str(package_id),
-    }
+    payload = {"variant_id": str(variant_id), "package_id": str(package_id)}
     _safe_broadcast(
         ["tour:variant_deleted", "tour.variant_deleted"],
         payload,
-        rooms=["ADMIN", f"package:{package_id}"],
+        rooms=[ADMIN_REALTIME_ROOM, f"package:{package_id}"],
     )
 
 
 def emit_tour_detail_updated(detail: Any, package_id: uuid.UUID | None = None) -> None:
-    """Emit tour:detail_updated when itinerary details are modified."""
     payload = {
         "detail_id": str(detail.id),
         "variant_id": str(detail.variant_id),
         "package_id": str(package_id) if package_id else None,
     }
-    rooms = ["ADMIN"]
+    rooms = [ADMIN_REALTIME_ROOM]
     if package_id:
         rooms.append(f"package:{package_id}")
     _safe_broadcast(["tour:detail_updated", "tour.detail_updated"], payload, rooms=rooms)
 
 
-# ── Document Broadcasts ──────────────────────────────────────────────
+# ── Document Broadcasts ───────────────────────────────────────────────
 
 def emit_document_uploaded(document: Any) -> None:
-    """Emit document:uploaded when a document is uploaded by admin or customer."""
     payload = {
         "document_id": str(document.id),
         "document_type": document.document_type.value if hasattr(document.document_type, "value") else str(document.document_type),
@@ -443,7 +417,7 @@ def emit_document_uploaded(document: Any) -> None:
         "uploaded_by": "CUSTOMER" if document.uploaded_by_account and document.uploaded_by_account.role.value == "CUSTOMER" else "ADMIN",
         "uploaded_at": document.uploaded_at.isoformat() if document.uploaded_at else None,
     }
-    rooms = ["ADMIN"]
+    rooms = [ADMIN_REALTIME_ROOM]
     if document.customer_id:
         rooms.append(f"CUSTOMER:{document.customer_id}")
     _safe_broadcast(["document:uploaded", "document.uploaded"], payload, rooms=rooms)
@@ -453,21 +427,19 @@ def emit_document_deleted(
     document_ids: list[uuid.UUID],
     customer_id: uuid.UUID | None = None,
 ) -> None:
-    """Emit document:deleted when documents are soft-deleted."""
     payload = {
         "document_ids": [str(d) for d in document_ids],
         "customer_id": str(customer_id) if customer_id else None,
     }
-    rooms = ["ADMIN"]
+    rooms = [ADMIN_REALTIME_ROOM]
     if customer_id:
         rooms.append(f"CUSTOMER:{customer_id}")
     _safe_broadcast(["document:deleted", "document.deleted"], payload, rooms=rooms)
 
 
-# ── Review Broadcasts ────────────────────────────────────────────────
+# ── Review Broadcasts ─────────────────────────────────────────────────
 
 def emit_review_created(review: Any) -> None:
-    """Emit review:created when a customer publishes a new review."""
     payload = {
         "review_id": str(review.id),
         "package_id": str(review.package_id),
@@ -476,40 +448,35 @@ def emit_review_created(review: Any) -> None:
         "is_published": review.is_published,
         "created_at": review.created_at.isoformat() if review.created_at else None,
     }
-    rooms = ["ADMIN"]
+    rooms = [ADMIN_REALTIME_ROOM]
     if review.package_id:
         rooms.append(f"package:{review.package_id}")
     _safe_broadcast(["review:created", "review.created"], payload, rooms=rooms)
 
 
 def emit_review_updated(review: Any) -> None:
-    """Emit review:updated when a customer edits their review."""
     payload = {
         "review_id": str(review.id),
         "package_id": str(review.package_id),
         "customer_id": str(review.customer_id) if review.customer_id else None,
         "rating": review.rating,
     }
-    rooms = ["ADMIN"]
+    rooms = [ADMIN_REALTIME_ROOM]
     if review.package_id:
         rooms.append(f"package:{review.package_id}")
     _safe_broadcast(["review:updated", "review.updated"], payload, rooms=rooms)
 
 
 def emit_review_deleted(review_id: uuid.UUID, package_id: uuid.UUID) -> None:
-    """Emit review:deleted when a review is soft-deleted."""
-    payload = {
-        "review_id": str(review_id),
-        "package_id": str(package_id),
-    }
+    payload = {"review_id": str(review_id), "package_id": str(package_id)}
     _safe_broadcast(
         ["review:deleted", "review.deleted"],
         payload,
-        rooms=["ADMIN", f"package:{package_id}"],
+        rooms=[ADMIN_REALTIME_ROOM, f"package:{package_id}"],
     )
 
 
-# ── Wishlist Broadcasts ──────────────────────────────────────────────
+# ── Wishlist Broadcasts ───────────────────────────────────────────────
 
 def emit_wishlist_updated(
     customer_id: uuid.UUID,
@@ -517,11 +484,10 @@ def emit_wishlist_updated(
     package_id: uuid.UUID,
     action: str,
 ) -> None:
-    """Emit wishlist:updated to sync across customer tabs/devices."""
     payload = {
         "customer_id": str(customer_id),
         "package_id": str(package_id),
-        "action": action,  # "added" | "removed"
+        "action": action,
     }
     _safe_broadcast(
         ["wishlist:updated", "wishlist.updated"],
@@ -530,21 +496,19 @@ def emit_wishlist_updated(
     )
 
 
-# ── Customer Broadcasts ──────────────────────────────────────────────
+# ── Customer Broadcasts ───────────────────────────────────────────────
 
 def emit_customer_created(customer: Any) -> None:
-    """Emit customer:created to admin dashboard."""
     payload = {
         "customer_id": str(customer.id),
         "name": customer.name,
         "email": customer.email,
         "mobile": customer.mobile,
     }
-    _safe_broadcast(["customer:created", "customer.created"], payload, rooms=["ADMIN"])
+    _safe_broadcast(["customer:created", "customer.created"], payload, rooms=[ADMIN_REALTIME_ROOM])
 
 
 def emit_customer_updated(customer: Any) -> None:
-    """Emit customer:updated to admin dashboard and customer's own room."""
     payload = {
         "customer_id": str(customer.id),
         "name": customer.name,
@@ -555,17 +519,16 @@ def emit_customer_updated(customer: Any) -> None:
     _safe_broadcast(
         ["customer:updated", "customer.updated"],
         payload,
-        rooms=["ADMIN", f"CUSTOMER:{customer.id}"],
+        rooms=[ADMIN_REALTIME_ROOM, f"CUSTOMER:{customer.id}"],
     )
 
 
 def emit_customer_deleted(customer_id: uuid.UUID) -> None:
-    """Emit customer:deleted to admin dashboard."""
     payload = {"customer_id": str(customer_id)}
-    _safe_broadcast(["customer:deleted", "customer.deleted"], payload, rooms=["ADMIN"])
+    _safe_broadcast(["customer:deleted", "customer.deleted"], payload, rooms=[ADMIN_REALTIME_ROOM])
 
 
-# ── Auth Session Broadcasts ──────────────────────────────────────────
+# ── Auth Session Broadcasts ───────────────────────────────────────────
 
 def emit_session_revoked(
     *,
@@ -573,7 +536,6 @@ def emit_session_revoked(
     actor_id: uuid.UUID,
     session_id: uuid.UUID,
 ) -> None:
-    """Emit auth:session_revoked so clients can invalidate tokens."""
     payload = {
         "session_id": str(session_id),
         "actor_type": actor_type,
@@ -586,245 +548,16 @@ def emit_session_revoked(
     )
 
 
-# ── Socket Lifecycle & Events ─────────────────────────────────────────
+# ── Notification publish helper ───────────────────────────────────────
 
-@sio.event
-async def connect(sid: str, environ: dict, auth: dict | None = None) -> bool:
-    token = (auth or {}).get("token")
-    payload = decode_access_token(token) if token else None
-    actor_type = payload.get("role", "").upper() if payload else ""
-    subject = payload.get("sub") if payload else None
-    if actor_type not in {"CUSTOMER", "ADMIN", "STAFF"} or not subject:
-        visitor_id = (auth or {}).get("visitor_id") or (auth or {}).get("visitorId") or str(uuid.uuid4())
-        session_id = (auth or {}).get("session_id") or (auth or {}).get("sessionId")
-        customer_id = (auth or {}).get("customer_id") or (auth or {}).get("customerId")
-        visitor_key = str(visitor_id)
-        record = upsert_active_visitor(
-            visitor_id=visitor_key,
-            session_id=str(session_id) if session_id else None,
-            customer_id=str(customer_id) if customer_id else None,
-            is_anonymous=customer_id is None,
-            activity="connected",
-            current_url=(auth or {}).get("current_url"),
-            source=(auth or {}).get("source"),
-            device=(auth or {}).get("device"),
-            browser=(auth or {}).get("browser"),
-            os=(auth or {}).get("os"),
-            ip_address=(auth or {}).get("ip_address"),
-            country=(auth or {}).get("country"),
-            city=(auth or {}).get("city"),
-            referrer=(auth or {}).get("referrer"),
-        )
-        VISITOR_SOCKETS[visitor_key].add(sid)
-        VISITOR_SOCKET_INDEX[sid] = visitor_key
-        await sio.save_session(sid, {"visitor_id": visitor_key, "session_id": record.get("session_id")})
-        await sio.enter_room(sid, f"{VISITOR_REALTIME_ROOM_PREFIX}{visitor_key}")
-        payload = {
-            "visitor_id": visitor_key,
-            "session_id": record.get("session_id"),
-            "customer_id": record.get("customer_id"),
-            "is_anonymous": record.get("is_anonymous", True),
-            "page": record.get("page"),
-            "connected_at": record.get("connected_at"),
-        }
-        await sio.emit("visitor_connected", payload, room=ADMIN_REALTIME_ROOM)
-        await sio.emit("visitor_connected", payload, room=ANALYTICS_REALTIME_ROOM)
-        return True
-    try:
-        actor_id = uuid.UUID(subject)
-    except ValueError:
-        return False
-
-    db = SessionLocal()
-    try:
-        if not db.scalar(select(Account.id).where(Account.id == actor_id, Account.is_active.is_(True))):
-            return False
-    finally:
-        db.close()
-
-    key = _actor_key(actor_type, actor_id)
-    _connections[key].add(sid)
-    _sessions[sid] = (key, actor_id)
-    await sio.save_session(sid, {"actor_type": actor_type, "actor_id": str(actor_id)})
-    await sio.enter_room(sid, key)
-    if actor_type in {"ADMIN", "STAFF"}:
-        await sio.enter_room(sid, "ADMIN")
-    await sio.emit(
-        "presence.updated",
-        {"actor_type": actor_type, "actor_id": str(actor_id), "online": True},
-        room="ADMIN",
-    )
-    return True
-
-
-@sio.event
-async def disconnect(sid: str) -> None:
-    session = _sessions.pop(sid, None)
-    if session:
-        key, actor_id = session
-        sockets = _connections[key]
-        sockets.discard(sid)
-        if not sockets:
-            _connections.pop(key, None)
-            actor_type = key.split(":", 1)[0]
-            await sio.emit(
-                "presence.updated",
-                {"actor_type": actor_type, "actor_id": str(actor_id), "online": False},
-                room=ADMIN_REALTIME_ROOM,
-            )
-        return
-
-    visitor_id = VISITOR_SOCKET_INDEX.pop(sid, None)
-    if not visitor_id:
-        return
-    sockets = VISITOR_SOCKETS.get(visitor_id, set())
-    sockets.discard(sid)
-    if sockets:
-        return
-    VISITOR_SOCKETS.pop(visitor_id, None)
-    record = ACTIVE_VISITORS.pop(visitor_id, None)
-    if record:
-        payload = {
-            "visitor_id": visitor_id,
-            "session_id": record.get("session_id"),
-            "last_activity": record.get("last_activity"),
-        }
-        await sio.emit("visitor_disconnected", payload, room=ADMIN_REALTIME_ROOM)
-        await sio.emit("visitor_disconnected", payload, room=ANALYTICS_REALTIME_ROOM)
-
-
-@sio.event
-async def join_lead(sid: str, data: dict | None = None) -> None:
-    """Allow connected staff/admin to subscribe to updates for a specific lead."""
-    session = _sessions.get(sid)
-    if not session or not data:
-        return
-    lead_id = data.get("lead_id")
-    if lead_id:
-        await sio.enter_room(sid, f"lead:{lead_id}")
-        await sio.enter_room(sid, f"sales:lead:{lead_id}")
-
-
-@sio.event
-async def leave_lead(sid: str, data: dict | None = None) -> None:
-    """Unsubscribe from updates for a specific lead."""
-    session = _sessions.get(sid)
-    if not session or not data:
-        return
-    lead_id = data.get("lead_id")
-    if lead_id:
-        await sio.leave_room(sid, f"lead:{lead_id}")
-        await sio.leave_room(sid, f"sales:lead:{lead_id}")
-
-
-@sio.event
-async def join_enquiry(sid: str, data: dict | None = None) -> None:
-    """Subscribe to updates for a specific enquiry."""
-    session = _sessions.get(sid)
-    if not session or not data:
-        return
-    enquiry_id = data.get("enquiry_id")
-    if enquiry_id:
-        await sio.enter_room(sid, f"enquiry:{enquiry_id}")
-
-
-@sio.event
-async def leave_enquiry(sid: str, data: dict | None = None) -> None:
-    """Unsubscribe from enquiry updates."""
-    session = _sessions.get(sid)
-    if not session or not data:
-        return
-    enquiry_id = data.get("enquiry_id")
-    if enquiry_id:
-        await sio.leave_room(sid, f"enquiry:{enquiry_id}")
-
-
-@sio.event
-async def join_package(sid: str, data: dict | None = None) -> None:
-    """Subscribe to updates for a specific tour package."""
-    session = _sessions.get(sid)
-    if not session or not data:
-        return
-    package_id = data.get("package_id")
-    if package_id:
-        await sio.enter_room(sid, f"package:{package_id}")
-
-
-@sio.event
-async def leave_package(sid: str, data: dict | None = None) -> None:
-    """Unsubscribe from tour package updates."""
-    session = _sessions.get(sid)
-    if not session or not data:
-        return
-    package_id = data.get("package_id")
-    if package_id:
-        await sio.leave_room(sid, f"package:{package_id}")
-
-
-@sio.event
-async def join_analytics(sid: str, data: dict | None = None) -> None:
-    """Subscribe to live analytics feed (admin only)."""
-    session = _sessions.get(sid)
-    if not session:
-        return
-    key, _ = session
-    if key.startswith("ADMIN:") or key.startswith("STAFF:"):
-        await sio.enter_room(sid, "analytics:live")
-
-
-@sio.event
-async def leave_analytics(sid: str, data: dict | None = None) -> None:
-    """Unsubscribe from live analytics feed."""
-    session = _sessions.get(sid)
-    if not session:
-        return
-    await sio.leave_room(sid, "analytics:live")
-
-
-@sio.event
-async def track_page(sid: str, data: dict | None = None) -> None:
-    session = _sessions.get(sid)
-    if not session or not data:
-        return
-    actor_key, actor_id = session
-    page = data.get("page")
-    visitor_id = data.get("visitor_id")
-    session_id = data.get("session_id")
-    if not page:
-        return
-
-    if visitor_id and session_id:
-        db = SessionLocal()
-        try:
-            from app.services.tracking_service import TrackingService
-
-            TrackingService(db).track_event(
-                uuid.UUID(visitor_id),
-                uuid.UUID(session_id),
-                event_name="page_view",
-                page=page,
-                metadata={"realtime": True},
-            )
-        finally:
-            db.close()
-
-    await sio.emit(
-        "customer.page_view",
-        {
-            "actor": actor_key,
-            "actor_id": str(actor_id),
-            "page": page,
-            "visitor_id": visitor_id,
-            "session_id": session_id,
-        },
-        room="ADMIN",
-    )
-
-
-async def publish_notification(item, db: Any | None = None) -> None:
+async def publish_notification(item: Any, db: Any | None = None) -> None:
     recipients = getattr(item, "recipient_ids", None) or []
     if not recipients:
-        single = getattr(item, "customer_id", None) or getattr(item, "user_id", None) or getattr(item, "recipient_id", None)
+        single = (
+            getattr(item, "customer_id", None)
+            or getattr(item, "user_id", None)
+            or getattr(item, "recipient_id", None)
+        )
         if single:
             recipients = [single]
     if not recipients:

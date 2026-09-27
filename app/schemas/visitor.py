@@ -1,5 +1,6 @@
+﻿"""Visitor, session, event schemas — enduser tracking + admin analytics."""
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import Field, ConfigDict
@@ -77,7 +78,7 @@ class VisitorEventResponse(VisitorEventBase):
     created_at: datetime
 
 
-# ── Enhanced Enduser Tracking Schemas ─────────────────────────────────
+# ── Enduser Tracking Request Schemas ──────────────────────────────────
 
 class VisitorIdentifyRequest(SchemaBase):
     fingerprint: str | None = Field(default=None, max_length=255, description="Client browser fingerprint")
@@ -104,6 +105,7 @@ class SessionStartRequest(SchemaBase):
     utm_medium: str | None = Field(default=None, max_length=100)
     utm_campaign: str | None = Field(default=None, max_length=100)
     utm_term: str | None = Field(default=None, max_length=100)
+    utm_content: str | None = Field(default=None, max_length=100, description="Stored in event metadata")
 
 
 class SessionHeartbeatRequest(SchemaBase):
@@ -140,7 +142,66 @@ class VisitorProfileResponse(SchemaBase):
     total_sessions: int
 
 
-# ── Admin Analytics Response Schemas ─────────────────────────────────
+# ── Live Presence Schemas ─────────────────────────────────────────────
+
+class LiveVisitorItem(SchemaBase):
+    """A single live visitor as seen in the admin presence panel."""
+    visitor_id: str
+    session_id: str | None = None
+    customer_id: str | None = None
+    visitor_type: str = Field(default="visitor", description="'customer' or 'visitor'")
+    visitor_code: str | None = None
+    customer_name: str | None = None
+    is_anonymous: bool = True
+    page: str | None = None
+    activity: str | None = None
+    source: str | None = None
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    utm_term: str | None = None
+    utm_content: str | None = None
+    referrer: str | None = None
+    current_url: str | None = None
+    device: str | None = None
+    browser: str | None = None
+    os: str | None = None
+    ip_address: str | None = None
+    country: str | None = None
+    state: str | None = None
+    city: str | None = None
+    session_start: str | None = None
+    last_activity: str | None = None
+    connected_at: str | None = None
+
+
+class LiveStatsResponse(SchemaBase):
+    total: int = Field(description="Total active connections")
+    customers: int = Field(description="Active logged-in customers")
+    visitors: int = Field(description="Active anonymous visitors")
+    active_visitors: list[LiveVisitorItem] = Field(default_factory=list)
+    timestamp: str
+
+
+# ── Admin Analytics Response Schemas ──────────────────────────────────
+
+DateFilter = Literal["today", "yesterday", "7d", "30d", "90d"]
+
+
+class AnalyticsStatsResponse(SchemaBase):
+    """Date-filtered statistical overview for admin analytics dashboard."""
+    total_visitors: int
+    total_customers: int
+    total_anonymous_visitors: int
+    total_events: int
+    total_page_views: int
+    total_sessions: int
+    avg_session_duration_seconds: float
+    avg_page_views_per_session: float
+    date_filter: str
+    period_start: str
+    period_end: str
+
 
 class AnalyticsOverviewResponse(SchemaBase):
     total_visitors: int
@@ -155,12 +216,30 @@ class TopPageItem(SchemaBase):
     page: str
     views: int
     unique_visitors: int
+    rank: int = 1
 
 
 class TopEventItem(SchemaBase):
     event_name: str
     count: int
     category: str | None = None
+
+
+class TrafficSourceItem(SchemaBase):
+    source: str = Field(description="direct | organic | social | referral | paid | email | utm_campaign")
+    sessions: int
+    visitors: int
+    percentage: float
+
+
+class LocationRankItem(SchemaBase):
+    location: str = Field(description="Country or City name")
+    location_type: str = Field(description="'country' or 'city'")
+    visitors: int
+    customers: int
+    total: int
+    percentage: float
+    rank: int
 
 
 class UtmPerformanceItem(SchemaBase):
@@ -175,7 +254,7 @@ class UtmPerformanceItem(SchemaBase):
 class FunnelStageItem(SchemaBase):
     stage: str
     visitor_count: int
-    conversion_rate: float  # Percentage of initial stage
+    conversion_rate: float
 
 
 class LeadScoreDistributionItem(SchemaBase):

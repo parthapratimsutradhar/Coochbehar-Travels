@@ -84,6 +84,7 @@ def create_session(
         utm_medium=payload.utm_medium,
         utm_campaign=payload.utm_campaign,
         utm_term=payload.utm_term,
+        utm_content=payload.utm_content,
     )
     return SuccessResponse(
         message="Visitor session created successfully",
