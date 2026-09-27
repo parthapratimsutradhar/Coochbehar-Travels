@@ -34,7 +34,11 @@ class CustomerRepository:
         stmt = (
             select(Account)
             .options(joinedload(Account.customer_profile))
-            .where(Account.email.ilike(email.strip()), Account.role == AccountRole.CUSTOMER)
+            .where(
+                Account.email.ilike(email.strip()),
+                Account.role == AccountRole.CUSTOMER,
+                Account.is_active.is_(True),
+            )
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
@@ -43,7 +47,11 @@ class CustomerRepository:
         stmt = (
             select(Account)
             .options(joinedload(Account.customer_profile))
-            .where(Account.mobile == mobile.strip(), Account.role == AccountRole.CUSTOMER)
+            .where(
+                Account.mobile == mobile.strip(),
+                Account.role == AccountRole.CUSTOMER,
+                Account.is_active.is_(True),
+            )
         )
         return self.db.execute(stmt).scalar_one_or_none()
 

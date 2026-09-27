@@ -290,6 +290,41 @@ def test_2_customer_pure_otp_login_and_autoregistration(client: TestClient, db_s
     assert customer.account_code.startswith("CUS-")
 
 
+def test_customer_otp_login_creates_new_account_for_inactive_mobile(client: TestClient, db_session):
+    old_customer = Account(
+        account_code="CUS-OLD-MOBILE",
+        name="Former Traveler",
+        mobile="+919900112233",
+        role=AccountRole.CUSTOMER,
+        is_active=False,
+    )
+    db_session.add(old_customer)
+    db_session.commit()
+
+    req_res = client.post(
+        "/api/v1/auth/otp/request",
+        json={"identifier": old_customer.mobile},
+    )
+    otp = req_res.json()["data"]["dev_otp"]
+    verify_res = client.post(
+        "/api/v1/auth/otp/verify",
+        json={"identifier": old_customer.mobile, "otp": otp, "name": "New Traveler"},
+    )
+
+    assert verify_res.status_code == 200
+    customers = (
+        db_session.query(Account)
+        .filter(Account.mobile == old_customer.mobile, Account.role == AccountRole.CUSTOMER)
+        .order_by(Account.created_at)
+        .all()
+    )
+    assert len(customers) == 2
+    assert customers[0].id == old_customer.id
+    assert customers[0].is_active is False
+    assert customers[1].is_active is True
+    assert customers[1].id != customers[0].id
+
+
 def test_3_customer_visitor_telemetry_linking(client: TestClient, db_session):
     """3. Test linking anonymous visitor telemetry to customer upon OTP verification."""
     visitor = Visitor(visitor_code="VIS-ANON01", fingerprint="fp-abc-123")
@@ -736,6 +771,46 @@ def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClien
     cust_id = uuid.UUID(me_data["id"])
     db_session.refresh(visitor)
     assert visitor.customer_id == cust_id
+
+
+def test_customer_google_login_creates_new_account_for_inactive_email(
+    client: TestClient,
+    db_session,
+    monkeypatch,
+):
+    email = "former-traveler@gmail.com"
+    old_customer = Account(
+        account_code="CUS-OLD-EMAIL",
+        name="Former Traveler",
+        email=email,
+        role=AccountRole.CUSTOMER,
+        is_active=False,
+    )
+    db_session.add(old_customer)
+    db_session.commit()
+
+    async def fake_upload_google_profile_picture(picture_url: str) -> str:
+        return "https://example.com/new-traveler.jpg"
+
+    monkeypatch.setattr(
+        "app.services.auth_service.upload_google_profile_picture",
+        fake_upload_google_profile_picture,
+    )
+    google_token = make_mock_google_id_token(email=email, name="New Traveler")
+    response = client.post("/api/v1/auth/google", json={"id_token": google_token})
+
+    assert response.status_code == 200
+    customers = (
+        db_session.query(Account)
+        .filter(Account.email == email, Account.role == AccountRole.CUSTOMER)
+        .order_by(Account.created_at)
+        .all()
+    )
+    assert len(customers) == 2
+    assert customers[0].id == old_customer.id
+    assert customers[0].is_active is False
+    assert customers[1].is_active is True
+    assert customers[1].id != customers[0].id
 
 
 def test_existing_customer_google_login_adds_missing_profile_pic(

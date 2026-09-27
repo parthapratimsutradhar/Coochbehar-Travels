@@ -1,4 +1,4 @@
-from sqlalchemy import DateTime, Enum, String, UniqueConstraint
+from sqlalchemy import DateTime, Enum, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from app.core.enums import AccountRole
@@ -7,8 +7,48 @@ from app.models.base import ActiveEntity
 class Account(ActiveEntity):
     __tablename__ = "accounts"
     __table_args__ = (
-        UniqueConstraint("email", "role", name="uq_accounts_email_role"),
-        UniqueConstraint("mobile", "role", name="uq_accounts_mobile_role"),
+        Index(
+            "uq_active_customer_email",
+            "email",
+            unique=True,
+            postgresql_where=text("role = 'CUSTOMER' AND is_active = true"),
+            sqlite_where=text("role = 'CUSTOMER' AND is_active = true"),
+        ),
+        Index(
+            "uq_admin_email",
+            "email",
+            unique=True,
+            postgresql_where=text("role = 'ADMIN'"),
+            sqlite_where=text("role = 'ADMIN'"),
+        ),
+        Index(
+            "uq_staff_email",
+            "email",
+            unique=True,
+            postgresql_where=text("role = 'STAFF'"),
+            sqlite_where=text("role = 'STAFF'"),
+        ),
+        Index(
+            "uq_active_customer_mobile",
+            "mobile",
+            unique=True,
+            postgresql_where=text("role = 'CUSTOMER' AND is_active = true"),
+            sqlite_where=text("role = 'CUSTOMER' AND is_active = true"),
+        ),
+        Index(
+            "uq_admin_mobile",
+            "mobile",
+            unique=True,
+            postgresql_where=text("role = 'ADMIN'"),
+            sqlite_where=text("role = 'ADMIN'"),
+        ),
+        Index(
+            "uq_staff_mobile",
+            "mobile",
+            unique=True,
+            postgresql_where=text("role = 'STAFF'"),
+            sqlite_where=text("role = 'STAFF'"),
+        ),
     )
 
     account_code: Mapped[str] = mapped_column(

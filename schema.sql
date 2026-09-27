@@ -1633,22 +1633,6 @@ ALTER TABLE ONLY public.tour_wishlists
 
 
 --
--- Name: accounts uq_accounts_email_role; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.accounts
-    ADD CONSTRAINT uq_accounts_email_role UNIQUE (email, role);
-
-
---
--- Name: accounts uq_accounts_mobile_role; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.accounts
-    ADD CONSTRAINT uq_accounts_mobile_role UNIQUE (mobile, role);
-
-
---
 -- Name: quotations uq_quotation_enquiry_version; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1763,6 +1747,48 @@ CREATE INDEX ix_accounts_email ON public.accounts USING btree (email);
 --
 
 CREATE INDEX ix_accounts_mobile ON public.accounts USING btree (mobile);
+
+
+--
+-- Name: uq_active_customer_email; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX uq_active_customer_email ON public.accounts USING btree (email) WHERE ((role = 'CUSTOMER'::account_role) AND (is_active = true));
+
+
+--
+-- Name: uq_admin_email; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX uq_admin_email ON public.accounts USING btree (email) WHERE (role = 'ADMIN'::account_role);
+
+
+--
+-- Name: uq_staff_email; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX uq_staff_email ON public.accounts USING btree (email) WHERE (role = 'STAFF'::account_role);
+
+
+--
+-- Name: uq_active_customer_mobile; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX uq_active_customer_mobile ON public.accounts USING btree (mobile) WHERE ((role = 'CUSTOMER'::account_role) AND (is_active = true));
+
+
+--
+-- Name: uq_admin_mobile; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX uq_admin_mobile ON public.accounts USING btree (mobile) WHERE (role = 'ADMIN'::account_role);
+
+
+--
+-- Name: uq_staff_mobile; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX uq_staff_mobile ON public.accounts USING btree (mobile) WHERE (role = 'STAFF'::account_role);
 
 
 --
