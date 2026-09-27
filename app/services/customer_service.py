@@ -199,7 +199,7 @@ class CustomerService:
             for b in bookings:
                 pax = b.adult_count + b.child_count + b.senior_count
                 tour_name = b.package.title if b.package else f"Booking {b.booking_code}"
-                destination = b.package.destination if b.package else None
+                destination = b.package.destination.name if b.package and b.package.destination else None
                 travel_date = b.departure.departure_date if b.departure else None
                 items.append(
                     CustomerTourResponse(
