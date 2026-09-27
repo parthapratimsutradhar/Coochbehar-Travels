@@ -25,6 +25,27 @@ A modern, scalable backend architecture built with **FastAPI**, **SQLAlchemy 2.0
 * **Direct Bookings**: Manage hotel room bookings and vehicle rental reservations.
 * **Sales Pipeline Management**: Lead status tracking (`new`, `contacted`, `qualified`, `converted`, `lost`) and sales team assignment.
 
+### 4. 👥 Real-Time Visitor Monitoring
+* **Live admin presence**: Admin and staff users subscribe to a dedicated realtime room for active visitors.
+* **Anonymous and authenticated tracking**: Each visitor gets a persistent `visitor_id` and a live session context; authenticated customers are linked to the same identity when available.
+* **Session lifecycle events**: The socket layer emits `visitor_connected`, `visitor_disconnected`, `page_view`, `page_navigation`, `activity`, `click`, `session_updated`, `visitor_identified`, and `visitor_location_updated` without requiring a page refresh.
+* **Presence and analytics separation**: The socket layer maintains transient active-visitor state, while the existing database models continue to persist historical analytics and sessions.
+
+#### Socket event reference
+| Event name | Direction | Auth | Purpose |
+| :--- | :--- | :--- | :--- |
+| `visitor_connected` | Backend → Admin | Admin/Staff socket room | A visitor enters the live feed. |
+| `visitor_disconnected` | Backend → Admin | Admin/Staff socket room | A visitor closes or loses the connection. |
+| `page_view` | Enduser → Backend → Admin | Anonymous or authenticated visitor | Tracks route and page transitions. |
+| `page_navigation` | Enduser → Backend → Admin | Anonymous or authenticated visitor | Tracks previous/current page navigation changes. |
+| `activity` | Enduser → Backend → Admin | Anonymous or authenticated visitor | Records contextual activity like search, filter, or form focus. |
+| `click` | Enduser → Backend → Admin | Anonymous or authenticated visitor | Captures meaningful click events only. |
+| `session_updated` | Backend → Admin | Admin/Staff socket room | Pushes latest active visitor location and session state. |
+| `visitor_identified` | Enduser → Backend → Admin | Anonymous or authenticated visitor | Links visitor metadata to an authenticated customer when available. |
+| `visitor_location_updated` | Enduser → Backend → Admin | Anonymous or authenticated visitor | Updates location, source, and referrer metadata. |
+
+> The official realtime contract lives in the dedicated module under `app/realtime`. The legacy `app/services/socket_service.py` remains for other business notifications, while visitor presence is centralized in the dedicated realtime layer.
+
 ---
 
 ## 🛠️ Technology Stack
