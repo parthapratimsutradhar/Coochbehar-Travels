@@ -4,66 +4,65 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 concurrency:
   group: gantabyaa-api-production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
-    name: Deploy to production
+    name: Deploy API to VPS
     runs-on: ubuntu-latest
 
     steps:
-      - name: Verify secrets
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-        run: |
-          test -n "$DEPLOY_HOST" || { echo "DEPLOY_HOST is missing"; exit 1; }
-          test -n "$DEPLOY_USER" || { echo "DEPLOY_USER is missing"; exit 1; }
-          test -n "$DEPLOY_PORT" || { echo "DEPLOY_PORT is missing"; exit 1; }
-          test -n "$DEPLOY_SSH_KEY" || { echo "DEPLOY_SSH_KEY is missing"; exit 1; }
-          echo "All deployment secrets are configured."
-
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           port: ${{ secrets.DEPLOY_PORT }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          command_timeout: 30m
+          key: ${{ secrets.DEPLOY_KEY }}
+          command_timeout: 10m
           script: |
             set -e
 
             APP_DIR="/home/gantabyaa-api/htdocs/api.gantabyaa.in"
             UV="/home/gantabyaa-api/.local/bin/uv"
 
-            cd "$APP_DIR"
-
             echo "==> Fetching latest code"
+            cd "$APP_DIR"
             git fetch origin main
             git reset --hard origin/main
-            git clean -fd
+            git clean -fd -e .env -e .venv
 
             echo "==> Installing dependencies"
             "$UV" sync --frozen
 
             echo "==> Running database migrations"
-            "$APP_DIR/.venv/bin/alembic" upgrade head
+            "$UV" run alembic upgrade head
 
             echo "==> Restarting API"
-            sudo -n systemctl restart gantabyaa-api
+            sudo -n /usr/bin/systemctl restart gantabyaa-api
 
-            echo "==> Checking API service"
-            sudo -n systemctl is-active --quiet gantabyaa-api
+            echo "==> Waiting for API"
 
-            echo "==> Checking local API"
-            curl --fail --silent --show-error \
-              http://127.0.0.1:8000/ > /dev/null
+            for i in {1..30}; do
+              if sudo -n /usr/bin/systemctl is-active --quiet gantabyaa-api; then
+                if curl -fsS http://127.0.0.1:8000/docs >/dev/null 2>&1; then
+                  echo "==> API is healthy"
+                  exit 0
+                fi
+              fi
 
-            echo "==> Deployment successful"
+              echo "Waiting for API... attempt $i/30"
+              sleep 2
+            done
+
+            echo "==> API failed to become healthy"
+
+            sudo -n /usr/bin/systemctl status gantabyaa-api --no-pager -l || true
+
+            echo "==> Recent API logs"
+            sudo -n /usr/bin/journalctl -u gantabyaa-api -n 100 --no-pager || true
+
+            exit 1
