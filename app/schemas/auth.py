@@ -162,7 +162,7 @@ class UserResponse(SchemaBase):
     user_code: str = Field(validation_alias=AliasChoices("account_code", "user_code"))
     name: str
     email: str
-    mobile: str
+    mobile: str | None = None
     role: AccountRole
     is_active: bool
     profile_pic: str | None = None
