@@ -1,0 +1,57 @@
+name: Deploy Gantabyaa API
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: gantabyaa-api-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+
+            APP_DIR="/home/gantabyaa-api/htdocs/api.gantabyaa.in"
+            UV="/home/gantabyaa-api/.local/bin/uv"
+
+            cd "$APP_DIR"
+
+            echo "==> Fetching latest code"
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
+
+            echo "==> Installing dependencies"
+            "$UV" sync --frozen
+
+            echo "==> Running database migrations"
+            "$APP_DIR/.venv/bin/alembic" upgrade head
+
+            echo "==> Restarting API"
+            sudo -n systemctl restart gantabyaa-api
+
+            echo "==> Checking API service"
+            sudo -n systemctl is-active --quiet gantabyaa-api
+
+            echo "==> Checking local API"
+            curl --fail --silent --show-error \
+              http://127.0.0.1:8000/ \
+              > /dev/null
+
+            echo "==> Deployment successful"
