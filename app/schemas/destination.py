@@ -36,3 +36,9 @@ class DestinationResponse(DestinationBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class DestinationPublicResponse(DestinationBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID

@@ -5,13 +5,41 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import HotelCategory, VehicleType
 from app.db.database import get_db
+from app.schemas.destination import DestinationPublicResponse
 from app.schemas.hotel import HotelPublicResponse
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.vehicle import VehiclePublicResponse
+from app.services.destination_service import DestinationService
 from app.services.hotel_service import HotelService
 from app.services.vehicle_service import VehicleService
 
 router = APIRouter(tags=["Ground Services"])
+
+
+@router.get(
+	"/destinations",
+	response_model=PaginatedResponse[DestinationPublicResponse],
+	summary="List active destinations",
+)
+def list_destinations(
+	page: int = Query(1, ge=1),
+	page_size: int = Query(20, ge=1, le=100),
+	db: Session = Depends(get_db),
+) -> PaginatedResponse[DestinationPublicResponse]:
+	result = DestinationService(db).list_destinations(page=page, page_size=page_size)
+	total_pages = result["total_pages"]
+	return PaginatedResponse(
+		message="Items fetched successfully",
+		data=[DestinationPublicResponse.model_validate(destination) for destination in result["items"]],
+		pagination=PaginationMeta(
+			current_page=page,
+			page_size=page_size,
+			total_items=result["total_items"],
+			total_pages=total_pages,
+			has_next=page < total_pages,
+			has_previous=page > 1 and total_pages > 0,
+		),
+	)
 
 
 @router.get(
