@@ -324,7 +324,7 @@ class QuotationService:
                 f"Please find your quotation for {quotation.tour_name} at the link below:\n"
                 f"{pdf_url}\n\n"
                 "This link is hosted in temporary storage and may expire.\n\n"
-                "Regards,\nCoochbehar Travels"
+                "Regards,\nGantabyaa"
             ),
         )
         return pdf_url

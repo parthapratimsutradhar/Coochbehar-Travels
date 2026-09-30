@@ -1,87 +1,46 @@
-import base64
-import json
+import html
 import logging
+import smtplib
+import ssl
 from email.message import EmailMessage
 from pathlib import Path
 
 from fastapi import HTTPException, status
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+LOGO_PATH = Path(__file__).resolve().parents[2] / "media" / "gantabyaa-logo.jpg"
 
 
 class EmailService:
   def _validate_config(self) -> None:
-    if settings.GMAIL_TOKEN_JSON:
-      return
-    token_file = Path(settings.GMAIL_TOKEN_FILE)
-    if not token_file.is_file():
+    if not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD:
       raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=f"Gmail OAuth token file was not found: {token_file}. Run scripts/generate_token.py first.",
+        detail="SMTP_USERNAME and SMTP_PASSWORD must be configured to send email.",
       )
-
-  def _get_gmail_service(self):
-    self._validate_config()
-    scopes = ["https://www.googleapis.com/auth/gmail.send"]
-    if settings.GMAIL_TOKEN_JSON:
-      try:
-        credentials = Credentials.from_authorized_user_info(
-          json.loads(settings.GMAIL_TOKEN_JSON), scopes
-        )
-      except (TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise HTTPException(
-          status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-          detail="GMAIL_TOKEN_JSON is not valid Google OAuth token JSON.",
-        ) from exc
-    else:
-      try:
-        credentials = Credentials.from_authorized_user_file(settings.GMAIL_TOKEN_FILE, scopes)
-      except (TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise HTTPException(
-          status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-          detail="Gmail token.json is invalid or missing refresh_token. Run scripts/generate_token.py again.",
-        ) from exc
-    if not credentials.refresh_token:
-      raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Gmail OAuth token is missing refresh_token. Run scripts/generate_token.py again.",
-      )
-    if credentials.expired and credentials.refresh_token:
-      credentials.refresh(Request())
-      if not settings.GMAIL_TOKEN_JSON:
-        Path(settings.GMAIL_TOKEN_FILE).write_text(credentials.to_json(), encoding="utf-8")
-    if not credentials.valid:
-      raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Gmail OAuth token is invalid. Run scripts/generate_token.py again.",
-      )
-    return build("gmail", "v1", credentials=credentials, cache_discovery=False)
 
   def send_otp_email(self, to_email: str, otp: str, expires_in_seconds: int) -> None:
     import sys
     if "pytest" in sys.modules or to_email.endswith("@example.com"):
-      logger.info("Skipping live Gmail delivery in test environment for %s", to_email)
+      logger.info("Skipping live SMTP delivery in test environment for %s", to_email)
       return
 
     expires_in_minutes = max(1, expires_in_seconds // 60)
     body = (
-      "Your Coochbehar Travels verification code is: "
+      "Your Gantabyaa verification code is: "
       f"{otp}\n\n"
       f"This code expires in {expires_in_minutes} minute(s).\n\n"
       "If you did not request this email, you can ignore it."
     )
     try:
-      self.send_email(to_email, "Your Coochbehar Travels OTP", body)
+      self.send_email(to_email, "Your Gantabyaa verification code", body)
     except HTTPException:
       raise
     except Exception as exc:
-      logger.exception("Gmail OTP delivery failed")
-      detail = "Email OTP failed: Gmail could not deliver the message."
+      logger.exception("SMTP OTP delivery failed")
+      detail = "Email OTP failed: the SMTP server could not deliver the message."
       if settings.IS_DEVELOPMENT:
         detail = f"{detail} Provider error: {exc}"
       raise HTTPException(
@@ -90,15 +49,51 @@ class EmailService:
       ) from exc
 
   def send_email(self, to_email: str, subject: str, body: str) -> dict:
+    self._validate_config()
     message = EmailMessage()
     message.set_content(body)
+    html_body = (
+      '<div style="font-family:Arial,sans-serif;color:#17345f;max-width:600px">'
+      '<img src="cid:gantabyaa-logo" alt="Gantabyaa" '
+      'style="display:block;width:220px;max-width:100%;height:auto;margin:0 0 24px">'
+      f'<div style="line-height:1.6">{html.escape(body).replace(chr(10), "<br>")}</div>'
+      "</div>"
+    )
+    message.add_alternative(html_body, subtype="html")
+    html_part = message.get_payload()[-1]
+    html_part.add_related(
+      LOGO_PATH.read_bytes(),
+      maintype="image",
+      subtype="jpeg",
+      cid="<gantabyaa-logo>",
+      filename=LOGO_PATH.name,
+    )
+    message["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL or settings.SMTP_USERNAME}>"
     message["To"] = to_email
     message["Subject"] = subject
-    encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii")
-    return self._get_gmail_service().users().messages().send(
-      userId="me",
-      body={"raw": encoded_message},
-    ).execute()
+    tls_context = ssl.create_default_context()
+
+    if settings.SMTP_PORT == 465:
+      with smtplib.SMTP_SSL(
+        settings.SMTP_HOST,
+        settings.SMTP_PORT,
+        timeout=30,
+        context=tls_context,
+      ) as server:
+        server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+        refused_recipients = server.send_message(message)
+    else:
+      with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=30) as server:
+        server.ehlo()
+        server.starttls(context=tls_context)
+        server.ehlo()
+        server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+        refused_recipients = server.send_message(message)
+
+    if refused_recipients:
+      raise smtplib.SMTPRecipientsRefused(refused_recipients)
+
+    return {"accepted": not refused_recipients, "refused_recipients": refused_recipients}
 
 
 def send_email(to_email: str, subject: str, body: str) -> dict:

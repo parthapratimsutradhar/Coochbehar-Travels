@@ -83,10 +83,13 @@ class Settings:
         )
     )
 
-# ── Gmail OAuth delivery (Google Cloud Console) ─────────────────────────────
-    GMAIL_CREDENTIALS_FILE: str = _env("GMAIL_CREDENTIALS_FILE") or "credentials.json"
-    GMAIL_TOKEN_FILE: str = _env("GMAIL_TOKEN_FILE") or "token.json"
-    GMAIL_TOKEN_JSON: str | None = _env("GMAIL_TOKEN_JSON")
+# ── SMTP email delivery ──────────────────────────────────────────
+    SMTP_HOST: str = _env("SMTP_HOST") or "smtp.hostinger.com"
+    SMTP_PORT: int = int(_env("SMTP_PORT") or "465")
+    SMTP_USERNAME: str | None = _env("SMTP_USERNAME")
+    SMTP_PASSWORD: str | None = _env("SMTP_PASSWORD")
+    SMTP_FROM_EMAIL: str | None = _env("SMTP_FROM_EMAIL")
+    SMTP_FROM_NAME: str = _env("SMTP_FROM_NAME") or "Coochbehar Travels"
 
     CLOUDINARY_CLOUD_NAME: str | None = _env("CLOUDINARY_CLOUD_NAME")
     CLOUDINARY_API_KEY: str | None = _env("CLOUDINARY_API_KEY")

@@ -338,7 +338,7 @@ class BookingService:
         EmailService().send_email(
             recipient_email,
             f"Booking {booking.booking_code} - {booking.package.title if booking.package else 'Travel booking'}",
-            f"Dear {customer_name},\n\nYour booking PDF is available here:\n{pdf_url}\n\nRegards,\nCoochbehar Travels",
+            f"Dear {customer_name},\n\nYour booking PDF is available here:\n{pdf_url}\n\nRegards,\nGantabyaa",
         )
         return pdf_url
 

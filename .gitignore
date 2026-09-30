@@ -9,11 +9,11 @@ wheels/
 # Virtual environments
 .venv
 
-# Environment variables
+# Local environment variables
 .env
 .env.production.example
 
-# Gmail OAuth secrets
+# Local credential files
 credentials.json
 token.json
 
