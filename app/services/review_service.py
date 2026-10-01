@@ -22,7 +22,7 @@ from app.schemas.review import (
     ReviewUpdate,
 )
 from app.schemas.tour_package import ReviewItemResponse
-from app.services.cloudinary_service import promote_cloudinary_asset
+from app.services.cdn_service import promote_cdn_asset
 from app.services.notification_service import NotificationService
 
 
@@ -37,11 +37,9 @@ async def _promote_gallery(gallery_items: list[Any] | None) -> list[dict[str, An
         url = item_dict.get("url")
         item_dict["id"] = str(uuid.uuid4())
         if url:
-            media_type = item_dict.get("type") or "image"
-            promoted = await promote_cloudinary_asset(
+            promoted = await promote_cdn_asset(
                 url,
                 "review-gallery",
-                resource_type=media_type,
             )
             item_dict["url"] = promoted["url"]
         promoted_items.append(item_dict)

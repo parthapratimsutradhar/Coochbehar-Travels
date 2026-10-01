@@ -145,8 +145,20 @@ Create a `.env` file in the root directory (or update existing `.env`):
 ```env
 DATABASE_URL=postgresql+psycopg://USERNAME:PASSWORD@HOST:PORT/DATABASE
 CORS_ORIGINS=https://your-frontend.onrender.com
-UPLOAD_MAX_SIZE_BYTES=10485760
-UPLOAD_ALLOWED_FOLDERS=tour-packages,customers,users,vehicles,rooms,reviews
+CDN_BASE_URL=https://cdn.gantabyaa.com
+CDN_STORAGE_PATH=/home/gantabyaa-cdn/htdocs/cdn.gantabyaa.com
+CDN_MAX_IMAGE_SIZE_MB=10
+CDN_MAX_VIDEO_SIZE_MB=100
+CDN_MAX_PDF_SIZE_MB=20
+CDN_MAX_VIDEO_DURATION_SECONDS=600
+CDN_MAX_IMAGE_DIMENSION=4096
+CDN_IMAGE_COMPRESSION_ENABLED=true
+CDN_VIDEO_COMPRESSION_ENABLED=true
+CDN_ANTIVIRUS_ENABLED=true
+CDN_ANTIVIRUS_HOST=127.0.0.1
+CDN_ANTIVIRUS_PORT=3310
+CDN_UPLOAD_RATE_LIMIT=10
+CDN_UPLOAD_RATE_WINDOW_SECONDS=3600
 ```
 
 Set `CORS_ORIGINS` in Render to the exact browser origin(s) that call this API,
@@ -160,9 +172,20 @@ CORS_ORIGINS=https://coochbehartravels.com,https://admin.coochbehartravels.com
 The file endpoint is `POST /api/v1/public/files/upload`. It requires the standard
 Bearer JWT and is available to authenticated admin, staff, and customer actors.
 
-The endpoint validates the JWT, file size, media type, and allowed folder before
-uploading to Cloudinary. Save the returned `public_id` in the relevant business
-record when associating the uploaded file.
+The endpoint validates the actual file content, scans it when
+`CDN_ANTIVIRUS_ENABLED=true`, processes supported media, and publishes the
+finished asset under `temporary-uploads/`. Business logic can later promote the
+server-generated temporary path into an existing permanent CDN folder. Upload
+limits are stored in the shared application database and apply per authenticated
+actor and direct peer IP across API workers. Apply the Alembic migration before
+deploying this version.
+
+Video uploads require `ffprobe`; compression also requires `ffmpeg`. When
+antivirus is enabled, the API requires ClamAV `clamd` at the configured
+`CDN_ANTIVIRUS_HOST:CDN_ANTIVIRUS_PORT` and fails uploads closed if the scanner
+is unavailable. Keep the scanner port private and restrict it to the API host.
+The health response exposes only scanner state (`disabled`, `unchecked`,
+`available`, or `unavailable`).
 
 *Example for local PostgreSQL:*
 ```env

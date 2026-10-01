@@ -15,7 +15,7 @@ from reportlab.platypus import (
 )
 
 from app.models.quotation import Quotation
-from app.services.cloudinary_service import upload_content_to_cloudinary
+from app.services.cdn_service import upload_content_to_cdn
 
 
 def _text(value: Any) -> str:
@@ -176,9 +176,9 @@ def build_quotation_pdf(quotation: Quotation) -> bytes:
 
 async def generate_and_upload_quotation_pdf(quotation: Quotation) -> dict[str, Any]:
     content = build_quotation_pdf(quotation)
-    return await upload_content_to_cloudinary(
+    return await upload_content_to_cdn(
         content=content,
         filename=f"{quotation.quotation_code}.pdf",
         content_type="application/pdf",
-        sub_folder="temporary-uploads/quotations",
+        target_folder="temporary-uploads",
     )

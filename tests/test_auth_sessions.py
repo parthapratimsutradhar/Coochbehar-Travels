@@ -694,7 +694,7 @@ def test_19_admin_google_login(client: TestClient, test_user: Account, db_sessio
 
     async def fake_upload_google_profile_picture(picture_url: str) -> str:
         assert picture_url.startswith("https://lh3.googleusercontent.com/")
-        return "https://res.cloudinary.com/example/image/upload/profile-picture/admin.jpg"
+        return "https://cdn.example.test/profile-picture/admin.jpg"
 
     monkeypatch.setattr(
         "app.services.auth_service.upload_google_profile_picture",
@@ -713,7 +713,7 @@ def test_19_admin_google_login(client: TestClient, test_user: Account, db_sessio
     data = res.json()["data"]
     assert "access_token" in data
     db_session.refresh(test_user)
-    assert test_user.profile_pic == "https://res.cloudinary.com/example/image/upload/profile-picture/admin.jpg"
+    assert test_user.profile_pic == "https://cdn.example.test/profile-picture/admin.jpg"
     assert settings.REFRESH_COOKIE_NAME in res.cookies
 
 
@@ -731,7 +731,7 @@ def test_admin_google_login_preserves_existing_profile_pic(
     async def fake_upload_google_profile_picture(picture_url: str) -> str:
         nonlocal upload_called
         upload_called = True
-        return "https://res.cloudinary.com/example/image/upload/profile-picture/google.jpg"
+        return "https://cdn.example.test/profile-picture/google.jpg"
 
     monkeypatch.setattr(
         "app.services.auth_service.upload_google_profile_picture",
@@ -758,7 +758,7 @@ def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClien
     """20. Test Customer Continue with Google (auto-registration + avatar + visitor linking)."""
     async def fake_upload_google_profile_picture(picture_url: str) -> str:
         assert picture_url.startswith("https://lh3.googleusercontent.com/")
-        return "https://res.cloudinary.com/example/image/upload/profile-picture/customer.jpg"
+        return "https://cdn.example.test/profile-picture/customer.jpg"
 
     monkeypatch.setattr(
         "app.services.auth_service.upload_google_profile_picture",
@@ -791,7 +791,7 @@ def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClien
     me_data = me_res.json()["data"]
     assert me_data["name"] == "Sandra Adventurer"
     assert me_data["email"] == "sandra.adventurer@gmail.com"
-    assert me_data["profile_pic"] == "https://res.cloudinary.com/example/image/upload/profile-picture/customer.jpg"
+    assert me_data["profile_pic"] == "https://cdn.example.test/profile-picture/customer.jpg"
 
     # Assert visitor is linked to new customer
     cust_id = uuid.UUID(me_data["id"])
@@ -966,7 +966,7 @@ def test_existing_customer_google_login_adds_missing_profile_pic(
     db_session.commit()
 
     async def fake_upload_google_profile_picture(picture_url: str) -> str:
-        return "https://res.cloudinary.com/example/image/upload/profile-picture/existing.jpg"
+        return "https://cdn.example.test/profile-picture/existing.jpg"
 
     monkeypatch.setattr(
         "app.services.auth_service.upload_google_profile_picture",
@@ -986,7 +986,7 @@ def test_existing_customer_google_login_adds_missing_profile_pic(
     assert res.status_code == 200
     db_session.refresh(customer)
     assert customer.profile_pic == (
-        "https://res.cloudinary.com/example/image/upload/profile-picture/existing.jpg"
+        "https://cdn.example.test/profile-picture/existing.jpg"
     )
 
 

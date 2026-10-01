@@ -9,7 +9,7 @@ from app.core.messages.error import VehicleError
 from app.models.vehicle import Vehicle
 from app.repository.vehicle_repo import VehicleRepository
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate
-from app.services.cloudinary_service import promote_cloudinary_asset
+from app.services.cdn_service import promote_cdn_asset
 
 
 async def _promote_vehicle_images(image_items: list[Any]) -> list[dict[str, Any]]:
@@ -18,10 +18,9 @@ async def _promote_vehicle_images(image_items: list[Any]) -> list[dict[str, Any]
         item_dict = item.model_dump() if hasattr(item, "model_dump") else dict(item)
         item_dict.setdefault("id", str(uuid.uuid4()))
         if item_dict.get("url"):
-            promoted = await promote_cloudinary_asset(
+            promoted = await promote_cdn_asset(
                 item_dict["url"],
                 "vehicle-images",
-                resource_type=item_dict.get("type") or "image",
             )
             item_dict["url"] = promoted["url"]
         promoted_items.append(item_dict)

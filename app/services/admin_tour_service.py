@@ -19,7 +19,7 @@ from app.schemas.admin_tour import (
     AdminTourVariantItem,
     normalize_json_payload,
 )
-from app.services import cloudinary_service
+from app.services import cdn_service
 
 
 class AdminTourService:
@@ -388,13 +388,8 @@ class AdminTourService:
                 self.db.delete(departure)
 
     @staticmethod
-    async def _promote_asset(asset: str, resource_type: str) -> str:
-        normalized_resource_type = "video" if resource_type.lower() == "video" else "image"
-        promoted = await cloudinary_service.promote_cloudinary_asset(
-            asset,
-            "tour-packages",
-            resource_type=normalized_resource_type,
-        )
+    async def _promote_asset(asset: str) -> str:
+        promoted = await cdn_service.promote_cdn_asset(asset, "tour-packages")
         return promoted["url"]
 
     @classmethod
@@ -404,9 +399,9 @@ class AdminTourService:
         image = banner_dict.get("image")
         video = banner_dict.get("video")
         if image:
-            image = await cls._promote_asset(image, "image")
+            image = await cls._promote_asset(image)
         if video:
-            video = await cls._promote_asset(video, "video")
+            video = await cls._promote_asset(video)
         return {"image": image, "video": video}
 
     @classmethod
@@ -417,14 +412,13 @@ class AdminTourService:
         for item in gallery_list:
             if isinstance(item, dict):
                 url = item.get("url")
-                media_type = str(item.get("type") or "image")
                 if url:
                     item = {
                         **item,
-                        "url": await cls._promote_asset(url, media_type),
+                        "url": await cls._promote_asset(url),
                     }
             elif isinstance(item, str):
-                item = await cls._promote_asset(item, "image")
+                item = await cls._promote_asset(item)
             promoted_gallery.append(item)
         return promoted_gallery
 

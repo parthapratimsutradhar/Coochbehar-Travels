@@ -10,6 +10,7 @@ from scalar_fastapi import get_scalar_api_reference
 
 from app.core.config import settings
 from app.core.exception_handlers import register_exception_handlers
+from app.middleware.upload_request_limit import UploadRequestSizeLimitMiddleware
 from app.api.v1.admin.urls import router as admin_router
 from app.api.v1.enduser.urls import router as enduser_router
 from app.api.v1.public.urls import router as public_router
@@ -38,6 +39,15 @@ async def _daily_cleanup_task() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.services.cdn_service import check_antivirus_available
+
+    if settings.CDN_ANTIVIRUS_ENABLED:
+        scanner_available = await asyncio.to_thread(check_antivirus_available)
+        if scanner_available:
+            logger.info("CDN antivirus scanner is available")
+        else:
+            logger.error("CDN antivirus is enabled but the scanner is unavailable")
+
     # Run cleanup once at startup (catches up on stale data)
     from app.services.cleanup_service import run_cleanup
     try:
@@ -64,6 +74,8 @@ app = FastAPI(
     redoc_url=None,
     lifespan=lifespan,
 )
+
+app.add_middleware(UploadRequestSizeLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -238,9 +250,12 @@ async def public_docs():
 # ── Health check ──────────────────────────────────────────────────────
 @app.get("/", tags=["Health"])
 def read_root():
+    from app.services.cdn_service import antivirus_health_status
+
     return {
         "status": "online",
         "service": "Coochbehar Travels API",
+        "upload_antivirus": antivirus_health_status(),
         "documentation": {
             "enduser": "/docs",
             "admin": "/admin/docs",

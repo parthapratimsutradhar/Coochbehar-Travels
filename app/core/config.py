@@ -91,15 +91,29 @@ class Settings:
     SMTP_FROM_EMAIL: str | None = _env("SMTP_FROM_EMAIL")
     SMTP_FROM_NAME: str = _env("SMTP_FROM_NAME") or "Coochbehar Travels"
 
-    CLOUDINARY_CLOUD_NAME: str | None = _env("CLOUDINARY_CLOUD_NAME")
-    CLOUDINARY_API_KEY: str | None = _env("CLOUDINARY_API_KEY")
-    CLOUDINARY_API_SECRET: str | None = _env("CLOUDINARY_API_SECRET")
     
     CDN_BASE_URL: str = _env("CDN_BASE_URL") or "https://cdn.gantabyaa.com"
     CDN_STORAGE_PATH: str = _env("CDN_STORAGE_PATH") or "/home/gantabyaa-cdn/htdocs/cdn.gantabyaa.com"
     CDN_MAX_IMAGE_SIZE_MB: int = int(_env("CDN_MAX_IMAGE_SIZE_MB") or "10")
     CDN_MAX_VIDEO_SIZE_MB: int = int(_env("CDN_MAX_VIDEO_SIZE_MB") or "100")
     CDN_MAX_PDF_SIZE_MB: int = int(_env("CDN_MAX_PDF_SIZE_MB") or "20")
+    CDN_MAX_VIDEO_DURATION_SECONDS: int = int(
+        _env("CDN_MAX_VIDEO_DURATION_SECONDS") or "600"
+    )
+    CDN_MAX_IMAGE_DIMENSION: int = int(_env("CDN_MAX_IMAGE_DIMENSION") or "4096")
+    CDN_IMAGE_COMPRESSION_ENABLED: bool = _env_bool(
+        "CDN_IMAGE_COMPRESSION_ENABLED", True
+    )
+    CDN_VIDEO_COMPRESSION_ENABLED: bool = _env_bool(
+        "CDN_VIDEO_COMPRESSION_ENABLED", True
+    )
+    CDN_ANTIVIRUS_ENABLED: bool = _env_bool("CDN_ANTIVIRUS_ENABLED", True)
+    CDN_ANTIVIRUS_HOST: str = _env("CDN_ANTIVIRUS_HOST") or "127.0.0.1"
+    CDN_ANTIVIRUS_PORT: int = int(_env("CDN_ANTIVIRUS_PORT") or "3310")
+    CDN_UPLOAD_RATE_LIMIT: int = int(_env("CDN_UPLOAD_RATE_LIMIT") or "10")
+    CDN_UPLOAD_RATE_WINDOW_SECONDS: int = int(
+        _env("CDN_UPLOAD_RATE_WINDOW_SECONDS") or "3600"
+    )
 
 
 settings = Settings()

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.hotel import Hotel
 from app.repository.hotel_repo import HotelRepository
 from app.schemas.hotel import HotelCreate, HotelUpdate
-from app.services.cloudinary_service import promote_cloudinary_asset
+from app.services.cdn_service import promote_cdn_asset
 
 
 async def _promote_hotel_images(image_items: list[Any]) -> list[dict[str, Any]]:
@@ -16,10 +16,9 @@ async def _promote_hotel_images(image_items: list[Any]) -> list[dict[str, Any]]:
         item_dict = item.model_dump() if hasattr(item, "model_dump") else dict(item)
         item_dict.setdefault("id", str(uuid.uuid4()))
         if item_dict.get("url"):
-            promoted = await promote_cloudinary_asset(
+            promoted = await promote_cdn_asset(
                 item_dict["url"],
                 "hotel-images",
-                resource_type=item_dict.get("type") or "image",
             )
             item_dict["url"] = promoted["url"]
         promoted_items.append(item_dict)

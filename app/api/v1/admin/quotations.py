@@ -165,7 +165,7 @@ def update_quotation_status(
 	"/{quotation_id}/pdf",
 	response_model=SuccessResponse[dict[str, str | None]],
 	responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
-	summary="Get the temporary Cloudinary quotation PDF URL (Admin)",
+	summary="Get the temporary CDN quotation PDF URL (Admin)",
 )
 async def download_quotation_pdf(
 	quotation_id: uuid.UUID,
@@ -177,8 +177,8 @@ async def download_quotation_pdf(
 	return SuccessResponse(
 		message=QuotationSuccess.PDF_GENERATED,
 		data={
-			"url": uploaded.get("secure_url") or uploaded.get("url"),
-			"public_id": uploaded.get("public_id"),
+			"url": uploaded.get("url"),
+			"path": uploaded.get("path"),
 		},
 	)
 

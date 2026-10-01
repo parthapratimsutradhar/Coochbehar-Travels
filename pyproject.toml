@@ -17,6 +17,7 @@ dependencies = [
     "imageio-ffmpeg>=0.6.0",
     "passlib[bcrypt]>=1.7.4",
     "pillow>=11.0.0",
+    "pypdf>=5.0.0",
     "psycopg[binary]>=3.3.4",
     "pwdlib[argon2]>=0.3.1",
     "pydantic-settings>=2.15.0",
@@ -29,7 +30,6 @@ dependencies = [
     "scalar-fastapi>=1.8.2",
     "sqlalchemy>=2.0.52",
     "uvicorn>=0.52.2",
-    "cloudinary>=1.46.0",
     "python-socketio>=5.15.0",
     "reportlab>=4.4.0",
 ]

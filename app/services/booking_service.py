@@ -331,7 +331,7 @@ class BookingService:
     async def email_booking(self, booking_id: uuid.UUID, recipient_email: str) -> str:
         booking = self.get_booking(booking_id)
         uploaded = await generate_and_upload_booking_pdf(booking)
-        pdf_url = uploaded.get("secure_url") or uploaded.get("url")
+        pdf_url = uploaded.get("url")
         if not pdf_url:
             raise HTTPException(status_code=502, detail="Booking PDF upload did not return a download URL.")
         customer_name = booking.customer.name if booking.customer else "Customer"

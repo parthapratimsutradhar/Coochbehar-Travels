@@ -9,7 +9,7 @@ from app.models.account import Account
 from app.models.document import Document
 from app.repository.document_repo import DocumentRepository
 from app.schemas.document import AdminDocumentResponse, DocumentResponse, DocumentUpdate
-from app.services.cloudinary_service import promote_cloudinary_asset, upload_file_to_cloudinary
+from app.services.cdn_service import promote_cdn_asset, upload_file_to_cdn
 
 
 class AdminDocumentService:
@@ -64,9 +64,9 @@ class AdminDocumentService:
     async def upload(self, customer_id: uuid.UUID, file: UploadFile, current_user: Account, **data: object) -> AdminDocumentResponse:
         if not self.repo.get_customer(customer_id):
             raise HTTPException(status_code=404, detail="Customer not found.")
-        result = await upload_file_to_cloudinary(file=file, sub_folder="temporary-uploads")
-        promoted = await promote_cloudinary_asset(
-            result["secure_url"],
+        result = await upload_file_to_cdn(file=file)
+        promoted = await promote_cdn_asset(
+            result["url"],
             "admin-documents",
         )
         document = self.repo.create(
@@ -87,7 +87,7 @@ class AdminDocumentService:
     ) -> AdminDocumentResponse:
         if not self.repo.get_customer(customer_id):
             raise HTTPException(status_code=404, detail="Customer not found.")
-        promoted = await promote_cloudinary_asset(url_or_id, "admin-documents")
+        promoted = await promote_cdn_asset(url_or_id, "admin-documents")
         document = self.repo.create(
             **data, customer_id=customer_id, uploaded_by_account_id=current_user.id,
             file_url=promoted["url"], file_name=file_name,

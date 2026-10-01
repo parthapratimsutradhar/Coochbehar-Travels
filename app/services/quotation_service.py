@@ -309,7 +309,7 @@ class QuotationService:
         quotation = self.get_quotation(quotation_id)
 
         uploaded = await generate_and_upload_quotation_pdf(quotation)
-        pdf_url = uploaded.get("secure_url") or uploaded.get("url")
+        pdf_url = uploaded.get("url")
         if not pdf_url:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,

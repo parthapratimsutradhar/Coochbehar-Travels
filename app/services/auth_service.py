@@ -19,7 +19,7 @@ from app.repository.otp_repo import OtpRepository
 from app.repository.user_repo import UserRepository
 from app.schemas.auth import AuthSessionResponse
 from app.services.email_service import EmailService
-from app.services.cloudinary_service import upload_google_profile_picture
+from app.services.cdn_service import upload_google_profile_picture
 from app.services.notification_service import NotificationService
 from app.schemas.notification import NotificationCreate
 from app.utils.security import (

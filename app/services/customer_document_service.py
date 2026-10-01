@@ -16,7 +16,7 @@ from app.schemas.document import (
 	CustomerDocumentUploadRequest,
 	DocumentDownloadResponse,
 )
-from app.services.cloudinary_service import promote_cloudinary_asset
+from app.services.cdn_service import promote_cdn_asset
 
 
 class CustomerDocumentService:
@@ -142,7 +142,7 @@ class CustomerDocumentService:
 		):
 			raise HTTPException(status_code=422, detail="file must reference a temporary upload")
 
-		promoted = await promote_cloudinary_asset(payload.file, "customer-documents")
+		promoted = await promote_cdn_asset(payload.file, "customer-documents")
 		self.repo.create(
 			document_type=payload.document_type,
 			title=payload.title.strip(),

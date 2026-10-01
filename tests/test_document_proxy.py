@@ -158,7 +158,7 @@ def test_customer_upload_accepts_admin_style_json_payload(client, db_session, mo
         assert target_folder == "customer-documents"
         return {"url": "https://storage.example/customer-documents/id-proof.pdf"}
 
-    monkeypatch.setattr(customer_document_service_module, "promote_cloudinary_asset", promote_asset)
+    monkeypatch.setattr(customer_document_service_module, "promote_cdn_asset", promote_asset)
     app.dependency_overrides[get_current_customer] = lambda: customer
     try:
         response = client.post(

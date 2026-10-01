@@ -8,7 +8,7 @@ from app.core.messages.error import AccessError, UserError
 from app.repository.account_repo import AccountRepository
 from app.schemas.account import AdminDeleteProfileRequest, AdminProfileUpdate, AdminStaffCreate
 from app.services.auth_service import AuthService
-from app.services.cloudinary_service import promote_cloudinary_asset
+from app.services.cdn_service import promote_cdn_asset
 from app.models.account import Account
 
 
@@ -77,10 +77,9 @@ class AdminAccountService:
 
         profile_pic = payload.profile_pic.strip() if payload.profile_pic else None
         if profile_pic:
-            promoted = await promote_cloudinary_asset(
+            promoted = await promote_cdn_asset(
                 profile_pic,
                 "profile-picture",
-                resource_type="image",
             )
             profile_pic = promoted["url"]
 
@@ -120,10 +119,9 @@ class AdminAccountService:
         if "profile_pic" in update_data:
             profile_pic = update_data["profile_pic"].strip() if update_data["profile_pic"] else None
             if profile_pic:
-                promoted = await promote_cloudinary_asset(
+                promoted = await promote_cdn_asset(
                     profile_pic,
                     "profile-picture",
-                    resource_type="image",
                 )
                 profile_pic = promoted["url"]
             update_data["profile_pic"] = profile_pic

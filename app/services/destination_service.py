@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.destination import Destination
 from app.repository.destination_repo import DestinationRepository
 from app.schemas.destination import DestinationCreate, DestinationUpdate
-from app.services.cloudinary_service import promote_cloudinary_asset
+from app.services.cdn_service import promote_cdn_asset
 
 
 class DestinationService:
@@ -67,7 +67,7 @@ class DestinationService:
         data = payload.model_dump()
         data["slug"] = slug
         if data.get("image_url"):
-            promoted = await promote_cloudinary_asset(data["image_url"], "destination-images", resource_type="image")
+            promoted = await promote_cdn_asset(data["image_url"], "destination-images")
             data["image_url"] = promoted["url"]
         return self.repo.create(**data)
 
@@ -82,7 +82,7 @@ class DestinationService:
                     detail="A destination with this slug already exists.",
                 )
         if "image_url" in data and data["image_url"]:
-            promoted = await promote_cloudinary_asset(data["image_url"], "destination-images", resource_type="image")
+            promoted = await promote_cdn_asset(data["image_url"], "destination-images")
             data["image_url"] = promoted["url"]
         return self.repo.update(dest, data)
 

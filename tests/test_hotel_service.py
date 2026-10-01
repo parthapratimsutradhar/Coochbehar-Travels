@@ -31,11 +31,11 @@ class FakeHotelRepository:
 async def test_hotel_create_and_update_promote_gallery_urls(monkeypatch):
     promoted_urls = []
 
-    async def fake_promote(url, target_folder, resource_type):
-        promoted_urls.append((url, target_folder, resource_type))
-        return {"url": f"permanent/{url.rsplit('/', 1)[-1]}", "public_id": ""}
+    async def fake_promote(url, target_folder):
+        promoted_urls.append((url, target_folder))
+        return {"url": f"permanent/{url.rsplit('/', 1)[-1]}", "path": ""}
 
-    monkeypatch.setattr(hotel_service, "promote_cloudinary_asset", fake_promote)
+    monkeypatch.setattr(hotel_service, "promote_cdn_asset", fake_promote)
     service = hotel_service.HotelService.__new__(hotel_service.HotelService)
     service.repo = FakeHotelRepository()
 
@@ -58,8 +58,8 @@ async def test_hotel_create_and_update_promote_gallery_urls(monkeypatch):
     await service.update_hotel(uuid4(), update_payload)
 
     assert promoted_urls == [
-        ("temporary/lobby.jpg", "hotel-images", "image"),
-        ("temporary/room.jpg", "hotel-images", "image"),
+        ("temporary/lobby.jpg", "hotel-images"),
+        ("temporary/room.jpg", "hotel-images"),
     ]
     assert service.repo.created["image"][0]["url"] == "permanent/lobby.jpg"
     assert service.repo.updated["image"][0]["url"] == "permanent/room.jpg"

@@ -9,7 +9,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.models.booking import Booking
-from app.services.cloudinary_service import upload_content_to_cloudinary
+from app.services.cdn_service import upload_content_to_cdn
 
 
 def _text(value: Any) -> str:
@@ -113,9 +113,9 @@ def build_booking_pdf(booking: Booking) -> bytes:
 
 
 async def generate_and_upload_booking_pdf(booking: Booking) -> dict[str, Any]:
-    return await upload_content_to_cloudinary(
+    return await upload_content_to_cdn(
         content=build_booking_pdf(booking),
         filename=f"{booking.booking_code}.pdf",
         content_type="application/pdf",
-        sub_folder="temporary-uploads/bookings",
+        target_folder="temporary-uploads",
     )

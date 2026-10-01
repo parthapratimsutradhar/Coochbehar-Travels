@@ -5,6 +5,7 @@ from app.models.base import ActiveEntity, Base, BaseEntity, UUIDEntity
 from app.models.booking import Booking
 from app.models.booking_status_history import BookingStatusHistory
 from app.models.booking_traveler import BookingTraveler
+from app.models.cdn_upload_rate_limit import CDNUploadRateLimit
 from app.models.customer_profile import CustomerProfile
 from app.models.destination import Destination
 from app.models.document import Document
@@ -53,6 +54,7 @@ __all__ = [
     "Booking",
     "BookingStatusHistory",
     "BookingTraveler",
+    "CDNUploadRateLimit",
     "Destination",
     "Document",
     "Enquiry",
