@@ -28,7 +28,7 @@ class TourVariant(ActiveEntity):
     )
 
     slug: Mapped[str] = mapped_column(
-        String(30),
+        String(255),
         unique=True,
         index=True,
         nullable=False,

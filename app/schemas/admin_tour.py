@@ -136,7 +136,7 @@ class TourPackageUpdateRequest(SchemaBase):
 
 class TourVariantCreateRequest(SchemaBase):
     tour_id: uuid.UUID
-    slug: str = Field(..., min_length=1, max_length=30)
+    slug: str = Field(..., min_length=1, max_length=255)
     name: str = Field(..., min_length=1, max_length=100)
     season_name: str | None = None
     valid_from: str = Field(..., description="YYYY-MM-DD")
@@ -151,7 +151,7 @@ class TourVariantCreateRequest(SchemaBase):
 
 
 class TourVariantUpdateRequest(SchemaBase):
-    slug: str | None = Field(default=None, min_length=1, max_length=30)
+    slug: str | None = Field(default=None, min_length=1, max_length=255)
     name: str | None = Field(default=None, min_length=1, max_length=100)
     season_name: str | None = None
     valid_from: str | None = None
