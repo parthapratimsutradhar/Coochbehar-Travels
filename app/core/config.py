@@ -94,6 +94,12 @@ class Settings:
     CLOUDINARY_CLOUD_NAME: str | None = _env("CLOUDINARY_CLOUD_NAME")
     CLOUDINARY_API_KEY: str | None = _env("CLOUDINARY_API_KEY")
     CLOUDINARY_API_SECRET: str | None = _env("CLOUDINARY_API_SECRET")
+    
+    CDN_BASE_URL: str = _env("CDN_BASE_URL") or "https://cdn.gantabyaa.com"
+    CDN_STORAGE_PATH: str = _env("CDN_STORAGE_PATH") or "/home/gantabyaa-cdn/htdocs/cdn.gantabyaa.com"
+    CDN_MAX_IMAGE_SIZE_MB: int = int(_env("CDN_MAX_IMAGE_SIZE_MB") or "10")
+    CDN_MAX_VIDEO_SIZE_MB: int = int(_env("CDN_MAX_VIDEO_SIZE_MB") or "100")
+    CDN_MAX_PDF_SIZE_MB: int = int(_env("CDN_MAX_PDF_SIZE_MB") or "20")
 
 
 settings = Settings()
