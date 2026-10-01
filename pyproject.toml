@@ -13,6 +13,7 @@ dependencies = [
     "apscheduler>=3.11.0",
     "email-validator>=2.3.0",
     "fastapi>=0.141.1",
+    "google-auth>=2.40.0",
     "httpx>=0.28.1",
     "imageio-ffmpeg>=0.6.0",
     "passlib[bcrypt]>=1.7.4",

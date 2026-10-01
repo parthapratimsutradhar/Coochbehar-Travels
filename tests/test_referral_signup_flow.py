@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.enums import AccountRole, LeadSource, ReferralStatus
 from app.core.messages.error import ReferralError
 from app.db.database import get_db
-from app.main import app
+from app.main import fastapi_app as app
 from app.models.account import Account
 from app.models.base import Base
 from app.models.customer_profile import CustomerProfile

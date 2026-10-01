@@ -372,9 +372,111 @@ def test_eicar_test_signature_is_rejected(cdn_root: Path, monkeypatch: pytest.Mo
         cdn.socket, "create_connection",
         lambda *args, **kwargs: FakeClamd(b"stream: Eicar-Test-Signature FOUND\0"),
     )
+    try:
+        with pytest.raises(HTTPException) as error:
+            cdn._scan_with_clamd(source)
+        assert error.value.status_code == 400
+    finally:
+        source.unlink(missing_ok=True)
+
+
+def test_clamd_ping_uses_configured_unix_socket(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "CDN_ANTIVIRUS_ENABLED", True)
+    monkeypatch.setattr(settings, "CDN_ANTIVIRUS_SOCKET", "/run/clamav/clamd.ctl")
+    monkeypatch.setattr(cdn.socket, "AF_UNIX", 1, raising=False)
+    connected_paths = []
+
+    class FakeUnixClamd(FakeClamd):
+        def __init__(self, family, socket_type):
+            assert family == cdn.socket.AF_UNIX
+            assert socket_type == cdn.socket.SOCK_STREAM
+            super().__init__(b"PONG\0")
+
+        def connect(self, path):
+            connected_paths.append(path)
+
+    monkeypatch.setattr(cdn.socket, "socket", FakeUnixClamd)
+    monkeypatch.setattr(
+        cdn.socket,
+        "create_connection",
+        lambda *args, **kwargs: pytest.fail("TCP must not be used when a socket is configured"),
+    )
+
+    assert cdn.check_antivirus_available()
+    assert connected_paths == ["/run/clamav/clamd.ctl"]
+    assert cdn.antivirus_health_status() == "available"
+
+
+def test_eicar_scan_uses_configured_unix_socket(
+    cdn_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(settings, "CDN_ANTIVIRUS_SOCKET", "/run/clamav/clamd.ctl")
+    monkeypatch.setattr(cdn.socket, "AF_UNIX", 1, raising=False)
+    connected_paths = []
+
+    class FakeUnixClamd(FakeClamd):
+        def __init__(self, family, socket_type):
+            assert family == cdn.socket.AF_UNIX
+            assert socket_type == cdn.socket.SOCK_STREAM
+            super().__init__(b"stream: Eicar-Test-Signature FOUND\0")
+
+        def connect(self, path):
+            connected_paths.append(path)
+
+    monkeypatch.setattr(cdn.socket, "socket", FakeUnixClamd)
+    monkeypatch.setattr(
+        cdn.socket,
+        "create_connection",
+        lambda *args, **kwargs: pytest.fail("TCP must not be used when a socket is configured"),
+    )
+    eicar = cdn_root / "eicar.com"
+    eicar.write_bytes(b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*")
+
+    try:
+        with pytest.raises(HTTPException) as error:
+            cdn._scan_with_clamd(eicar)
+        assert error.value.status_code == 400
+        assert connected_paths == ["/run/clamav/clamd.ctl"]
+    finally:
+        eicar.unlink(missing_ok=True)
+
+
+def test_unavailable_unix_socket_fails_closed(
+    cdn_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(settings, "CDN_ANTIVIRUS_ENABLED", True)
+    monkeypatch.setattr(settings, "CDN_ANTIVIRUS_SOCKET", "/run/clamav/clamd.ctl")
+    monkeypatch.setattr(
+        cdn,
+        "_connect_to_clamd",
+        lambda timeout: (_ for _ in ()).throw(FileNotFoundError("clamd socket unavailable")),
+    )
+
+    assert not cdn.check_antivirus_available()
+    assert cdn.antivirus_health_status() == "unavailable"
     with pytest.raises(HTTPException) as error:
-        cdn._scan_with_clamd(source)
-    assert error.value.status_code == 400
+        _upload(image_bytes(), "image/jpeg")
+    assert error.value.status_code == 503
+    assert not list((cdn_root / cdn.TEMP_FOLDER).iterdir())
+
+
+def test_clean_upload_scans_through_configured_unix_socket(
+    cdn_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(settings, "CDN_ANTIVIRUS_ENABLED", True)
+    monkeypatch.setattr(settings, "CDN_ANTIVIRUS_SOCKET", "/run/clamav/clamd.ctl")
+    connected_paths = []
+
+    def connect_to_scanner(timeout):
+        connected_paths.append(settings.CDN_ANTIVIRUS_SOCKET)
+        return FakeClamd(b"stream: OK\0")
+
+    monkeypatch.setattr(cdn, "_connect_to_clamd", connect_to_scanner)
+
+    result = _upload(image_bytes(), "image/jpeg")
+
+    assert result["path"].startswith(f"{cdn.TEMP_FOLDER}/")
+    assert connected_paths == ["/run/clamav/clamd.ctl"]
 
 
 def test_antivirus_unavailable_fails_closed(cdn_root: Path, monkeypatch: pytest.MonkeyPatch):

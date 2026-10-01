@@ -277,9 +277,25 @@ def _validate_pdf(path: Path) -> None:
         ) from None
 
 
-def _clamd_command(command: bytes) -> str:
+def _connect_to_clamd(timeout: float) -> socket.socket:
+    if settings.CDN_ANTIVIRUS_SOCKET:
+        if not hasattr(socket, "AF_UNIX"):
+            raise OSError("Unix-domain sockets are unavailable on this platform")
+        scanner = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            scanner.settimeout(timeout)
+            scanner.connect(settings.CDN_ANTIVIRUS_SOCKET)
+            return scanner
+        except OSError:
+            scanner.close()
+            raise
+
     endpoint = (settings.CDN_ANTIVIRUS_HOST, settings.CDN_ANTIVIRUS_PORT)
-    with socket.create_connection(endpoint, timeout=5) as scanner:
+    return socket.create_connection(endpoint, timeout=timeout)
+
+
+def _clamd_command(command: bytes) -> str:
+    with _connect_to_clamd(timeout=5) as scanner:
         scanner.settimeout(30)
         scanner.sendall(command)
         response = bytearray()
@@ -312,8 +328,7 @@ def antivirus_health_status() -> str:
 
 def _scan_with_clamd(path: Path) -> None:
     try:
-        endpoint = (settings.CDN_ANTIVIRUS_HOST, settings.CDN_ANTIVIRUS_PORT)
-        with socket.create_connection(endpoint, timeout=5) as scanner:
+        with _connect_to_clamd(timeout=5) as scanner:
             scanner.settimeout(60)
             scanner.sendall(b"zINSTREAM\0")
             with path.open("rb") as source:

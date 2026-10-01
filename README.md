@@ -145,6 +145,9 @@ Create a `.env` file in the root directory (or update existing `.env`):
 ```env
 DATABASE_URL=postgresql+psycopg://USERNAME:PASSWORD@HOST:PORT/DATABASE
 CORS_ORIGINS=https://your-frontend.onrender.com
+GOOGLE_CLIENT_ID_ADMIN=your-admin-web-client-id
+GOOGLE_CLIENT_ID_ENDUSER=your-enduser-web-client-id
+GOOGLE_CLIENT_ID_ANDROID=your-android-client-id
 CDN_BASE_URL=https://cdn.gantabyaa.com
 CDN_STORAGE_PATH=/home/gantabyaa-cdn/htdocs/cdn.gantabyaa.com
 CDN_MAX_IMAGE_SIZE_MB=10
@@ -155,8 +158,7 @@ CDN_MAX_IMAGE_DIMENSION=4096
 CDN_IMAGE_COMPRESSION_ENABLED=true
 CDN_VIDEO_COMPRESSION_ENABLED=true
 CDN_ANTIVIRUS_ENABLED=true
-CDN_ANTIVIRUS_HOST=127.0.0.1
-CDN_ANTIVIRUS_PORT=3310
+CDN_ANTIVIRUS_SOCKET=/run/clamav/clamd.ctl
 CDN_UPLOAD_RATE_LIMIT=10
 CDN_UPLOAD_RATE_WINDOW_SECONDS=3600
 ```
@@ -168,6 +170,12 @@ trailing slash. For example:
 ```env
 CORS_ORIGINS=https://coochbehartravels.com,https://admin.coochbehartravels.com
 ```
+
+Google sign-in uses ID tokens and requires only OAuth client IDs; do not add a
+Google client secret to this backend. The admin client ID is accepted only by
+the admin login flow, while the end-user web and Android IDs are accepted only
+by the customer login flow. Android debug IDs are accepted only when
+`IS_DEVELOPMENT=true`.
 
 The file endpoint is `POST /api/v1/public/files/upload`. It requires the standard
 Bearer JWT and is available to authenticated admin, staff, and customer actors.
@@ -181,9 +189,10 @@ actor and direct peer IP across API workers. Apply the Alembic migration before
 deploying this version.
 
 Video uploads require `ffprobe`; compression also requires `ffmpeg`. When
-antivirus is enabled, the API requires ClamAV `clamd` at the configured
-`CDN_ANTIVIRUS_HOST:CDN_ANTIVIRUS_PORT` and fails uploads closed if the scanner
-is unavailable. Keep the scanner port private and restrict it to the API host.
+antivirus is enabled, the API uses `CDN_ANTIVIRUS_SOCKET` when configured and
+fails uploads closed if the scanner is unavailable. The VPS configuration uses
+`/run/clamav/clamd.ctl`, which must be accessible to the API service user. TCP
+host/port settings remain available only when no Unix socket is configured.
 The health response exposes only scanner state (`disabled`, `unchecked`,
 `available`, or `unavailable`).
 

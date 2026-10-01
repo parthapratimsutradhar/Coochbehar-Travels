@@ -59,28 +59,33 @@ class Settings:
     OTP_MAX_ATTEMPTS: int = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
 
 # ── Google OAuth ─────────────────────────────────────────────────
-    GOOGLE_CLIENT_ID_WEB: str | None = _env("GOOGLE_CLIENT_ID_WEB")
-    GOOGLE_CLIENT_ID_ANDROID_RELEASE: str | None = _env("GOOGLE_CLIENT_ID_ANDROID_RELEASE")
-    GOOGLE_CLIENT_ID_ANDROID_DEBUG: str | None = _env("GOOGLE_CLIENT_ID_ANDROID_DEBUG")
-
-    GOOGLE_CLIENT_IDS_ANDROID: tuple[str, ...] = tuple(
-        client_id.strip()
-        for client_id in (
-            GOOGLE_CLIENT_ID_ANDROID_RELEASE,
-            GOOGLE_CLIENT_ID_ANDROID_DEBUG,
-        )
-        if client_id and client_id.strip()
+    GOOGLE_CLIENT_ID_ADMIN: str | None = _env("GOOGLE_CLIENT_ID_ADMIN")
+    GOOGLE_CLIENT_ID_ENDUSER: str | None = (
+        _env("GOOGLE_CLIENT_ID_ENDUSER") or _env("GOOGLE_CLIENT_ID_WEB")
+    )
+    GOOGLE_CLIENT_ID_ANDROID: str | None = (
+        _env("GOOGLE_CLIENT_ID_ANDROID") or _env("GOOGLE_CLIENT_ID_ANDROID_RELEASE")
     )
 
-    GOOGLE_CLIENT_IDS_ALLOWED: tuple[str, ...] = tuple(
+    GOOGLE_CLIENT_IDS_ADMIN: tuple[str, ...] = tuple(
+        client_id
+        for client_id in (GOOGLE_CLIENT_ID_ADMIN,)
+        if client_id
+    )
+    
+    GOOGLE_CLIENT_IDS_CUSTOMER: tuple[str, ...] = tuple(
         dict.fromkeys(
-            client_id.strip()
+            client_id
             for client_id in (
-                GOOGLE_CLIENT_ID_WEB,
-                *GOOGLE_CLIENT_IDS_ANDROID,
+                GOOGLE_CLIENT_ID_ENDUSER,
+                GOOGLE_CLIENT_ID_ANDROID,
             )
-            if client_id and client_id.strip()
+            if client_id
         )
+    )
+    
+    GOOGLE_CLIENT_IDS_ALLOWED: tuple[str, ...] = tuple(
+        dict.fromkeys((*GOOGLE_CLIENT_IDS_ADMIN, *GOOGLE_CLIENT_IDS_CUSTOMER))
     )
 
 # ── SMTP email delivery ──────────────────────────────────────────
@@ -108,6 +113,7 @@ class Settings:
         "CDN_VIDEO_COMPRESSION_ENABLED", True
     )
     CDN_ANTIVIRUS_ENABLED: bool = _env_bool("CDN_ANTIVIRUS_ENABLED", True)
+    CDN_ANTIVIRUS_SOCKET: str | None = _env("CDN_ANTIVIRUS_SOCKET")
     CDN_ANTIVIRUS_HOST: str = _env("CDN_ANTIVIRUS_HOST") or "127.0.0.1"
     CDN_ANTIVIRUS_PORT: int = int(_env("CDN_ANTIVIRUS_PORT") or "3310")
     CDN_UPLOAD_RATE_LIMIT: int = int(_env("CDN_UPLOAD_RATE_LIMIT") or "10")

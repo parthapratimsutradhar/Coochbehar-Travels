@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.enums import AccountRole
 from app.core.enums import AccountRole, LeadSource
 from app.db.database import get_db
-from app.main import app
+from app.main import fastapi_app as app
 from app.models.auth_session import AuthSession
 from app.repository.auth_session_repo import AuthSessionRepository
 from app.models.base import Base
@@ -144,20 +144,44 @@ def make_mock_google_id_token(email: str, name: str, picture: str | None = None,
         "aud": aud,
         "iss": "https://accounts.google.com",
     }
-    return jwt.encode(payload, "google-mock-secret", algorithm="HS256")
+    return jwt.encode(payload, "google-mock-secret-for-tests-only", algorithm="HS256")
 
 
-def test_verify_google_id_token_rejects_unapproved_android_client_id(monkeypatch):
-    """Only Android release/debug client IDs should be accepted."""
-    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID_WEB", "web-client-id")
-    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID_ANDROID_RELEASE", "android-release-id")
-    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID_ANDROID_DEBUG", "android-debug-id")
+def fake_verify_google_id_token(token: str, audience_group: str) -> dict:
+    return jwt.decode(token, options={"verify_signature": False})
 
-    valid_token = make_mock_google_id_token("traveler@example.com", "Traveler", aud="android-debug-id")
-    invalid_token = make_mock_google_id_token("traveler@example.com", "Traveler", aud="unexpected-client-id")
 
-    assert verify_google_id_token(valid_token) is not None
-    assert verify_google_id_token(invalid_token) is None
+def test_verify_google_id_token_scopes_audiences_to_login_flow(monkeypatch):
+    """Admin and customer login accept only their own configured client IDs."""
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_IDS_ADMIN", ("admin-client-id",))
+    monkeypatch.setattr(
+        settings,
+        "GOOGLE_CLIENT_IDS_CUSTOMER",
+        ("web-client-id", "android-client-id"),
+    )
+
+    def fake_verify_oauth2_token(token: str, request, audience=None) -> dict:
+        return jwt.decode(token, options={"verify_signature": False})
+
+    monkeypatch.setattr(
+        "app.utils.security.google_id_token.verify_oauth2_token",
+        fake_verify_oauth2_token,
+    )
+    admin_token = make_mock_google_id_token(
+        "admin@example.com", "Admin", aud="admin-client-id"
+    )
+    customer_token = make_mock_google_id_token(
+        "traveler@example.com", "Traveler", aud="android-client-id"
+    )
+    invalid_token = make_mock_google_id_token(
+        "traveler@example.com", "Traveler", aud="unexpected-client-id"
+    )
+
+    assert verify_google_id_token(admin_token, "admin") is not None
+    assert verify_google_id_token(admin_token, "customer") is None
+    assert verify_google_id_token(customer_token, "customer") is not None
+    assert verify_google_id_token(customer_token, "admin") is None
+    assert verify_google_id_token(invalid_token, "customer") is None
 
 
 # ── TEST CASES ─────────────────────────────────────────────────────────
@@ -700,6 +724,10 @@ def test_19_admin_google_login(client: TestClient, test_user: Account, db_sessio
         "app.services.auth_service.upload_google_profile_picture",
         fake_upload_google_profile_picture,
     )
+    monkeypatch.setattr(
+        "app.services.auth_service.verify_google_id_token",
+        fake_verify_google_id_token,
+    )
     google_token = make_mock_google_id_token(
         email=test_user.email,
         name=test_user.name,
@@ -737,6 +765,10 @@ def test_admin_google_login_preserves_existing_profile_pic(
         "app.services.auth_service.upload_google_profile_picture",
         fake_upload_google_profile_picture,
     )
+    monkeypatch.setattr(
+        "app.services.auth_service.verify_google_id_token",
+        fake_verify_google_id_token,
+    )
     google_token = make_mock_google_id_token(
         email=test_user.email,
         name=test_user.name,
@@ -763,6 +795,10 @@ def test_20_customer_google_login_with_profile_pic_and_visitor(client: TestClien
     monkeypatch.setattr(
         "app.services.auth_service.upload_google_profile_picture",
         fake_upload_google_profile_picture,
+    )
+    monkeypatch.setattr(
+        "app.services.auth_service.verify_google_id_token",
+        fake_verify_google_id_token,
     )
     visitor = Visitor(visitor_code="VIS-GGL01")
     db_session.add(visitor)
@@ -830,6 +866,10 @@ def test_customer_google_login_rejects_inactive_email(
         "app.services.auth_service.upload_google_profile_picture",
         fake_upload_google_profile_picture,
     )
+    monkeypatch.setattr(
+        "app.services.auth_service.verify_google_id_token",
+        fake_verify_google_id_token,
+    )
     google_token = make_mock_google_id_token(email=email, name="New Traveler")
     response = client.post("/api/v1/auth/google", json={"id_token": google_token})
 
@@ -849,6 +889,7 @@ def test_customer_google_login_rejects_inactive_email(
 def test_customer_signup_allows_contact_shared_with_active_admin(
     client: TestClient,
     db_session,
+    monkeypatch,
 ):
     email = "contact-owner@example.com"
     old_customer = Account(
@@ -878,6 +919,10 @@ def test_customer_signup_allows_contact_shared_with_active_admin(
         "No active customer account exists for this email or phone number. Please sign up."
     )
 
+    monkeypatch.setattr(
+        "app.services.auth_service.verify_google_id_token",
+        fake_verify_google_id_token,
+    )
     google_token = make_mock_google_id_token(email=email, name="Contact Owner")
     google_response = client.post("/api/v1/auth/google", json={"id_token": google_token})
     assert google_response.status_code == 404
@@ -971,6 +1016,10 @@ def test_existing_customer_google_login_adds_missing_profile_pic(
     monkeypatch.setattr(
         "app.services.auth_service.upload_google_profile_picture",
         fake_upload_google_profile_picture,
+    )
+    monkeypatch.setattr(
+        "app.services.auth_service.verify_google_id_token",
+        fake_verify_google_id_token,
     )
     google_token = make_mock_google_id_token(
         email=customer.email,

@@ -2,8 +2,11 @@ import hashlib
 import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 from uuid import UUID
 import jwt
+from google.auth.transport.requests import Request
+from google.oauth2 import id_token as google_id_token
 
 from app.core.config import settings
 
@@ -99,58 +102,46 @@ def decode_access_token(token: str) -> dict | None:
         return None
 
 
-def _iter_google_client_ids() -> list[str]:
-    """Return the allowed Google OAuth client IDs in a single canonical list."""
-    values: list[str] = []
-    for raw_value in getattr(settings, "GOOGLE_CLIENT_IDS_ALLOWED", ()) or ():
-        cleaned = str(raw_value).strip()
-        if cleaned:
-            values.append(cleaned)
-    for attr in (
-        "GOOGLE_CLIENT_ID",
-        "GOOGLE_CLIENT_ID_WEB",
-        "GOOGLE_CLIENT_ID_ANDROID_RELEASE",
-        "GOOGLE_CLIENT_ID_ANDROID_DEBUG",
-    ):
-        val = getattr(settings, attr, None)
-        if val:
-            cleaned = str(val).strip()
-            if cleaned and cleaned not in values:
-                values.append(cleaned)
-    return values
+def verify_google_id_token(
+    token: str,
+    audience_group: Literal["admin", "customer"],
+) -> dict | None:
+    """Cryptographically verify a Google ID token against the flow's client IDs."""
+    if not token:
+        return None
 
-
-
-def verify_google_id_token(id_token: str) -> dict | None:
-    """Verify and decode a Google OAuth ID token, extracting email, name, and profile_pic.
-
-    Local and test mocks commonly use a synthetic audience such as "mock-google-client-id".
-    We accept that explicit development sentinel while still rejecting unexpected real-client
-    audiences when the application has configured Google client IDs.
-    """
-    if not id_token:
+    configured_audiences = getattr(
+        settings,
+        "GOOGLE_CLIENT_IDS_ADMIN" if audience_group == "admin" else "GOOGLE_CLIENT_IDS_CUSTOMER",
+        (),
+    ) or ()
+    allowed_audiences = set(configured_audiences)
+    if not allowed_audiences:
         return None
 
     try:
-        payload = jwt.decode(id_token, options={"verify_signature": False})
+        payload = google_id_token.verify_oauth2_token(
+            token,
+            Request(),
+            audience=None,
+        )
         email = payload.get("email")
-        if not email:
+        if not email or payload.get("email_verified") is not True:
             return None
 
-        aud = payload.get("aud")
-        allowed_audiences = set(_iter_google_client_ids())
-        if aud is not None and allowed_audiences:
-            if aud == "mock-google-client-id":
-                pass
-            elif aud not in allowed_audiences:
-                return None
+        audience = payload.get("aud")
+        token_audiences = {audience} if isinstance(audience, str) else set(audience or ())
+        if not allowed_audiences or not token_audiences.intersection(allowed_audiences):
+            return None
+        if len(token_audiences) > 1 and payload.get("azp") not in allowed_audiences:
+            return None
 
         return {
             "sub": payload.get("sub"),
             "email": email.strip().lower(),
             "name": payload.get("name") or email.split("@")[0].capitalize(),
             "picture": payload.get("picture"),  # profile_pic avatar
-            "email_verified": payload.get("email_verified", True),
+            "email_verified": True,
         }
     except Exception:
         return None

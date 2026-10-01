@@ -292,7 +292,7 @@ class AuthService:
         ip_address: str | None = None,
     ) -> tuple[str, str, Account]:
         """Authenticate Admin user with Google OAuth ID token."""
-        google_data = verify_google_id_token(id_token)
+        google_data = verify_google_id_token(id_token, audience_group="admin")
         if not google_data:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -554,7 +554,7 @@ class AuthService:
         referral_code: str | None = None,
     ) -> tuple[str, str, Account]:
         """Authenticate / Register customer via Google OAuth ID token."""
-        google_data = verify_google_id_token(id_token)
+        google_data = verify_google_id_token(id_token, audience_group="customer")
         if not google_data:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
