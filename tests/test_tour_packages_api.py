@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.database import get_db
-from app.main import app
+from app.main import fastapi_app as app
 from app.models.base import Base
 from app.models.destination import Destination
 from app.models.review import Review
@@ -156,6 +156,32 @@ def create_package_and_variants():
     )
     session.commit()
     return package
+
+
+def test_tour_package_badge_filter_matches_default_variant():
+    setup_db()
+    app.dependency_overrides[get_db] = override_db
+
+    try:
+        create_package_and_variants()
+        with TestClient(app) as client:
+            matching_response = client.get(
+                "/api/v1/tour-packages",
+                params={"badge": "Most Popular"},
+            )
+            assert matching_response.status_code == 200
+            assert matching_response.json()["pagination"]["total_items"] == 1
+            assert matching_response.json()["data"][0]["badge"] == "Most Popular"
+
+            alternate_badge_response = client.get(
+                "/api/v1/tour-packages",
+                params={"badge": "Top Rated"},
+            )
+            assert alternate_badge_response.status_code == 200
+            assert alternate_badge_response.json()["pagination"]["total_items"] == 0
+    finally:
+        app.dependency_overrides.clear()
+        Base.metadata.drop_all(bind=test_engine)
 
 
 def test_tour_package_endpoints_return_default_variant_data():

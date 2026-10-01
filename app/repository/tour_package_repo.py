@@ -46,6 +46,18 @@ class TourPackageRepository:
                 )
             )
 
+        if filters.badge is not None:
+            query = query.filter(
+                TourPackage.id.in_(
+                    self.db.query(TourVariant.package_id)
+                    .filter(
+                        TourVariant.is_active.is_(True),
+                        TourVariant.is_default.is_(True),
+                        TourVariant.badge == filters.badge,
+                    )
+                )
+            )
+
         if filters.is_featured is not None:
             query = query.filter(TourPackage.is_featured == filters.is_featured)
 

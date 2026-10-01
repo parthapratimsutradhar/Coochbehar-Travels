@@ -307,6 +307,10 @@ class TourPackageFilterParams(SchemaBase):
         None,
         description="Filter by active variant season name (case-insensitive)",
     )
+    badge: str | None = Field(
+        None,
+        description="Filter by exact badge on the active default variant",
+    )
     is_featured: bool | None = Field(
         None,
         description="Filter by featured status",
