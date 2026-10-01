@@ -354,7 +354,12 @@ class AuthService:
 
         cleaned, id_type = self.normalize_identifier(identifier)
 
-        if referral_code:
+        if referral_code and not self.customer_repo.get_by_identifier(cleaned):
+            if self.customer_repo.has_active_account_with_identifier(cleaned):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ReferralError.EXISTING_ACCOUNT,
+                )
             referrer = self._resolve_referrer(referral_code)
             if (
                 (referrer.email and referrer.email.strip().lower() == cleaned.lower())
@@ -363,15 +368,6 @@ class AuthService:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=ReferralError.SELF_REFERRAL,
-                )
-            if (
-                self.customer_repo.has_active_customer_with_identifier(cleaned)
-                or self.customer_repo.has_active_account_with_identifier(cleaned)
-                or self.customer_repo.get_by_identifier(cleaned)
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ReferralError.EXISTING_ACCOUNT,
                 )
 
         self._validate_customer_auth_identifier(cleaned, purpose)
@@ -447,11 +443,6 @@ class AuthService:
         customer = self.customer_repo.get_by_identifier(cleaned)
 
         if customer:
-            if referral_code:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ReferralError.EXISTING_ACCOUNT,
-                )
             if name and customer.name == "Valued Traveler":
                 customer.name = name.strip()
                 self.db.commit()
@@ -566,13 +557,7 @@ class AuthService:
         picture = google_data.get("picture")
 
         customer = self.customer_repo.get_by_email(email)
-        if customer:
-            if referral_code:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ReferralError.EXISTING_ACCOUNT,
-                )
-        else:
+        if not customer:
             self._validate_customer_auth_identifier(email, CustomerOtpPurpose.LOGIN.value)
             referrer = self._resolve_referrer(referral_code)
             if referrer and (referrer.email and referrer.email.strip().lower() == email.strip().lower()):

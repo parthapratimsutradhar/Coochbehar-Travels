@@ -97,17 +97,16 @@ def test_validate_referral_invite_accepts_new_identifier(client):
     assert resp.json()["data"]["referral_code"] == "ALICE100"
 
 
-def test_request_otp_rejects_existing_account_with_referral(client):
+def test_request_otp_allows_existing_customer_login_with_referral(client):
     resp = client.post(
         "/api/v1/auth/otp/request",
         json={
             "identifier": "alice@example.com",
-            "purpose": "SIGNUP",
+            "purpose": "LOGIN",
             "referral_code": "ALICE100",
         },
     )
-    assert resp.status_code == 400
-    assert resp.json()["message"] in (ReferralError.EXISTING_ACCOUNT, ReferralError.SELF_REFERRAL)
+    assert resp.status_code == 200
 
 
 def test_signup_otp_flow_creates_referral_using_latest_models(client, db_session):
@@ -149,12 +148,13 @@ def test_signup_otp_flow_creates_referral_using_latest_models(client, db_session
     assert referral.referred_customer.name == "Bob Referred"
 
 
-def test_signup_otp_rejects_already_existing_account_on_verify(client):
+def test_otp_login_with_referral_does_not_create_referral_for_existing_account(client, db_session):
     req_resp = client.post(
         "/api/v1/auth/otp/request",
         json={
             "identifier": "alice@example.com",
             "purpose": "LOGIN",
+            "referral_code": "ALICE100",
         },
     )
     assert req_resp.status_code == 200
@@ -169,8 +169,8 @@ def test_signup_otp_rejects_already_existing_account_on_verify(client):
             "referral_code": "ALICE100",
         },
     )
-    assert verify_resp.status_code == 400
-    assert verify_resp.json()["message"] == ReferralError.EXISTING_ACCOUNT
+    assert verify_resp.status_code == 200
+    assert db_session.query(Referral).count() == 0
 
 
 def test_google_login_creates_referral_for_new_customer(client, db_session):
@@ -197,7 +197,7 @@ def test_google_login_creates_referral_for_new_customer(client, db_session):
     assert referral.referred_customer.name == "Charlie Google"
 
 
-def test_google_login_rejects_referral_code_for_existing_customer(client):
+def test_google_login_with_referral_allows_existing_customer_without_new_referral(client, db_session):
     fake_payload = {
         "email": "david@example.com",
         "name": "David Google",
@@ -216,5 +216,6 @@ def test_google_login_rejects_referral_code_for_existing_customer(client):
                 "referral_code": "ALICE100",
             },
         )
-        assert resp2.status_code == 400
-        assert resp2.json()["message"] == ReferralError.EXISTING_ACCOUNT
+        assert resp2.status_code == 200
+
+    assert db_session.query(Referral).count() == 0
