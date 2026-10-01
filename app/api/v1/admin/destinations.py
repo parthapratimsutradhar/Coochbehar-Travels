@@ -6,7 +6,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin_or_staff
 from app.db.database import get_db
 from app.models.account import Account
-from app.schemas.destination import DestinationCreate, DestinationResponse, DestinationUpdate
+from app.schemas.destination import (
+    AdminDestinationResponse,
+    DestinationBulkTransferRequest,
+    DestinationBulkTransferResponse,
+    DestinationCreate,
+    DestinationUpdate,
+)
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.destination_service import DestinationService
@@ -36,7 +42,7 @@ async def create_destination(
 
 @router.get(
     "",
-    response_model=PaginatedResponse[DestinationResponse],
+    response_model=PaginatedResponse[AdminDestinationResponse],
     summary="List destinations (Admin)",
 )
 def list_destinations(
@@ -55,9 +61,15 @@ def list_destinations(
         is_domestic=is_domestic, is_featured=is_featured,
         is_active=is_active, search=search,
     )
+    usage_counts = service.get_usage_counts([destination.id for destination in result["items"]])
     return PaginatedResponse(
         message="Destinations fetched successfully",
-        data=[DestinationResponse.model_validate(d) for d in result["items"]],
+        data=[
+            AdminDestinationResponse.model_validate(destination).model_copy(
+                update=usage_counts[destination.id]
+            )
+            for destination in result["items"]
+        ],
         pagination=PaginationMeta(
             current_page=result["page"],
             page_size=result["page_size"],
@@ -66,6 +78,24 @@ def list_destinations(
             has_next=result["page"] < result["total_pages"],
             has_previous=result["page"] > 1,
         ),
+    )
+
+
+@router.post(
+    "/bulk-transfer",
+    response_model=SuccessResponse[DestinationBulkTransferResponse],
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Transfer hotels and tour packages between destinations",
+)
+def bulk_transfer_destination_usage(
+    payload: DestinationBulkTransferRequest,
+    db: Session = Depends(get_db),
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    data = DestinationService(db).bulk_transfer(payload)
+    return SuccessResponse(
+        message="Destination items transferred successfully",
+        data=data,
     )
 
 

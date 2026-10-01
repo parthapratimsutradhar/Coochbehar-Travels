@@ -18,12 +18,13 @@ from app.api.v1.admin.quotations import get_quotation, list_quotations
 from app.api.v1.enduser.customer_tour import list_my_tours
 from app.core.enums import AccountRole, BookingSource, BookingStatus, EnquiryChannel, EnquiryStatus, EnquiryType, PaymentMethod, QuotationStatus, TourType
 from app.db.database import get_db
-from app.main import app
+from app.main import fastapi_app as app
 from app.models.base import Base
 from app.models.account import Account
 from app.models.booking import Booking
 from app.models.destination import Destination
 from app.models.enquiry import Enquiry
+from app.models.hotel import Hotel
 from app.models.quotation import Quotation
 from app.models.tour_package import TourPackage
 from app.schemas.booking import (
@@ -760,7 +761,10 @@ def test_destination_crud(client, superadmin_auth_header, db_session):
     assert list_resp.status_code == 200
     items = list_resp.json()["data"]
     assert len(items) >= 1
-    dest_id = next(item["id"] for item in items if item["slug"] == "darjeeling-hills")
+    destination_item = next(item for item in items if item["slug"] == "darjeeling-hills")
+    dest_id = destination_item["id"]
+    assert destination_item["tour_package_count"] == 0
+    assert destination_item["hotel_count"] == 0
 
     # Public list
     pub_resp = client.get("/api/v1/public/destinations/")
@@ -778,6 +782,18 @@ def test_destination_crud(client, superadmin_auth_header, db_session):
     assert up_resp.json()["message"] == "Destination updated successfully"
     assert "data" not in up_resp.json()
 
+    destination = db_session.get(Destination, uuid.UUID(dest_id))
+    destination.is_active = False
+    db_session.commit()
+
+    reactivate_resp = client.patch(
+        f"/api/v1/admin/destinations/{dest_id}",
+        headers=superadmin_auth_header,
+        json={"is_active": True},
+    )
+    assert reactivate_resp.status_code == 200, reactivate_resp.text
+    assert destination.is_active is True
+
     package = TourPackage(
         tour_code="DEST-001",
         slug="destination-linked-tour",
@@ -794,8 +810,64 @@ def test_destination_crud(client, superadmin_auth_header, db_session):
     assert blocked_del_resp.status_code == 409
     assert "used by tour packages" in blocked_del_resp.json()["message"]
 
+    package_count_response = client.get(
+        "/api/v1/admin/destinations/",
+        headers=superadmin_auth_header,
+        params={"search": "darjeeling-hills"},
+    )
+    package_counts = package_count_response.json()["data"][0]
+    assert package_counts["tour_package_count"] == 1
+    assert package_counts["hotel_count"] == 0
+
     package.destination_id = None
     db_session.commit()
+
+    hotel = Hotel(
+        name="Linked Hotel",
+        image=[],
+        destination_id=uuid.UUID(dest_id),
+    )
+    db_session.add(hotel)
+    db_session.commit()
+
+    blocked_hotel_del_resp = client.delete(
+        f"/api/v1/admin/destinations/{dest_id}",
+        headers=superadmin_auth_header,
+    )
+    assert blocked_hotel_del_resp.status_code == 409
+    assert "used by hotels" in blocked_hotel_del_resp.json()["message"]
+
+    package.destination_id = uuid.UUID(dest_id)
+    db_session.commit()
+
+    target_destination = Destination(
+        name="Transfer Target",
+        slug="transfer-target",
+        country="India",
+    )
+    db_session.add(target_destination)
+    db_session.commit()
+
+    transfer_resp = client.post(
+        "/api/v1/admin/destinations/bulk-transfer",
+        headers=superadmin_auth_header,
+        json={
+            "source_destination_id": dest_id,
+            "target_destination_id": str(target_destination.id),
+        },
+    )
+    assert transfer_resp.status_code == 200, transfer_resp.text
+    assert transfer_resp.json()["data"]["tour_packages_transferred"] == 1
+    assert transfer_resp.json()["data"]["hotels_transferred"] == 1
+
+    transferred_destination_list = client.get(
+        "/api/v1/admin/destinations/",
+        headers=superadmin_auth_header,
+        params={"search": "transfer-target"},
+    )
+    transferred_counts = transferred_destination_list.json()["data"][0]
+    assert transferred_counts["tour_package_count"] == 1
+    assert transferred_counts["hotel_count"] == 1
 
     # Soft delete
     del_resp = client.delete(f"/api/v1/admin/destinations/{dest_id}", headers=superadmin_auth_header)

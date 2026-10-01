@@ -4,7 +4,12 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from app.models.destination import Destination
 from app.repository.destination_repo import DestinationRepository
-from app.schemas.destination import DestinationCreate, DestinationUpdate
+from app.schemas.destination import (
+    DestinationBulkTransferRequest,
+    DestinationBulkTransferResponse,
+    DestinationCreate,
+    DestinationUpdate,
+)
 from app.services.cdn_service import promote_cdn_asset
 
 
@@ -56,6 +61,32 @@ class DestinationService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Destination not found.")
         return dest
 
+    def get_usage_counts(self, destination_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
+        return self.repo.get_usage_counts(destination_ids)
+
+    def bulk_transfer(
+        self,
+        payload: DestinationBulkTransferRequest,
+    ) -> DestinationBulkTransferResponse:
+        if payload.source_destination_id == payload.target_destination_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Source and target destinations must be different.",
+            )
+
+        self.get_destination(payload.source_destination_id)
+        self.get_destination(payload.target_destination_id)
+        package_count, hotel_count = self.repo.transfer_usage(
+            payload.source_destination_id,
+            payload.target_destination_id,
+        )
+        return DestinationBulkTransferResponse(
+            source_destination_id=payload.source_destination_id,
+            target_destination_id=payload.target_destination_id,
+            tour_packages_transferred=package_count,
+            hotels_transferred=hotel_count,
+        )
+
     async def create_destination(self, payload: DestinationCreate) -> Destination:
         slug = payload.slug or self._slugify(payload.name)
         existing = self.repo.get_by_slug(slug)
@@ -72,7 +103,9 @@ class DestinationService:
         return self.repo.create(**data)
 
     async def update_destination(self, destination_id: uuid.UUID, payload: DestinationUpdate) -> Destination:
-        dest = self.get_destination(destination_id)
+        dest = self.repo.get_by_id(destination_id)
+        if dest is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Destination not found.")
         data = payload.model_dump(exclude_unset=True)
         if "slug" in data and data["slug"] is not None:
             existing = self.repo.get_by_slug(data["slug"])
@@ -92,5 +125,10 @@ class DestinationService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Cannot delete a destination that is used by tour packages.",
+            )
+        if self.repo.has_hotels(dest.id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot delete a destination that is used by hotels.",
             )
         self.repo.delete(dest)

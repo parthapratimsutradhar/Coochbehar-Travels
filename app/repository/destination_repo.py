@@ -2,6 +2,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from app.models.destination import Destination
+from app.models.hotel import Hotel
 from app.models.tour_package import TourPackage
 
 
@@ -20,6 +21,64 @@ class DestinationRepository:
     def has_tour_packages(self, destination_id: uuid.UUID) -> bool:
         stmt = select(TourPackage.id).where(TourPackage.destination_id == destination_id).exists()
         return self.db.query(stmt).scalar()
+
+    def has_hotels(self, destination_id: uuid.UUID) -> bool:
+        stmt = select(Hotel.id).where(Hotel.destination_id == destination_id).exists()
+        return self.db.query(stmt).scalar()
+
+    def get_usage_counts(self, destination_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
+        counts = {
+            destination_id: {"tour_package_count": 0, "hotel_count": 0}
+            for destination_id in destination_ids
+        }
+        if not destination_ids:
+            return counts
+
+        package_counts = (
+            self.db.query(TourPackage.destination_id, func.count(TourPackage.id))
+            .filter(TourPackage.destination_id.in_(destination_ids))
+            .group_by(TourPackage.destination_id)
+            .all()
+        )
+        hotel_counts = (
+            self.db.query(Hotel.destination_id, func.count(Hotel.id))
+            .filter(Hotel.destination_id.in_(destination_ids))
+            .group_by(Hotel.destination_id)
+            .all()
+        )
+        for destination_id, count in package_counts:
+            counts[destination_id]["tour_package_count"] = count
+        for destination_id, count in hotel_counts:
+            counts[destination_id]["hotel_count"] = count
+        return counts
+
+    def transfer_usage(
+        self,
+        source_destination_id: uuid.UUID,
+        target_destination_id: uuid.UUID,
+    ) -> tuple[int, int]:
+        try:
+            package_count = (
+                self.db.query(TourPackage)
+                .filter(TourPackage.destination_id == source_destination_id)
+                .update(
+                    {TourPackage.destination_id: target_destination_id},
+                    synchronize_session=False,
+                )
+            )
+            hotel_count = (
+                self.db.query(Hotel)
+                .filter(Hotel.destination_id == source_destination_id)
+                .update(
+                    {Hotel.destination_id: target_destination_id},
+                    synchronize_session=False,
+                )
+            )
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        return package_count, hotel_count
 
     def create(self, **kwargs) -> Destination:
         destination = Destination(**kwargs)

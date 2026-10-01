@@ -38,6 +38,23 @@ class DestinationResponse(DestinationBase):
     updated_at: datetime
 
 
+class AdminDestinationResponse(DestinationResponse):
+    tour_package_count: int = 0
+    hotel_count: int = 0
+
+
+class DestinationBulkTransferRequest(SchemaBase):
+    source_destination_id: UUID
+    target_destination_id: UUID
+
+
+class DestinationBulkTransferResponse(SchemaBase):
+    source_destination_id: UUID
+    target_destination_id: UUID
+    tour_packages_transferred: int
+    hotels_transferred: int
+
+
 class DestinationPublicResponse(DestinationBase):
     model_config = ConfigDict(from_attributes=True)
 
