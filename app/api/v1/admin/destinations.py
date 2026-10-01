@@ -89,7 +89,7 @@ async def update_destination(
 @router.delete(
     "/{destination_id}",
     response_model=ActionResponse,
-    responses={404: {"model": ErrorResponse}},
+    responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
     summary="Soft-delete a destination",
 )
 def delete_destination(

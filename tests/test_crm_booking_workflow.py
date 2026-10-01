@@ -732,7 +732,7 @@ def test_offline_booking_service_uses_tour_offer_id_schema_contract(db_session, 
     assert booking.offer_id == offer_id
 
 
-def test_destination_crud(client, superadmin_auth_header):
+def test_destination_crud(client, superadmin_auth_header, db_session):
     # Create destination
     resp = client.post(
         "/api/v1/admin/destinations/",
@@ -777,6 +777,25 @@ def test_destination_crud(client, superadmin_auth_header):
     assert up_resp.json()["success"] is True
     assert up_resp.json()["message"] == "Destination updated successfully"
     assert "data" not in up_resp.json()
+
+    package = TourPackage(
+        tour_code="DEST-001",
+        slug="destination-linked-tour",
+        title="Destination Linked Tour",
+        destination_id=uuid.UUID(dest_id),
+    )
+    db_session.add(package)
+    db_session.commit()
+
+    blocked_del_resp = client.delete(
+        f"/api/v1/admin/destinations/{dest_id}",
+        headers=superadmin_auth_header,
+    )
+    assert blocked_del_resp.status_code == 409
+    assert "used by tour packages" in blocked_del_resp.json()["message"]
+
+    package.destination_id = None
+    db_session.commit()
 
     # Soft delete
     del_resp = client.delete(f"/api/v1/admin/destinations/{dest_id}", headers=superadmin_auth_header)

@@ -88,4 +88,9 @@ class DestinationService:
 
     def delete_destination(self, destination_id: uuid.UUID) -> None:
         dest = self.get_destination(destination_id)
+        if self.repo.has_tour_packages(dest.id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot delete a destination that is used by tour packages.",
+            )
         self.repo.delete(dest)

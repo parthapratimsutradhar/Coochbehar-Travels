@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.enums import ReferralStatus
@@ -21,7 +21,7 @@ class ReferralRepository:
         return (
             self.db.query(CustomerProfile)
             .options(joinedload(CustomerProfile.account))
-            .filter(CustomerProfile.referral_code == referral_code)
+            .filter(func.upper(CustomerProfile.referral_code) == referral_code.strip().upper())
             .first()
         )
 

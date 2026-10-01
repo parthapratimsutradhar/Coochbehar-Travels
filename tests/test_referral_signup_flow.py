@@ -97,6 +97,17 @@ def test_validate_referral_invite_accepts_new_identifier(client):
     assert resp.json()["data"]["referral_code"] == "ALICE100"
 
 
+def test_validate_referral_invite_matches_mixed_case_stored_code(client, db_session):
+    profile = db_session.query(CustomerProfile).one()
+    profile.referral_code = "Alice100"
+    db_session.commit()
+
+    resp = client.get("/api/v1/referrals/invite/ALICE100")
+
+    assert resp.status_code == 200
+    assert resp.json()["data"]["referral_code"] == "Alice100"
+
+
 def test_request_otp_allows_existing_customer_login_with_referral(client):
     resp = client.post(
         "/api/v1/auth/otp/request",
@@ -110,6 +121,10 @@ def test_request_otp_allows_existing_customer_login_with_referral(client):
 
 
 def test_signup_otp_flow_creates_referral_using_latest_models(client, db_session):
+    profile = db_session.query(CustomerProfile).one()
+    profile.referral_code = "Alice100"
+    db_session.commit()
+
     # 1. Request OTP for brand new user Bob
     req_resp = client.post(
         "/api/v1/auth/otp/request",

@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -618,7 +619,7 @@ class AuthService:
             self.db.query(Account)
             .join(CustomerProfile, CustomerProfile.account_id == Account.id)
             .filter(
-                CustomerProfile.referral_code == normalized_code,
+                func.upper(CustomerProfile.referral_code) == normalized_code,
                 Account.is_active.is_(True),
                 Account.role == AccountRole.CUSTOMER,
             )

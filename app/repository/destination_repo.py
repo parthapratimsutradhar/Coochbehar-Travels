@@ -2,6 +2,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from app.models.destination import Destination
+from app.models.tour_package import TourPackage
 
 
 class DestinationRepository:
@@ -15,6 +16,10 @@ class DestinationRepository:
     def get_by_slug(self, slug: str) -> Destination | None:
         stmt = select(Destination).where(Destination.slug == slug)
         return self.db.execute(stmt).scalar_one_or_none()
+
+    def has_tour_packages(self, destination_id: uuid.UUID) -> bool:
+        stmt = select(TourPackage.id).where(TourPackage.destination_id == destination_id).exists()
+        return self.db.query(stmt).scalar()
 
     def create(self, **kwargs) -> Destination:
         destination = Destination(**kwargs)
