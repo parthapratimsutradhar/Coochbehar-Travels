@@ -1,6 +1,7 @@
 import asyncio
 import io
 import json
+import os
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
@@ -110,6 +111,29 @@ def test_native_file_upload_uses_temporary_cdn_folder(cdn_root: Path):
     assert result["path"].startswith("temporary-uploads/")
     assert result["url"].startswith("https://cdn.example.test/temporary-uploads/")
     assert result["bytes"] > 0
+
+
+def test_expired_temp_upload_cleanup_removes_only_files_over_24_hours(
+    cdn_root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    now = cdn.time.time()
+    monkeypatch.setattr(cdn.time, "time", lambda: now)
+    expired = cdn_root / cdn.TEMP_FOLDER / "expired.jpg"
+    recent = cdn_root / cdn.TEMP_FOLDER / "recent.jpg"
+    other_folder_file = cdn_root / "profile-picture" / "expired.jpg"
+    expired.write_bytes(b"expired")
+    recent.write_bytes(b"recent")
+    other_folder_file.write_bytes(b"keep")
+    old_timestamp = now - cdn.TEMP_UPLOAD_RETENTION_SECONDS - 1
+    os.utime(expired, (old_timestamp, old_timestamp))
+    os.utime(other_folder_file, (old_timestamp, old_timestamp))
+
+    deleted_count = cdn.cleanup_expired_temp_uploads()
+
+    assert deleted_count == 1
+    assert not expired.exists()
+    assert recent.exists()
+    assert other_folder_file.exists()
 
 
 def test_google_profile_picture_uploads_directly_to_permanent_folder(

@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import logging
+from datetime import datetime
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -22,19 +23,33 @@ import socketio
 
 logger = logging.getLogger(__name__)
 
-# ── Daily analytics cleanup scheduler ────────────────────────────────
-async def _daily_cleanup_task() -> None:
-    """Run the 90-day retention cleanup once per day."""
-    from app.services.cleanup_service import run_cleanup
+# ── Scheduled data cleanup ────────────────────────────────────────────
+async def _scheduled_cleanup_task(
+    job_name: str,
+    cleanup,
+    interval_days: int,
+    hour: int,
+    minute: int,
+) -> None:
+    """Keep one configured cleanup job scheduled while the app is running."""
+    from app.services.cleanup_service import next_cleanup_run
+
     while True:
         try:
-            await asyncio.sleep(24 * 60 * 60)  # wait 24 h
-            summary = await run_cleanup()
-            logger.info("Daily cleanup ran: %s", summary)
+            scheduled_time = next_cleanup_run(interval_days, hour, minute)
+            delay = max(
+                (scheduled_time - datetime.now(scheduled_time.tzinfo)).total_seconds(),
+                0,
+            )
+            logger.info("Next %s scheduled for %s", job_name, scheduled_time.isoformat())
+            await asyncio.sleep(delay)
+            summary = await cleanup()
+            logger.info("%s completed: %s", job_name, summary)
         except asyncio.CancelledError:
             break
         except Exception:
-            logger.exception("Daily cleanup task error")
+            logger.exception("Scheduled %s task error", job_name)
+            await asyncio.sleep(60)
 
 
 @asynccontextmanager
@@ -48,22 +63,32 @@ async def lifespan(app: FastAPI):
         else:
             logger.error("CDN antivirus is enabled but the scanner is unavailable")
 
-    # Run cleanup once at startup (catches up on stale data)
-    from app.services.cleanup_service import run_cleanup
-    try:
-        summary = await run_cleanup()
-        logger.info("Startup cleanup ran: %s", summary)
-    except Exception:
-        logger.exception("Startup cleanup failed")
+    from app.services.cleanup_service import run_analytics_cleanup, run_cleanup
 
-    # Schedule daily background cleanup
-    task = asyncio.create_task(_daily_cleanup_task())
+    tasks = [
+        asyncio.create_task(
+            _scheduled_cleanup_task(
+                "analytics cleanup",
+                run_analytics_cleanup,
+                settings.ANALYTICS_CLEANUP_INTERVAL_DAYS,
+                settings.ANALYTICS_CLEANUP_HOUR,
+                settings.ANALYTICS_CLEANUP_MINUTE,
+            )
+        ),
+        asyncio.create_task(
+            _scheduled_cleanup_task(
+                "temporary CDN cleanup",
+                run_cleanup,
+                settings.CDN_CLEANUP_INTERVAL_DAYS,
+                settings.CDN_CLEANUP_HOUR,
+                settings.CDN_CLEANUP_MINUTE,
+            )
+        ),
+    ]
     yield
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 app = FastAPI(

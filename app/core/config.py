@@ -126,6 +126,16 @@ class Settings:
     CDN_ADMIN_UPLOAD_RATE_WINDOW_SECONDS: int = int(
         _env("CDN_ADMIN_UPLOAD_RATE_WINDOW_SECONDS") or "900"
     )
+    DATA_RETENTION_DAYS: int = int(_env("DATA_RETENTION_DAYS") or "30")
+    ANALYTICS_CLEANUP_INTERVAL_DAYS: int = int(
+        _env("ANALYTICS_CLEANUP_INTERVAL_DAYS") or "3"
+    )
+    ANALYTICS_CLEANUP_HOUR: int = int(_env("ANALYTICS_CLEANUP_HOUR") or "2")
+    ANALYTICS_CLEANUP_MINUTE: int = int(_env("ANALYTICS_CLEANUP_MINUTE") or "0")
+    CDN_CLEANUP_INTERVAL_DAYS: int = int(_env("CDN_CLEANUP_INTERVAL_DAYS") or "1")
+    CDN_CLEANUP_HOUR: int = int(_env("CDN_CLEANUP_HOUR") or "3")
+    CDN_CLEANUP_MINUTE: int = int(_env("CDN_CLEANUP_MINUTE") or "0")
+    CLEANUP_TIMEZONE: str = _env("CLEANUP_TIMEZONE") or "Asia/Kolkata"
 
 
 settings = Settings()

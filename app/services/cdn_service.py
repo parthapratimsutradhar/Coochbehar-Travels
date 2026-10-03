@@ -35,6 +35,7 @@ CDN_ROOT = Path(settings.CDN_STORAGE_PATH).resolve()
 CDN_BASE_URL = settings.CDN_BASE_URL.rstrip("/")
 
 TEMP_FOLDER = "temporary-uploads"
+TEMP_UPLOAD_RETENTION_SECONDS = 24 * 60 * 60
 
 PERMANENT_FOLDERS = {
     "profile-picture",
@@ -1036,6 +1037,27 @@ def delete_cdn_file(relative_path: str) -> bool:
 
     path.unlink()
     return True
+
+
+def cleanup_expired_temp_uploads() -> int:
+    cutoff = time.time() - TEMP_UPLOAD_RETENTION_SECONDS
+    temp_directory = CDN_ROOT / TEMP_FOLDER
+    deleted_count = 0
+
+    try:
+        entries = temp_directory.iterdir()
+        for entry in entries:
+            try:
+                entry_stat = entry.stat(follow_symlinks=False)
+                if stat.S_ISREG(entry_stat.st_mode) and entry_stat.st_mtime <= cutoff:
+                    entry.unlink()
+                    deleted_count += 1
+            except OSError:
+                logger.exception("Could not clean expired temporary CDN file: %s", entry)
+    except OSError:
+        logger.exception("Could not access temporary CDN upload directory: %s", temp_directory)
+
+    return deleted_count
 
 
 def get_cdn_file_path(relative_path: str) -> Path:
