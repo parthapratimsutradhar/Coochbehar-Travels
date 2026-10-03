@@ -181,12 +181,23 @@ The file endpoint is `POST /api/v1/public/files/upload`. It requires the standar
 Bearer JWT and is available to authenticated admin, staff, and customer actors.
 
 The endpoint validates the actual file content, scans it when
-`CDN_ANTIVIRUS_ENABLED=true`, processes supported media, and publishes the
-finished asset under `temporary-uploads/`. Business logic can later promote the
-server-generated temporary path into an existing permanent CDN folder. Upload
-limits are stored in the shared application database and apply per authenticated
-actor and direct peer IP across API workers. Apply the Alembic migration before
-deploying this version.
+`CDN_ANTIVIRUS_ENABLED=true`, and stores supported media under the server-only
+`temporary-uploads/` directory. Its `url` field is a bearer-authenticated API
+download path, not a public CDN URL. Business logic can later promote the
+server-generated temporary path into an allowlisted public folder or private
+document directory. Upload limits are stored in the shared application database
+and apply per authenticated actor and direct peer IP across API workers. Apply
+the Alembic migration before deploying this version.
+
+Existing documents stored in the root-level `customer-documents/` and
+`admin-documents/` directories must be migrated before serving the new version.
+Back up the CDN directory and database, then manually move the files into the
+matching `private/` subdirectories and update each existing document's
+`file_url` to its private relative path while old application workers are
+drained. Verify every stored path against its document and confirm that the
+legacy directories are empty before serving the new version. Keep the origin
+deny rules for `/private/`, `/temporary-uploads/`, and `/.upload-staging/` in
+place throughout the transition.
 
 Video uploads require `ffprobe`; compression also requires `ffmpeg`. When
 antivirus is enabled, the API uses `CDN_ANTIVIRUS_SOCKET` when configured and

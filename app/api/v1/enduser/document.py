@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_customer
@@ -67,16 +67,20 @@ async def download_document(
 	document_id: uuid.UUID,
 	current_customer: Account = Depends(get_current_customer),
 	db: Session = Depends(get_db),
-	) -> StreamingResponse:
-	document, content = await CustomerDocumentService(db).get_file(
+	) -> FileResponse:
+	document, path = await CustomerDocumentService(db).get_file(
 		document_id=document_id,
 		current_user=current_customer,
 		role="CUSTOMER",
 	)
-	return StreamingResponse(
-		content,
+	return FileResponse(
+		path,
 		media_type=document.mime_type or "application/octet-stream",
-		headers={"Content-Disposition": f'attachment; filename="{document.file_name}"'},
+		filename=document.file_name,
+		headers={
+			"Cache-Control": "private, no-store",
+			"Pragma": "no-cache",
+		},
 	)
 
 

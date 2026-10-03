@@ -48,7 +48,13 @@ class EmailService:
         detail=detail,
       ) from exc
 
-  def send_email(self, to_email: str, subject: str, body: str) -> dict:
+  def send_email(
+    self,
+    to_email: str,
+    subject: str,
+    body: str,
+    attachments: list[tuple[str, bytes, str]] | None = None,
+  ) -> dict:
     self._validate_config()
     message = EmailMessage()
     message.set_content(body)
@@ -68,6 +74,18 @@ class EmailService:
       cid="<gantabyaa-logo>",
       filename=LOGO_PATH.name,
     )
+    for filename, content, content_type in attachments or []:
+      maintype, separator, subtype = content_type.partition("/")
+      if not separator:
+        maintype, subtype = "application", "octet-stream"
+      safe_filename = filename.replace("\\", "/").rsplit("/", 1)[-1]
+      safe_filename = safe_filename.replace("\r", "").replace("\n", "") or "attachment"
+      message.add_attachment(
+        content,
+        maintype=maintype,
+        subtype=subtype,
+        filename=safe_filename,
+      )
     message["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL or settings.SMTP_USERNAME}>"
     message["To"] = to_email
     message["Subject"] = subject

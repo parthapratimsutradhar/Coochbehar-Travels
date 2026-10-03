@@ -3,7 +3,8 @@ import uuid
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin, get_current_admin_only
@@ -57,6 +58,29 @@ def list_documents(
     )
 
 
+@router.get(
+    "/{document_id}/download",
+    responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Download a private document",
+)
+def download_document(
+    document_id: uuid.UUID,
+    current_user: Account = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    del current_user
+    document, path = AdminDocumentService(db).get_file(document_id)
+    return FileResponse(
+        path,
+        media_type=document.mime_type or "application/octet-stream",
+        filename=document.file_name,
+        headers={
+            "Cache-Control": "private, no-store",
+            "Pragma": "no-cache",
+        },
+    )
+
+
 @router.delete(
     "/bulk", 
     response_model=ActionResponse
@@ -87,13 +111,6 @@ async def upload_customer_document(
         "title": payload.title.strip(),
         "description": payload.description.strip() if payload.description else None,
     }
-    if not (
-        payload.file.startswith("http://")
-        or payload.file.startswith("https://")
-        or "temporary-uploads" in payload.file
-    ):
-        raise HTTPException(status_code=422, detail="file must reference a temporary upload")
-
     mime_type = mimetypes.guess_type(payload.file_name)[0] or "application/octet-stream"
     await AdminDocumentService(db).upload_from_url(
         customer_id=payload.customer_id,

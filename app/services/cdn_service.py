@@ -37,11 +37,9 @@ CDN_BASE_URL = settings.CDN_BASE_URL.rstrip("/")
 TEMP_FOLDER = "temporary-uploads"
 TEMP_UPLOAD_RETENTION_SECONDS = 24 * 60 * 60
 
-PERMANENT_FOLDERS = {
+PUBLIC_FOLDERS = {
     "profile-picture",
     "tour-packages",
-    "customer-documents",
-    "admin-documents",
     "review-gallery",
     "destination-images",
     "hotel-images",
@@ -49,11 +47,19 @@ PERMANENT_FOLDERS = {
     "room-images",
 }
 
-ALLOWED_FOLDERS = PERMANENT_FOLDERS | {TEMP_FOLDER}
+PRIVATE_DOCUMENT_FOLDERS = {
+    "private/customer-documents",
+    "private/admin-documents",
+}
+_DOCUMENT_FOLDER_ALIASES = {
+    "customer-documents": "private/customer-documents",
+    "admin-documents": "private/admin-documents",
+}
+ALLOWED_FOLDERS = PUBLIC_FOLDERS | PRIVATE_DOCUMENT_FOLDERS | {TEMP_FOLDER}
 
 CDN_ROOT.mkdir(parents=True, exist_ok=True)
 
-for folder in ALLOWED_FOLDERS:
+for folder in PUBLIC_FOLDERS | {TEMP_FOLDER} | PRIVATE_DOCUMENT_FOLDERS:
     (CDN_ROOT / folder).mkdir(parents=True, exist_ok=True)
 
 ALLOWED_CONTENT_TYPES = {
@@ -100,7 +106,8 @@ _ANTIVIRUS_STATUS = "disabled" if not settings.CDN_ANTIVIRUS_ENABLED else "unche
 
 
 def _validate_folder(folder: str, *, allow_temp: bool = True) -> str:
-    folder = folder.strip().strip("/")
+    folder = folder.strip()
+    folder = _DOCUMENT_FOLDER_ALIASES.get(folder, folder)
 
     if folder not in ALLOWED_FOLDERS:
         raise HTTPException(
@@ -180,6 +187,9 @@ def _validate_relative_path(relative_path: str) -> str:
         not path
         or path.startswith("/")
         or "\\" in path
+        or "%" in path
+        or "?" in path
+        or "#" in path
         or PureWindowsPath(path).is_absolute()
         or any(part in {"", ".", ".."} or ":" in part for part in parts)
         or "\x00" in path
@@ -197,8 +207,53 @@ def _private_work_directory() -> Path:
     if staging_root.is_symlink():
         raise RuntimeError("Private staging directory is unsafe")
     staging_root.mkdir(mode=0o700, exist_ok=True)
+    if not staging_root.resolve().is_relative_to(CDN_ROOT):
+        raise RuntimeError("Private staging directory is outside the CDN root")
     os.chmod(staging_root, 0o700)
     return Path(tempfile.mkdtemp(prefix="upload-", dir=staging_root))
+
+
+def _temporary_upload_relative_path(reference: str) -> str:
+    parsed = urlsplit(reference)
+    if parsed.scheme or parsed.netloc:
+        cdn_origin = urlsplit(CDN_BASE_URL)
+        if (parsed.scheme.lower(), parsed.netloc.lower()) != (
+            cdn_origin.scheme.lower(),
+            cdn_origin.netloc.lower(),
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="File reference must point to a temporary CDN upload",
+            )
+        if parsed.query or parsed.fragment:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Temporary upload references cannot include a query or fragment",
+            )
+        relative_path = parsed.path.lstrip("/")
+    elif parsed.path.startswith("/api/v1/public/files/temporary/"):
+        if parsed.query or parsed.fragment:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Temporary upload references cannot include a query or fragment",
+            )
+        filename = parsed.path.removeprefix("/api/v1/public/files/temporary/")
+        relative_path = f"{TEMP_FOLDER}/{filename}"
+    else:
+        relative_path = reference
+
+    relative_path = _validate_relative_path(relative_path)
+    parts = relative_path.split("/")
+    if (
+        len(parts) != 2
+        or parts[0] != TEMP_FOLDER
+        or not _TEMP_FILENAME_RE.fullmatch(parts[1])
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Only server-generated temporary uploads can be used",
+        )
+    return relative_path
 
 
 async def _stage_upload(file: UploadFile, path: Path, content_type: str) -> int:
@@ -572,6 +627,11 @@ async def _upload_file_to_folder(
     target_folder: str,
 ) -> dict[str, Any]:
     target_folder = _validate_folder(target_folder)
+    if target_folder in PRIVATE_DOCUMENT_FOLDERS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Private documents must be promoted from temporary storage",
+        )
     async with _UPLOAD_CONCURRENCY:
         content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
         extension = _validate_content_type(content_type)
@@ -650,7 +710,11 @@ async def _upload_file_to_folder(
             published = True
             return {
                 "path": relative_path,
-                "url": f"{CDN_BASE_URL}/{relative_path}",
+                "url": (
+                    build_temporary_download_url(relative_path)
+                    if target_folder == TEMP_FOLDER
+                    else build_cdn_url(relative_path)
+                ),
                 "filename": filename,
                 "content_type": content_type,
                 "bytes": size if selected == original else selected.stat().st_size,
@@ -704,26 +768,64 @@ async def promote_cdn_asset(
     url_or_path: str | None,
     target_folder: str,
 ) -> dict[str, str]:
+    target_folder = _validate_folder(target_folder, allow_temp=False)
     if not url_or_path:
         return {"url": "", "path": ""}
 
     cleaned = url_or_path.strip()
-    relative_path = cleaned
     parsed = urlsplit(cleaned)
+    is_private_destination = target_folder in PRIVATE_DOCUMENT_FOLDERS
+
+    if is_private_destination:
+        relative_path = _temporary_upload_relative_path(cleaned)
+        promoted = promote_temp_file(relative_path, target_folder)
+        return {"url": "", "path": promoted["path"]}
+
     if parsed.scheme or parsed.netloc:
         cdn_origin = urlsplit(CDN_BASE_URL)
-        if (parsed.scheme.lower(), parsed.netloc.lower()) != (
-            cdn_origin.scheme.lower(),
-            cdn_origin.netloc.lower(),
+        if parsed.netloc.lower() == cdn_origin.netloc.lower():
+            if parsed.scheme.lower() != cdn_origin.scheme.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="CDN asset URL has an invalid scheme",
+                )
+            relative_path = _validate_relative_path(parsed.path.lstrip("/"))
+            if relative_path.startswith(f"{TEMP_FOLDER}/"):
+                relative_path = _temporary_upload_relative_path(cleaned)
+                promoted = promote_temp_file(relative_path, target_folder)
+                return {"url": promoted["url"], "path": promoted["path"]}
+            if relative_path.split("/", 1)[0] in PUBLIC_FOLDERS:
+                return {"url": cleaned, "path": relative_path}
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="CDN path is not a public asset",
+            )
+
+        if (
+            parsed.scheme.lower() in {"http", "https"}
+            and parsed.hostname
+            and not parsed.username
+            and not parsed.password
         ):
-            return {"url": url_or_path, "path": ""}
-        relative_path = parsed.path.lstrip("/")
+            return {"url": cleaned, "path": ""}
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Asset URL is invalid",
+        )
 
-    if not relative_path.startswith(f"{TEMP_FOLDER}/"):
-        return {"url": url_or_path, "path": relative_path}
-
-    promoted = promote_temp_file(relative_path, target_folder)
-    return {"url": promoted["url"], "path": promoted["path"]}
+    if cleaned.startswith("/"):
+        relative_path = _temporary_upload_relative_path(cleaned)
+    else:
+        relative_path = _validate_relative_path(cleaned)
+    if relative_path.startswith(f"{TEMP_FOLDER}/"):
+        promoted = promote_temp_file(relative_path, target_folder)
+        return {"url": promoted["url"], "path": promoted["path"]}
+    if relative_path.split("/", 1)[0] in PUBLIC_FOLDERS:
+        return {"url": build_cdn_url(relative_path), "path": relative_path}
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail="Asset path is not a temporary upload or public asset",
+    )
 
 
 def _validate_google_picture_url(picture_url: str) -> None:
@@ -1018,7 +1120,11 @@ def promote_temp_file(
 
     return {
         "path": destination_relative_path,
-        "url": f"{CDN_BASE_URL}/{destination_relative_path}",
+        "url": (
+            build_cdn_url(destination_relative_path)
+            if target_folder in PUBLIC_FOLDERS
+            else ""
+        ),
         "filename": filename,
         "bytes": destination.stat().st_size,
     }
@@ -1026,14 +1132,27 @@ def promote_temp_file(
 
 def delete_cdn_file(relative_path: str) -> bool:
     relative_path = _validate_relative_path(relative_path)
+    parts = relative_path.split("/")
+    if (
+        len(parts) != 2
+        or parts[0] not in PUBLIC_FOLDERS | {TEMP_FOLDER}
+        or not _TEMP_FILENAME_RE.fullmatch(parts[1])
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only generated CDN files can be deleted",
+        )
 
-    if relative_path.startswith(f"{TEMP_FOLDER}/"):
-        path = _resolve_path(relative_path)
-    else:
-        path = _resolve_path(relative_path)
-
-    if not path.is_file():
+    path = _resolve_path(relative_path)
+    try:
+        file_stat = path.lstat()
+    except FileNotFoundError:
         return False
+    if not stat.S_ISREG(file_stat.st_mode):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only regular CDN files can be deleted",
+        )
 
     path.unlink()
     return True
@@ -1045,6 +1164,12 @@ def cleanup_expired_temp_uploads() -> int:
     deleted_count = 0
 
     try:
+        directory_info = temp_directory.lstat()
+        if (
+            not stat.S_ISDIR(directory_info.st_mode)
+            or not temp_directory.resolve().is_relative_to(CDN_ROOT)
+        ):
+            raise OSError("Temporary upload directory is unsafe")
         entries = temp_directory.iterdir()
         for entry in entries:
             try:
@@ -1057,14 +1182,116 @@ def cleanup_expired_temp_uploads() -> int:
     except OSError:
         logger.exception("Could not access temporary CDN upload directory: %s", temp_directory)
 
+    staging_root = CDN_ROOT / ".upload-staging"
+    staging_deleted = 0
+    try:
+        try:
+            staging_info = staging_root.lstat()
+        except FileNotFoundError:
+            staging_info = None
+        if staging_info is not None:
+            if (
+                not stat.S_ISDIR(staging_info.st_mode)
+                or not staging_root.resolve().is_relative_to(CDN_ROOT)
+            ):
+                raise OSError("Staging directory is unsafe")
+            for entry in staging_root.iterdir():
+                try:
+                    entry_stat = entry.lstat()
+                    if (
+                        entry.name.startswith("upload-")
+                        and stat.S_ISDIR(entry_stat.st_mode)
+                        and entry_stat.st_mtime <= cutoff
+                        and entry.resolve().is_relative_to(staging_root.resolve())
+                    ):
+                        shutil.rmtree(entry)
+                        staging_deleted += 1
+                except OSError:
+                    logger.exception("Could not clean expired CDN staging directory: %s", entry)
+    except OSError:
+        logger.exception("Could not access CDN staging directory: %s", staging_root)
+    if staging_deleted:
+        logger.info("Removed %d expired CDN staging directories", staging_deleted)
+
     return deleted_count
+
+
+def get_temporary_upload_path(filename: str) -> Path:
+    if not _TEMP_FILENAME_RE.fullmatch(filename):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Temporary upload not found",
+        )
+    path = _resolve_path(f"{TEMP_FOLDER}/{filename}")
+    try:
+        file_stat = path.lstat()
+        resolved = path.resolve(strict=True)
+    except OSError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Temporary upload not found",
+        ) from None
+    if (
+        not stat.S_ISREG(file_stat.st_mode)
+        or file_stat.st_nlink != 1
+        or resolved.parent != (CDN_ROOT / TEMP_FOLDER).resolve()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Temporary upload not found",
+        )
+    return path
+
+
+def get_private_document_path(relative_path: str) -> Path:
+    relative_path = _validate_relative_path(relative_path)
+    parts = relative_path.split("/")
+    if (
+        len(parts) != 3
+        or "/".join(parts[:2]) not in PRIVATE_DOCUMENT_FOLDERS
+        or not _TEMP_FILENAME_RE.fullmatch(parts[2])
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+    path = _resolve_path(relative_path)
+    private_root = (CDN_ROOT / "private").resolve()
+    try:
+        file_stat = path.lstat()
+        resolved = path.resolve(strict=True)
+    except OSError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        ) from None
+    if (
+        not stat.S_ISREG(file_stat.st_mode)
+        or file_stat.st_nlink != 1
+        or resolved == private_root
+        or private_root not in resolved.parents
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+    return path
 
 
 def get_cdn_file_path(relative_path: str) -> Path:
     relative_path = _validate_relative_path(relative_path)
+    parts = relative_path.split("/")
+    if len(parts) < 2 or parts[0] not in PUBLIC_FOLDERS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="CDN file not found",
+        )
     path = _resolve_path(relative_path)
-
-    if not path.is_file():
+    try:
+        file_stat = path.lstat()
+    except OSError:
+        file_stat = None
+    if file_stat is None or not stat.S_ISREG(file_stat.st_mode):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="CDN file not found",
@@ -1075,4 +1302,25 @@ def get_cdn_file_path(relative_path: str) -> Path:
 
 def build_cdn_url(relative_path: str) -> str:
     relative_path = _validate_relative_path(relative_path)
+    parts = relative_path.split("/")
+    if len(parts) < 2 or parts[0] not in PUBLIC_FOLDERS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Only permanent public assets have CDN URLs",
+        )
     return f"{CDN_BASE_URL}/{relative_path}"
+
+
+def build_temporary_download_url(relative_path: str) -> str:
+    relative_path = _validate_relative_path(relative_path)
+    parts = relative_path.split("/")
+    if (
+        len(parts) != 2
+        or parts[0] != TEMP_FOLDER
+        or not _TEMP_FILENAME_RE.fullmatch(parts[1])
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid temporary upload path",
+        )
+    return f"/api/v1/public/files/temporary/{parts[1]}"

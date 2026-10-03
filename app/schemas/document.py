@@ -74,7 +74,7 @@ class AdminDocumentResponse(SchemaBase):
 
 class AdminDocumentUploadRequest(SchemaBase):
     customer_id: uuid.UUID
-    file: str = Field(..., min_length=1, description="Temporary CDN upload URL or relative path")
+    file: str = Field(..., min_length=1, description="Temporary upload API URL or relative path")
     file_name: str = Field(default="document", min_length=1, max_length=255)
     document_type: DocumentType
     title: str = Field(..., min_length=1, max_length=200)
@@ -82,7 +82,7 @@ class AdminDocumentUploadRequest(SchemaBase):
 
 
 class CustomerDocumentUploadRequest(SchemaBase):
-    file: str = Field(..., min_length=1, description="Temporary CDN upload URL or relative path")
+    file: str = Field(..., min_length=1, description="Temporary upload API URL or relative path")
     file_name: str = Field(default="document", min_length=1, max_length=255)
     document_type: DocumentType
     title: str = Field(..., min_length=1, max_length=200)

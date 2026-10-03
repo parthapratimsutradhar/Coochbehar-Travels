@@ -132,9 +132,15 @@ class Settings:
     )
     ANALYTICS_CLEANUP_HOUR: int = int(_env("ANALYTICS_CLEANUP_HOUR") or "2")
     ANALYTICS_CLEANUP_MINUTE: int = int(_env("ANALYTICS_CLEANUP_MINUTE") or "0")
-    CDN_CLEANUP_INTERVAL_DAYS: int = int(_env("CDN_CLEANUP_INTERVAL_DAYS") or "1")
-    CDN_CLEANUP_HOUR: int = int(_env("CDN_CLEANUP_HOUR") or "3")
-    CDN_CLEANUP_MINUTE: int = int(_env("CDN_CLEANUP_MINUTE") or "0")
+    CDN_CLEANUP_INTERVAL_DAYS: int = int(
+        _env("CDN_CLEANUP_INTERVAL_DAYS") or _env("CLEANUP_INTERVAL_DAYS") or "1"
+    )
+    CDN_CLEANUP_HOUR: int = int(
+        _env("CDN_CLEANUP_HOUR") or _env("DAILY_CLEANUP_HOUR") or "3"
+    )
+    CDN_CLEANUP_MINUTE: int = int(
+        _env("CDN_CLEANUP_MINUTE") or _env("DAILY_CLEANUP_MINUTE") or "0"
+    )
     CLEANUP_TIMEZONE: str = _env("CLEANUP_TIMEZONE") or "Asia/Kolkata"
 
 

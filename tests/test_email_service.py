@@ -55,3 +55,30 @@ def test_send_email_raises_when_recipient_is_refused(monkeypatch):
 
     with pytest.raises(smtplib.SMTPRecipientsRefused, match="customer@example.com"):
         EmailService().send_email("customer@example.com", "Subject", "Body")
+
+
+def test_send_email_supports_private_pdf_attachments(monkeypatch):
+    server = MagicMock()
+    server.send_message.return_value = {}
+    smtp_constructor = MagicMock()
+    smtp_constructor.return_value.__enter__.return_value = server
+    monkeypatch.setattr("app.services.email_service.smtplib.SMTP_SSL", smtp_constructor)
+    monkeypatch.setattr(settings, "SMTP_PORT", 465)
+    monkeypatch.setattr(settings, "SMTP_USERNAME", "sender@example.com")
+    monkeypatch.setattr(settings, "SMTP_PASSWORD", "mailbox-password")
+    monkeypatch.setattr(settings, "SMTP_FROM_EMAIL", "sender@example.com")
+
+    EmailService().send_email(
+        "customer@example.com",
+        "Private document",
+        "The PDF is attached.",
+        attachments=[("quotation.pdf", b"private pdf bytes", "application/pdf")],
+    )
+
+    sent_message = server.send_message.call_args.args[0]
+    attachment = next(
+        part for part in sent_message.walk()
+        if part.get_content_type() == "application/pdf"
+    )
+    assert attachment.get_filename() == "quotation.pdf"
+    assert attachment.get_payload(decode=True) == b"private pdf bytes"

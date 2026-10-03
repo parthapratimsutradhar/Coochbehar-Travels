@@ -328,19 +328,21 @@ class BookingService:
         booking = self.get_booking(booking_id)
         return booking.booking_code, build_booking_pdf(booking)
 
-    async def email_booking(self, booking_id: uuid.UUID, recipient_email: str) -> str:
+    async def email_booking(self, booking_id: uuid.UUID, recipient_email: str) -> None:
         booking = self.get_booking(booking_id)
-        uploaded = await generate_and_upload_booking_pdf(booking)
-        pdf_url = uploaded.get("url")
-        if not pdf_url:
-            raise HTTPException(status_code=502, detail="Booking PDF upload did not return a download URL.")
         customer_name = booking.customer.name if booking.customer else "Customer"
         EmailService().send_email(
             recipient_email,
             f"Booking {booking.booking_code} - {booking.package.title if booking.package else 'Travel booking'}",
-            f"Dear {customer_name},\n\nYour booking PDF is available here:\n{pdf_url}\n\nRegards,\nGantabyaa",
+            f"Dear {customer_name},\n\nYour booking PDF is attached.\n\nRegards,\nGantabyaa",
+            attachments=[
+                (
+                    f"{booking.booking_code}.pdf",
+                    build_booking_pdf(booking),
+                    "application/pdf",
+                )
+            ],
         )
-        return pdf_url
 
     def add_traveller(
         self,

@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
+from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
@@ -9,7 +10,11 @@ from app.models.account import Account
 from app.models.document import Document
 from app.repository.document_repo import DocumentRepository
 from app.schemas.document import AdminDocumentResponse, DocumentResponse, DocumentUpdate
-from app.services.cdn_service import promote_cdn_asset, upload_file_to_cdn
+from app.services.cdn_service import (
+    get_private_document_path,
+    promote_cdn_asset,
+    upload_file_to_cdn,
+)
 
 
 class AdminDocumentService:
@@ -36,7 +41,7 @@ class AdminDocumentService:
     def _serialize(document: Document) -> AdminDocumentResponse:
         uploader = document.uploaded_by_account
         customer_upload = uploader is not None and uploader.role == AccountRole.CUSTOMER
-        proxy_url = f"/api/v1/documents/{document.id}/file"
+        proxy_url = f"/api/v1/admin/documents/{document.id}/download"
         return AdminDocumentResponse(
             id=document.id, document_type=document.document_type, title=document.title,
             description=document.description, customer_id=document.customer_id,
@@ -71,7 +76,7 @@ class AdminDocumentService:
         )
         document = self.repo.create(
             **data, customer_id=customer_id, uploaded_by_account_id=current_user.id,
-            file_url=promoted["url"], file_name=file.filename or "document",
+            file_url=promoted["path"], file_name=file.filename or "document",
             mime_type=file.content_type, file_size=result.get("bytes"),
         )
         return self._serialize(document)
@@ -90,10 +95,16 @@ class AdminDocumentService:
         promoted = await promote_cdn_asset(url_or_id, "admin-documents")
         document = self.repo.create(
             **data, customer_id=customer_id, uploaded_by_account_id=current_user.id,
-            file_url=promoted["url"], file_name=file_name,
+            file_url=promoted["path"], file_name=file_name,
             mime_type=mime_type or "application/octet-stream", file_size=None,
         )
         return self._serialize(document)
+
+    def get_file(self, document_id: uuid.UUID) -> tuple[Document, Path]:
+        document = self.repo.get_active_by_id(document_id)
+        if document is None:
+            raise HTTPException(status_code=404, detail="Document not found.")
+        return document, get_private_document_path(document.file_url)
 
     def update(self, document_id: uuid.UUID, payload: DocumentUpdate) -> None:
         document = self.repo.get_active_by_id(document_id)

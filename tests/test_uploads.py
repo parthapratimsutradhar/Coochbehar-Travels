@@ -33,7 +33,7 @@ def cdn_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(settings, "CDN_VIDEO_COMPRESSION_ENABLED", False)
     monkeypatch.setattr(settings, "CDN_ANTIVIRUS_ENABLED", False)
     for folder in cdn.ALLOWED_FOLDERS:
-        (root / folder).mkdir()
+        (root / folder).mkdir(parents=True)
     return root
 
 
@@ -81,6 +81,26 @@ def test_upload_requires_jwt(client: TestClient):
     assert response.status_code == 401
 
 
+def test_temporary_download_requires_jwt_and_is_not_cacheable(
+    client: TestClient, cdn_root: Path
+):
+    filename = f"{uuid.uuid4().hex}.pdf"
+    (cdn_root / cdn.TEMP_FOLDER / filename).write_bytes(b"private temp pdf")
+    response = client.get(f"/api/v1/public/files/temporary/{filename}")
+    assert response.status_code == 401
+
+    client.app.dependency_overrides[get_current_actor] = lambda: (
+        SimpleNamespace(id=uuid.uuid4()), "CUSTOMER"
+    )
+    try:
+        response = client.get(f"/api/v1/public/files/temporary/{filename}")
+    finally:
+        client.app.dependency_overrides.pop(get_current_actor, None)
+    assert response.status_code == 200
+    assert response.content == b"private temp pdf"
+    assert response.headers["cache-control"] == "private, no-store"
+
+
 def test_request_body_limit_rejects_before_multipart_parsing(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ):
@@ -109,11 +129,11 @@ def test_valid_image_uploads(cdn_root: Path, content_type: str, image_format: st
 def test_native_file_upload_uses_temporary_cdn_folder(cdn_root: Path):
     result = asyncio.run(cdn.upload_file_to_cdn(_upload_file(image_bytes("PNG"), "image/png")))
     assert result["path"].startswith("temporary-uploads/")
-    assert result["url"].startswith("https://cdn.example.test/temporary-uploads/")
+    assert result["url"].startswith("/api/v1/public/files/temporary/")
     assert result["bytes"] > 0
 
 
-def test_expired_temp_upload_cleanup_removes_only_files_over_24_hours(
+def test_expired_temp_upload_cleanup_removes_expired_temp_and_staging_files(
     cdn_root: Path, monkeypatch: pytest.MonkeyPatch
 ):
     now = cdn.time.time()
@@ -121,12 +141,16 @@ def test_expired_temp_upload_cleanup_removes_only_files_over_24_hours(
     expired = cdn_root / cdn.TEMP_FOLDER / "expired.jpg"
     recent = cdn_root / cdn.TEMP_FOLDER / "recent.jpg"
     other_folder_file = cdn_root / "profile-picture" / "expired.jpg"
+    staging_directory = cdn_root / ".upload-staging" / "upload-expired"
     expired.write_bytes(b"expired")
     recent.write_bytes(b"recent")
     other_folder_file.write_bytes(b"keep")
+    staging_directory.mkdir(parents=True)
+    (staging_directory / "source").write_bytes(b"stale staging data")
     old_timestamp = now - cdn.TEMP_UPLOAD_RETENTION_SECONDS - 1
     os.utime(expired, (old_timestamp, old_timestamp))
     os.utime(other_folder_file, (old_timestamp, old_timestamp))
+    os.utime(staging_directory, (old_timestamp, old_timestamp))
 
     deleted_count = cdn.cleanup_expired_temp_uploads()
 
@@ -134,6 +158,7 @@ def test_expired_temp_upload_cleanup_removes_only_files_over_24_hours(
     assert not expired.exists()
     assert recent.exists()
     assert other_folder_file.exists()
+    assert not staging_directory.exists()
 
 
 def test_google_profile_picture_uploads_directly_to_permanent_folder(
@@ -545,9 +570,52 @@ def test_cdn_promotion_accepts_temp_url(cdn_root: Path):
             "customer-documents",
         )
     )
-    assert result["url"].endswith(f"customer-documents/{filename}")
-    assert result["path"] == f"customer-documents/{filename}"
+    assert result["url"] == ""
+    assert result["path"] == f"private/customer-documents/{filename}"
     assert not source.exists()
+
+
+def test_private_promotion_rejects_foreign_url():
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(
+            cdn.promote_cdn_asset(
+                "https://storage.example/private/document.pdf",
+                "customer-documents",
+            )
+        )
+    assert error.value.status_code == 422
+
+
+@pytest.mark.parametrize("folder", sorted(cdn.PUBLIC_FOLDERS))
+def test_public_asset_promotion_keeps_direct_cdn_url(cdn_root: Path, folder: str):
+    filename = f"{uuid.uuid4().hex}.jpg"
+    source = cdn_root / cdn.TEMP_FOLDER / filename
+    source.write_bytes(b"validated image")
+
+    result = asyncio.run(
+        cdn.promote_cdn_asset(f"{cdn.TEMP_FOLDER}/{filename}", folder)
+    )
+
+    assert result["path"] == f"{folder}/{filename}"
+    assert result["url"] == f"https://cdn.example.test/{folder}/{filename}"
+
+
+@pytest.mark.parametrize(
+    "private_path",
+    [
+        "private/customer-documents/file.pdf",
+        "private/admin-documents/file.pdf",
+        "temporary-uploads/file.pdf",
+    ],
+)
+def test_non_public_paths_cannot_become_cdn_urls(private_path: str):
+    with pytest.raises(HTTPException):
+        cdn.build_cdn_url(private_path)
+
+
+def test_encoded_traversal_is_rejected():
+    with pytest.raises(HTTPException):
+        cdn._validate_relative_path("temporary-uploads/%2e%2e/file.pdf")
 
 
 @pytest.mark.parametrize(
@@ -602,7 +670,7 @@ def test_authenticated_upload_response_contract(
     async def fake_upload(file):
         return {
             "path": "temporary-uploads/0123456789abcdef0123456789abcdef.jpg",
-            "url": "https://cdn.example.test/temporary-uploads/0123456789abcdef0123456789abcdef.jpg",
+            "url": "/api/v1/public/files/temporary/0123456789abcdef0123456789abcdef.jpg",
             "filename": "0123456789abcdef0123456789abcdef.jpg",
             "content_type": "image/jpeg",
             "bytes": 123,
@@ -619,6 +687,9 @@ def test_authenticated_upload_response_contract(
     assert response.status_code == 201
     assert response.json()["message"] == "File uploaded successfully"
     assert response.json()["data"]["bytes"] == 123
+    assert response.json()["data"]["url"].startswith(
+        "/api/v1/public/files/temporary/"
+    )
 
 
 def test_upload_route_returns_429(client: TestClient, monkeypatch: pytest.MonkeyPatch):

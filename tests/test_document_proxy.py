@@ -7,7 +7,7 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api.deps import get_current_customer
+from app.api.deps import get_current_admin, get_current_customer
 from app.core.enums import AccountRole, DocumentType
 from app.db.database import get_db
 from app.main import app
@@ -15,6 +15,7 @@ from app.models.account import Account
 from app.models.base import Base
 from app.models.document import Document
 from app.services import customer_document_service as customer_document_service_module
+from app.services import cdn_service
 from app.services.customer_service import CustomerService
 
 compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
@@ -90,24 +91,38 @@ def create_document(db, customer_id, uploaded_by_id, file_name="passport.pdf", f
     return doc
 
 
-def test_customer_list_returns_full_url_and_download_returns_blob(client, db_session):
+def test_customer_list_returns_backend_url_and_download_returns_private_blob(
+    client, db_session, tmp_path, monkeypatch
+):
     customer = create_account(db_session, AccountRole.CUSTOMER, "cust3@example.com")
-    doc = create_document(db_session, customer.id, customer.id)
+    private_folder = tmp_path / "private" / "customer-documents"
+    private_folder.mkdir(parents=True)
+    filename = f"{uuid.uuid4().hex}.pdf"
+    (private_folder / filename).write_bytes(b"private document content")
+    monkeypatch.setattr(cdn_service, "CDN_ROOT", tmp_path)
+    doc = create_document(
+        db_session,
+        customer.id,
+        customer.id,
+        file_name="passport.pdf",
+        file_url=f"private/customer-documents/{filename}",
+    )
 
     app.dependency_overrides[get_current_customer] = lambda: customer
     try:
-        # 1. Test listing returns the complete stored file URL
+        # 1. Listings expose only the authenticated API download path.
         list_res = client.get("/api/v1/documents")
         assert list_res.status_code == 200
         doc_item = list_res.json()["data"][0]
-        assert doc_item["file_url"] == doc.file_url
+        assert doc_item["file_url"] == f"/api/v1/documents/{doc.id}/download"
 
-        # 2. Test download endpoint returns the document blob
+        # 2. The customer endpoint streams the file with private cache headers.
         dl_res = client.get(f"/api/v1/documents/{doc.id}/download")
         assert dl_res.status_code == 200
-        assert dl_res.content == b"mock document content"
+        assert dl_res.content == b"private document content"
         assert "attachment" in dl_res.headers["content-disposition"]
         assert "passport.pdf" in dl_res.headers["content-disposition"]
+        assert dl_res.headers["cache-control"] == "private, no-store"
     finally:
         app.dependency_overrides.pop(get_current_customer, None)
 
@@ -154,9 +169,9 @@ def test_customer_upload_accepts_admin_style_json_payload(client, db_session, mo
     customer = create_account(db_session, AccountRole.CUSTOMER, "upload-customer@example.com")
 
     async def promote_asset(file_url, target_folder):
-        assert file_url == "https://storage.example/temporary-uploads/id-proof.pdf"
+        assert file_url == "/api/v1/public/files/temporary/0123456789abcdef0123456789abcdef.pdf"
         assert target_folder == "customer-documents"
-        return {"url": "https://storage.example/customer-documents/id-proof.pdf"}
+        return {"url": "", "path": "private/customer-documents/0123456789abcdef0123456789abcdef.pdf"}
 
     monkeypatch.setattr(customer_document_service_module, "promote_cdn_asset", promote_asset)
     app.dependency_overrides[get_current_customer] = lambda: customer
@@ -164,7 +179,7 @@ def test_customer_upload_accepts_admin_style_json_payload(client, db_session, mo
         response = client.post(
             "/api/v1/documents",
             json={
-                "file": "https://storage.example/temporary-uploads/id-proof.pdf",
+                "file": "/api/v1/public/files/temporary/0123456789abcdef0123456789abcdef.pdf",
                 "file_name": "id-proof.pdf",
                 "document_type": "ID_PROOF",
                 "title": "  Identity proof  ",
@@ -179,10 +194,57 @@ def test_customer_upload_accepts_admin_style_json_payload(client, db_session, mo
         assert document.uploaded_by_account_id == customer.id
         assert document.title == "Identity proof"
         assert document.description == "Uploaded document"
-        assert document.file_url == "https://storage.example/customer-documents/id-proof.pdf"
+        assert document.file_url == "private/customer-documents/0123456789abcdef0123456789abcdef.pdf"
         assert document.mime_type == "application/pdf"
     finally:
         app.dependency_overrides.pop(get_current_customer, None)
+
+
+def test_customer_cannot_download_document_owned_by_another_customer(
+    client, db_session
+):
+    owner = create_account(db_session, AccountRole.CUSTOMER, "owner2@example.com")
+    uploader = create_account(db_session, AccountRole.CUSTOMER, "uploader2@example.com")
+    doc = create_document(db_session, owner.id, uploader.id)
+
+    app.dependency_overrides[get_current_customer] = lambda: uploader
+    try:
+        response = client.get(f"/api/v1/documents/{doc.id}/download")
+    finally:
+        app.dependency_overrides.pop(get_current_customer, None)
+
+    assert response.status_code == 404
+
+
+def test_admin_can_download_private_document_without_public_cache(
+    client, db_session, tmp_path, monkeypatch
+):
+    customer = create_account(db_session, AccountRole.CUSTOMER, "doc-owner@example.com")
+    admin = create_account(db_session, AccountRole.ADMIN, "doc-admin@example.com")
+    private_folder = tmp_path / "private" / "admin-documents"
+    private_folder.mkdir(parents=True)
+    filename = f"{uuid.uuid4().hex}.pdf"
+    (private_folder / filename).write_bytes(b"admin-only file")
+    monkeypatch.setattr(cdn_service, "CDN_ROOT", tmp_path)
+    doc = create_document(
+        db_session,
+        customer.id,
+        admin.id,
+        file_url=f"private/admin-documents/{filename}",
+    )
+
+    unauthenticated = client.get(f"/api/v1/admin/documents/{doc.id}/download")
+    assert unauthenticated.status_code == 401
+
+    app.dependency_overrides[get_current_admin] = lambda: admin
+    try:
+        response = client.get(f"/api/v1/admin/documents/{doc.id}/download")
+    finally:
+        app.dependency_overrides.pop(get_current_admin, None)
+
+    assert response.status_code == 200
+    assert response.content == b"admin-only file"
+    assert response.headers["cache-control"] == "private, no-store"
 
 
 def test_customer_documents_tab_builds_valid_payload(db_session):

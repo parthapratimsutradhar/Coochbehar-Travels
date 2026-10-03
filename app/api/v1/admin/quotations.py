@@ -165,7 +165,7 @@ def update_quotation_status(
 	"/{quotation_id}/pdf",
 	response_model=SuccessResponse[dict[str, str | None]],
 	responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
-	summary="Get the temporary CDN quotation PDF URL (Admin)",
+	summary="Get a protected temporary quotation PDF URL (Admin)",
 )
 async def download_quotation_pdf(
 	quotation_id: uuid.UUID,

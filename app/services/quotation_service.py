@@ -14,7 +14,10 @@ from app.repository.enquiry_repo import EnquiryRepository
 from app.repository.quotation_repo import QuotationRepository
 from app.schemas.quotation import QuotationCreate, QuotationUpdate, QuotationVersionCreate
 from app.services.email_service import EmailService
-from app.services.quotation_pdf_service import generate_and_upload_quotation_pdf
+from app.services.quotation_pdf_service import (
+    build_quotation_pdf,
+    generate_and_upload_quotation_pdf,
+)
 
 if TYPE_CHECKING:
     from app.models.booking import Booking
@@ -305,29 +308,24 @@ class QuotationService:
     async def generate_quotation_pdf(self, quotation_id: uuid.UUID) -> dict:
         return await generate_and_upload_quotation_pdf(self.get_quotation(quotation_id))
 
-    async def email_quotation(self, quotation_id: uuid.UUID, recipient_email: str) -> str:
+    async def email_quotation(self, quotation_id: uuid.UUID, recipient_email: str) -> None:
         quotation = self.get_quotation(quotation_id)
-
-        uploaded = await generate_and_upload_quotation_pdf(quotation)
-        pdf_url = uploaded.get("url")
-        if not pdf_url:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Quotation PDF upload did not return a download URL.",
-            )
-
         EmailService().send_email(
             recipient_email,
             f"Quotation {quotation.quotation_code} - {quotation.tour_name}",
             (
                 f"Dear {quotation.customer.name},\n\n"
-                f"Please find your quotation for {quotation.tour_name} at the link below:\n"
-                f"{pdf_url}\n\n"
-                "This link is hosted in temporary storage and may expire.\n\n"
-                "Regards,\nGantabyaa"
+                f"Please find your quotation for {quotation.tour_name} attached.\n\n"
+                "Regards, Gantabyaa"
             ),
+            attachments=[
+                (
+                    f"{quotation.quotation_code}.pdf",
+                    build_quotation_pdf(quotation),
+                    "application/pdf",
+                )
+            ],
         )
-        return pdf_url
 
     def send_quotation(self, quotation_id: uuid.UUID) -> Quotation:
         quotation = self.get_quotation(quotation_id)

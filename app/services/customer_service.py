@@ -411,7 +411,7 @@ class CustomerService:
                             "file_size",
                         )
                     },
-                    file_url=f"/api/v1/documents/{item.id}/file",
+                    file_url=f"/api/v1/documents/{item.id}/download",
                     customer_name=customer.name,
                     customer_profile_pic=customer.profile_pic,
                     uploaded_by_customer_id=item.uploaded_by_account_id

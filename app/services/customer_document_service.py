@@ -1,9 +1,8 @@
 import uuid
-from collections.abc import AsyncIterator
 import mimetypes
 from math import ceil
+from pathlib import Path
 
-import httpx
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -16,7 +15,7 @@ from app.schemas.document import (
 	CustomerDocumentUploadRequest,
 	DocumentDownloadResponse,
 )
-from app.services.cdn_service import promote_cdn_asset
+from app.services.cdn_service import get_private_document_path, promote_cdn_asset
 
 
 class CustomerDocumentService:
@@ -38,7 +37,7 @@ class CustomerDocumentService:
 			file_name=document.file_name,
 			mime_type=document.mime_type,
 			file_size=document.file_size,
-			file_url=document.file_url,
+			file_url=f"/api/v1/documents/{document.id}/download",
 			customer_name=document.customer.name if document.customer else None,
 			customer_profile_pic=document.customer.profile_pic if document.customer else None,
 			uploader_name=uploader.name if uploader else None,
@@ -72,7 +71,7 @@ class CustomerDocumentService:
 		return DocumentDownloadResponse(
 			document_id=document.id,
 			file_name=document.file_name,
-			download_url=document.file_url,
+			download_url=f"/api/v1/documents/{document.id}/download",
 		)
 
 	async def get_file(
@@ -80,68 +79,25 @@ class CustomerDocumentService:
 		document_id: uuid.UUID,
 		current_user: Account,
 		role: str,
-	) -> tuple[Document, AsyncIterator[bytes]]:
+	) -> tuple[Document, Path]:
 		document = self.repo.get_active_by_id(document_id)
 		if document is None:
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
 
-		if role not in (AccountRole.ADMIN, AccountRole.STAFF):
-			if document.customer_id != current_user.id and document.uploaded_by_account_id != current_user.id:
+		if role not in (AccountRole.ADMIN, AccountRole.STAFF, "ADMIN", "STAFF"):
+			if document.customer_id != current_user.id:
 				raise HTTPException(
-					status_code=status.HTTP_403_FORBIDDEN,
-					detail="You do not have permission to access this document.",
+					status_code=status.HTTP_404_NOT_FOUND,
+					detail="Document not found.",
 				)
 
-		return document, await self._stream_file(document.file_url)
-
-	@staticmethod
-	async def _stream_file(file_url: str) -> AsyncIterator[bytes]:
-		if not file_url.startswith(("http://", "https://")):
-			async def mock_stream() -> AsyncIterator[bytes]:
-				yield b"mock document content"
-
-			return mock_stream()
-
-		client = httpx.AsyncClient(timeout=60.0)
-		try:
-			request = client.build_request("GET", file_url)
-			response = await client.send(request, stream=True)
-		except httpx.HTTPError as exc:
-			await client.aclose()
-			raise HTTPException(
-				status_code=status.HTTP_502_BAD_GATEWAY,
-				detail="Failed to connect to storage provider.",
-			) from exc
-
-		if response.status_code >= 400:
-			await response.aclose()
-			await client.aclose()
-			raise HTTPException(
-				status_code=status.HTTP_502_BAD_GATEWAY,
-				detail="Unable to fetch document from storage provider.",
-			)
-
-		async def stream() -> AsyncIterator[bytes]:
-			try:
-				async for chunk in response.aiter_bytes(chunk_size=65536):
-					yield chunk
-			finally:
-				await response.aclose()
-				await client.aclose()
-
-		return stream()
+		return document, get_private_document_path(document.file_url)
 
 	async def upload_from_url(
 		self,
 		payload: CustomerDocumentUploadRequest,
 		current_customer: Account,
 	) -> None:
-		if not (
-			payload.file.startswith(("http://", "https://"))
-			or "temporary-uploads" in payload.file
-		):
-			raise HTTPException(status_code=422, detail="file must reference a temporary upload")
-
 		promoted = await promote_cdn_asset(payload.file, "customer-documents")
 		self.repo.create(
 			document_type=payload.document_type,
@@ -149,7 +105,7 @@ class CustomerDocumentService:
 			description=payload.description.strip() if payload.description else None,
 			customer_id=current_customer.id,
 			uploaded_by_account_id=current_customer.id,
-			file_url=promoted["url"],
+			file_url=promoted["path"],
 			file_name=payload.file_name,
 			mime_type=mimetypes.guess_type(payload.file_name)[0] or "application/octet-stream",
 			file_size=None,
