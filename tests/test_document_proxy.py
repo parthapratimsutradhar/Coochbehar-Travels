@@ -170,7 +170,7 @@ def test_customer_upload_accepts_admin_style_json_payload(client, db_session, mo
 
     async def promote_asset(file_url, target_folder):
         assert file_url == "/api/v1/public/files/temporary/0123456789abcdef0123456789abcdef.pdf"
-        assert target_folder == "customer-documents"
+        assert target_folder == "private/customer-documents"
         return {"url": "", "path": "private/customer-documents/0123456789abcdef0123456789abcdef.pdf"}
 
     monkeypatch.setattr(customer_document_service_module, "promote_cdn_asset", promote_asset)

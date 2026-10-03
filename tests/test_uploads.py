@@ -567,7 +567,7 @@ def test_cdn_promotion_accepts_temp_url(cdn_root: Path):
     result = asyncio.run(
         cdn.promote_cdn_asset(
             f"https://cdn.example.test/{cdn.TEMP_FOLDER}/{filename}",
-            "customer-documents",
+            "private/customer-documents",
         )
     )
     assert result["url"] == ""
@@ -580,7 +580,7 @@ def test_private_promotion_rejects_foreign_url():
         asyncio.run(
             cdn.promote_cdn_asset(
                 "https://storage.example/private/document.pdf",
-                "customer-documents",
+                "private/customer-documents",
             )
         )
     assert error.value.status_code == 422

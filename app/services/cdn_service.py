@@ -51,10 +51,6 @@ PRIVATE_DOCUMENT_FOLDERS = {
     "private/customer-documents",
     "private/admin-documents",
 }
-_DOCUMENT_FOLDER_ALIASES = {
-    "customer-documents": "private/customer-documents",
-    "admin-documents": "private/admin-documents",
-}
 ALLOWED_FOLDERS = PUBLIC_FOLDERS | PRIVATE_DOCUMENT_FOLDERS | {TEMP_FOLDER}
 
 CDN_ROOT.mkdir(parents=True, exist_ok=True)
@@ -107,7 +103,6 @@ _ANTIVIRUS_STATUS = "disabled" if not settings.CDN_ANTIVIRUS_ENABLED else "unche
 
 def _validate_folder(folder: str, *, allow_temp: bool = True) -> str:
     folder = folder.strip()
-    folder = _DOCUMENT_FOLDER_ALIASES.get(folder, folder)
 
     if folder not in ALLOWED_FOLDERS:
         raise HTTPException(

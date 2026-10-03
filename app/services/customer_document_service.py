@@ -98,7 +98,7 @@ class CustomerDocumentService:
 		payload: CustomerDocumentUploadRequest,
 		current_customer: Account,
 	) -> None:
-		promoted = await promote_cdn_asset(payload.file, "customer-documents")
+		promoted = await promote_cdn_asset(payload.file, "private/customer-documents")
 		self.repo.create(
 			document_type=payload.document_type,
 			title=payload.title.strip(),

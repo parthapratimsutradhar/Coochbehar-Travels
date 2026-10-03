@@ -72,7 +72,7 @@ class AdminDocumentService:
         result = await upload_file_to_cdn(file=file)
         promoted = await promote_cdn_asset(
             result["url"],
-            "admin-documents",
+            "private/admin-documents",
         )
         document = self.repo.create(
             **data, customer_id=customer_id, uploaded_by_account_id=current_user.id,
@@ -92,7 +92,7 @@ class AdminDocumentService:
     ) -> AdminDocumentResponse:
         if not self.repo.get_customer(customer_id):
             raise HTTPException(status_code=404, detail="Customer not found.")
-        promoted = await promote_cdn_asset(url_or_id, "admin-documents")
+        promoted = await promote_cdn_asset(url_or_id, "private/admin-documents")
         document = self.repo.create(
             **data, customer_id=customer_id, uploaded_by_account_id=current_user.id,
             file_url=promoted["path"], file_name=file_name,
