@@ -78,7 +78,10 @@ def test_identify_visitor_fills_missing_location_from_request_ip(monkeypatch):
 
     response = asyncio.run(
         visitor_api.identify_visitor(
-            VisitorIdentifyRequest(fingerprint="fingerprint-1"), request, db=None
+            VisitorIdentifyRequest(fingerprint="fingerprint-1"),
+            request,
+            db=None,
+            current_customer=None,
         )
     )
 
@@ -88,6 +91,17 @@ def test_identify_visitor_fills_missing_location_from_request_ip(monkeypatch):
     assert captured["city"] == "Kolkata"
     assert captured["customer_id"] is None
     assert response.data.visitor.city == "Kolkata"
+
+    customer_id = uuid.uuid4()
+    asyncio.run(
+        visitor_api.identify_visitor(
+            VisitorIdentifyRequest(fingerprint="fingerprint-1"),
+            request,
+            db=None,
+            current_customer=SimpleNamespace(id=customer_id),
+        )
+    )
+    assert captured["customer_id"] == customer_id
 
 
 def test_ip_geolocation_skips_private_addresses():
@@ -234,6 +248,56 @@ def test_visitor_identified_broadcast_includes_linked_customer_data(monkeypatch)
     assert broadcasts[0]["customer_email"] == "partha@example.com"
     assert broadcasts[0]["customer_mobile"] == "+919000000001"
     assert broadcasts[0]["state"] == "West Bengal"
+
+
+def test_customer_identification_updates_active_presence_immediately(monkeypatch):
+    from app.realtime import presence
+    from app.services import socket_service
+
+    customer = SimpleNamespace(
+        role="CUSTOMER",
+        name="Partha",
+        email="partha@example.com",
+        mobile="+919000000001",
+        profile_pic=None,
+    )
+    visitor_id = uuid.uuid4()
+    visitor = SimpleNamespace(
+        id=visitor_id,
+        visitor_code="VIS-LIVE-CUSTOMER",
+        fingerprint="fingerprint-live-customer",
+        ip_address="8.8.8.8",
+        country="India",
+        state="West Bengal",
+        city="Kolkata",
+        browser="Chrome",
+        os="Windows",
+        device="desktop",
+        customer_id=uuid.uuid4(),
+        customer=customer,
+        first_seen=datetime.now(timezone.utc),
+    )
+    active_visitors = {str(visitor_id): {"visitor_id": str(visitor_id), "page": "/tours"}}
+    broadcasts = []
+    monkeypatch.setattr(presence, "ACTIVE_VISITORS", active_visitors)
+    monkeypatch.setattr(socket_service, "ACTIVE_VISITORS", active_visitors)
+    monkeypatch.setattr(
+        socket_service,
+        "_safe_broadcast",
+        lambda event_names, payload, rooms: broadcasts.append((event_names, payload)),
+    )
+
+    socket_service.emit_visitor_identified(visitor, is_new=False)
+
+    live_presence = active_visitors[str(visitor_id)]
+    assert live_presence["visitor_type"] == "customer"
+    assert live_presence["customer_name"] == "Partha"
+    assert live_presence["customer_email"] == "partha@example.com"
+    assert live_presence["is_anonymous"] is False
+    assert any("visitor_identified" in names for names, _ in broadcasts)
+    live_stats = next(payload for names, payload in broadcasts if "live_stats" in names)
+    assert live_stats["customers"] == 1
+    assert live_stats["visitors"] == 0
 
 
 def test_live_stats_snapshots_are_targeted_and_updates_are_compact(monkeypatch):

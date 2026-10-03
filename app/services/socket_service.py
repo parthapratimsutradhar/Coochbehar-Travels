@@ -12,6 +12,7 @@ import asyncio
 import logging
 import uuid
 from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -19,6 +20,7 @@ from sqlalchemy import select
 from app.db.database import SessionLocal
 from app.models.account import Account
 from app.realtime.constants import ANALYTICS_REALTIME_ROOM, ADMIN_REALTIME_ROOM
+from app.realtime.presence import ACTIVE_VISITORS, get_live_counts, upsert_active_visitor
 from app.realtime.socket_manager import sio
 from app.utils.cdn_urls import cdn_url_for_value
 
@@ -232,8 +234,9 @@ def emit_visitor_identified(visitor: Any, *, is_new: bool) -> None:
     customer = visitor.customer if visitor.customer_id else None
     if customer is not None and getattr(customer.role, "value", customer.role) != "CUSTOMER":
         customer = None
+    visitor_id = str(visitor.id)
     payload = {
-        "visitor_id": str(visitor.id),
+        "visitor_id": visitor_id,
         "visitor_code": visitor.visitor_code,
         "fingerprint": visitor.fingerprint,
         "ip_address": visitor.ip_address,
@@ -259,6 +262,42 @@ def emit_visitor_identified(visitor: Any, *, is_new: bool) -> None:
         ["analytics:visitor_identified", "analytics.visitor_identified"],
         payload,
         rooms=[ADMIN_REALTIME_ROOM, ANALYTICS_REALTIME_ROOM],
+    )
+
+    if visitor_id not in ACTIVE_VISITORS:
+        return
+
+    upsert_active_visitor(
+        visitor_id=visitor_id,
+        customer_id=str(visitor.customer_id) if customer else None,
+        visitor_type="customer" if customer else "visitor",
+        visitor_code=visitor.visitor_code,
+        customer_name=customer.name if customer else None,
+        customer_email=customer.email if customer else None,
+        customer_mobile=customer.mobile if customer else None,
+        customer_profile_pic=(
+            cdn_url_for_value(customer.profile_pic)
+            if customer and customer.profile_pic
+            else None
+        ),
+        is_anonymous=customer is None,
+        ip_address=visitor.ip_address,
+        country=visitor.country,
+        state=visitor.state,
+        city=visitor.city,
+        device=visitor.device,
+        browser=visitor.browser,
+        os=visitor.os,
+    )
+    _safe_broadcast(
+        ["visitor_identified"],
+        dict(ACTIVE_VISITORS[visitor_id]),
+        rooms=[ADMIN_REALTIME_ROOM],
+    )
+    _safe_broadcast(
+        ["live_stats"],
+        {**get_live_counts(), "timestamp": datetime.now(timezone.utc).isoformat()},
+        rooms=[ADMIN_REALTIME_ROOM],
     )
 
 

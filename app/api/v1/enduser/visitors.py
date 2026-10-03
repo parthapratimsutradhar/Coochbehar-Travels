@@ -4,7 +4,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_optional_customer
 from app.db.database import get_db
+from app.models.account import Account
 from app.schemas.response import SuccessResponse
 from app.schemas.visitor import (
     EventBatchRequest,
@@ -40,6 +42,7 @@ async def identify_visitor(
     payload: VisitorIdentifyRequest,
     request: Request,
     db: Session = Depends(get_db),
+    current_customer: Account | None = Depends(get_optional_customer),
 ):
     ip_address = get_client_ip(request) or payload.ip_address
     country = payload.country
@@ -62,7 +65,7 @@ async def identify_visitor(
         browser=payload.browser or user_agent,
         os=payload.os,
         device=payload.device,
-        customer_id=None,
+        customer_id=current_customer.id if current_customer else None,
     )
 
     return SuccessResponse(
