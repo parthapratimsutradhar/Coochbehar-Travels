@@ -120,6 +120,12 @@ class Settings:
     CDN_UPLOAD_RATE_WINDOW_SECONDS: int = int(
         _env("CDN_UPLOAD_RATE_WINDOW_SECONDS") or "3600"
     )
+    CDN_ADMIN_UPLOAD_RATE_LIMIT: int = int(
+        _env("CDN_ADMIN_UPLOAD_RATE_LIMIT") or "100"
+    )
+    CDN_ADMIN_UPLOAD_RATE_WINDOW_SECONDS: int = int(
+        _env("CDN_ADMIN_UPLOAD_RATE_WINDOW_SECONDS") or "900"
+    )
 
 
 settings = Settings()

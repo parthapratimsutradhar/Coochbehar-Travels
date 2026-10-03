@@ -548,6 +548,22 @@ def test_upload_rate_limit_returns_429(monkeypatch: pytest.MonkeyPatch):
     assert error.value.status_code == 429
 
 
+def test_admin_upload_rate_limit_uses_admin_quota(monkeypatch: pytest.MonkeyPatch):
+    engine = create_engine("sqlite://")
+    CDNUploadRateLimit.__table__.create(engine)
+    monkeypatch.setattr(settings, "CDN_UPLOAD_RATE_LIMIT", 1)
+    monkeypatch.setattr(settings, "CDN_UPLOAD_RATE_WINDOW_SECONDS", 3600)
+    monkeypatch.setattr(settings, "CDN_ADMIN_UPLOAD_RATE_LIMIT", 100)
+    monkeypatch.setattr(settings, "CDN_ADMIN_UPLOAD_RATE_WINDOW_SECONDS", 900)
+    actor = (SimpleNamespace(id=uuid.uuid4()), "ADMIN")
+    with Session(engine) as db:
+        for _ in range(100):
+            cdn.enforce_upload_rate_limit(db, actor, "192.0.2.1")
+        with pytest.raises(HTTPException) as error:
+            cdn.enforce_upload_rate_limit(db, actor, "192.0.2.1")
+    assert error.value.status_code == 429
+
+
 @pytest.mark.parametrize("actor_type", ["ADMIN", "STAFF", "CUSTOMER"])
 def test_authenticated_upload_response_contract(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, actor_type: str

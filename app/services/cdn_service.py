@@ -835,8 +835,13 @@ async def upload_google_profile_picture(picture_url: str) -> str:
 
 
 def enforce_upload_rate_limit(db: Any, actor: Any, client_ip: str | None) -> None:
-    limit = settings.CDN_UPLOAD_RATE_LIMIT
-    window_seconds = settings.CDN_UPLOAD_RATE_WINDOW_SECONDS
+    actor_value, actor_type = actor if isinstance(actor, tuple) else (actor, "ACTOR")
+    if actor_type == "ADMIN":
+        limit = settings.CDN_ADMIN_UPLOAD_RATE_LIMIT
+        window_seconds = settings.CDN_ADMIN_UPLOAD_RATE_WINDOW_SECONDS
+    else:
+        limit = settings.CDN_UPLOAD_RATE_LIMIT
+        window_seconds = settings.CDN_UPLOAD_RATE_WINDOW_SECONDS
     if limit < 1 or window_seconds < 1:
         logger.error("CDN upload rate-limit settings must be positive")
         raise HTTPException(
@@ -844,7 +849,6 @@ def enforce_upload_rate_limit(db: Any, actor: Any, client_ip: str | None) -> Non
             detail="Upload rate limiting is temporarily unavailable",
         )
 
-    actor_value, actor_type = actor if isinstance(actor, tuple) else (actor, "ACTOR")
     actor_id = getattr(actor_value, "id", None)
     if actor_id is None:
         raise HTTPException(
