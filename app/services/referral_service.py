@@ -1,13 +1,17 @@
 import uuid
+import secrets
+import string
 from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.enums import AccountRole, PaymentMethod, ReferralStatus
+from app.core.enums import AccountRole, LeadSource, PaymentMethod, ReferralStatus
 from app.core.messages.error import ReferralError
 from app.models.account import Account
+from app.models.customer_profile import CustomerProfile
 from app.models.referral import Referral
 from app.models.referral_reward_history import ReferralRewardHistory
 from app.repository.customer_repo import CustomerRepository
@@ -148,7 +152,39 @@ class ReferralService:
 
     def get_customer_referral_code(self, customer_id: uuid.UUID) -> ReferralCodeResponse:
         profile = self.repo.get_profile_by_account_id(customer_id)
-        return ReferralCodeResponse(referral_code=profile.referral_code if profile else "")
+        if profile:
+            return ReferralCodeResponse(referral_code=profile.referral_code)
+
+        customer = self.db.get(Account, customer_id)
+        if customer is None or customer.role != AccountRole.CUSTOMER:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found.")
+
+        alphabet = string.ascii_uppercase + string.digits
+        for _ in range(5):
+            referral_code = "".join(secrets.choice(alphabet) for _ in range(8))
+            if self.repo.get_profile_by_code(referral_code):
+                continue
+
+            profile = CustomerProfile(
+                account_id=customer_id,
+                source=LeadSource.WEBSITE,
+                referral_code=referral_code,
+            )
+            self.db.add(profile)
+            try:
+                self.db.commit()
+                self.db.refresh(profile)
+                return ReferralCodeResponse(referral_code=profile.referral_code)
+            except IntegrityError:
+                self.db.rollback()
+                profile = self.repo.get_profile_by_account_id(customer_id)
+                if profile:
+                    return ReferralCodeResponse(referral_code=profile.referral_code)
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Unable to create a unique referral code. Please try again.",
+        )
 
     @staticmethod
     def _latest_reward_history(referral: Referral) -> ReferralRewardHistory | None:
