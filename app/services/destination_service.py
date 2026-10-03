@@ -11,6 +11,7 @@ from app.schemas.destination import (
     DestinationUpdate,
 )
 from app.services.cdn_service import promote_cdn_asset
+from app.utils.cdn_urls import cdn_storage_value
 
 
 class DestinationService:
@@ -99,7 +100,7 @@ class DestinationService:
         data["slug"] = slug
         if data.get("image_url"):
             promoted = await promote_cdn_asset(data["image_url"], "destination-images")
-            data["image_url"] = promoted["url"]
+            data["image_url"] = cdn_storage_value(promoted.get("path") or promoted["url"])
         return self.repo.create(**data)
 
     async def update_destination(self, destination_id: uuid.UUID, payload: DestinationUpdate) -> Destination:
@@ -116,7 +117,7 @@ class DestinationService:
                 )
         if "image_url" in data and data["image_url"]:
             promoted = await promote_cdn_asset(data["image_url"], "destination-images")
-            data["image_url"] = promoted["url"]
+            data["image_url"] = cdn_storage_value(promoted.get("path") or promoted["url"])
         return self.repo.update(dest, data)
 
     def delete_destination(self, destination_id: uuid.UUID) -> None:

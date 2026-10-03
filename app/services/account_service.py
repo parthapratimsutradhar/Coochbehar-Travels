@@ -9,6 +9,7 @@ from app.repository.account_repo import AccountRepository
 from app.schemas.account import AdminDeleteProfileRequest, AdminProfileUpdate, AdminStaffCreate
 from app.services.auth_service import AuthService
 from app.services.cdn_service import promote_cdn_asset
+from app.utils.cdn_urls import cdn_storage_value
 from app.models.account import Account
 
 
@@ -81,7 +82,7 @@ class AdminAccountService:
                 profile_pic,
                 "profile-picture",
             )
-            profile_pic = promoted["url"]
+            profile_pic = cdn_storage_value(promoted.get("path") or promoted["url"])
 
         try:
             return self.repo.create_staff(
@@ -123,7 +124,7 @@ class AdminAccountService:
                     profile_pic,
                     "profile-picture",
                 )
-                profile_pic = promoted["url"]
+                profile_pic = cdn_storage_value(promoted.get("path") or promoted["url"])
             update_data["profile_pic"] = profile_pic
 
         for field, value in update_data.items():

@@ -20,6 +20,7 @@ from app.schemas.admin_tour import (
     normalize_json_payload,
 )
 from app.services import cdn_service
+from app.utils.cdn_urls import cdn_storage_value
 
 
 class AdminTourService:
@@ -390,7 +391,7 @@ class AdminTourService:
     @staticmethod
     async def _promote_asset(asset: str) -> str:
         promoted = await cdn_service.promote_cdn_asset(asset, "tour-packages")
-        return promoted["url"]
+        return cdn_storage_value(promoted.get("path") or promoted["url"])
 
     @classmethod
     async def _promote_banner(cls, banner_dict: dict[str, Any] | None) -> dict[str, str | None]:

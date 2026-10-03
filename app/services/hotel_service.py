@@ -8,6 +8,7 @@ from app.models.hotel import Hotel
 from app.repository.hotel_repo import HotelRepository
 from app.schemas.hotel import HotelCreate, HotelUpdate
 from app.services.cdn_service import promote_cdn_asset
+from app.utils.cdn_urls import cdn_storage_value
 
 
 async def _promote_hotel_images(image_items: list[Any]) -> list[dict[str, Any]]:
@@ -20,7 +21,7 @@ async def _promote_hotel_images(image_items: list[Any]) -> list[dict[str, Any]]:
                 item_dict["url"],
                 "hotel-images",
             )
-            item_dict["url"] = promoted["url"]
+            item_dict["url"] = cdn_storage_value(promoted.get("path") or promoted["url"])
         promoted_items.append(item_dict)
     return promoted_items
 

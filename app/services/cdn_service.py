@@ -28,6 +28,7 @@ from starlette.datastructures import Headers
 
 from app.core.config import settings
 from app.models.cdn_upload_rate_limit import CDNUploadRateLimit
+from app.utils.cdn_urls import PUBLIC_CDN_FOLDERS
 
 
 logger = logging.getLogger(__name__)
@@ -37,15 +38,7 @@ CDN_BASE_URL = settings.CDN_BASE_URL.rstrip("/")
 TEMP_FOLDER = "temporary-uploads"
 TEMP_UPLOAD_RETENTION_SECONDS = 24 * 60 * 60
 
-PUBLIC_FOLDERS = {
-    "profile-picture",
-    "tour-packages",
-    "review-gallery",
-    "destination-images",
-    "hotel-images",
-    "vehicle-images",
-    "room-images",
-}
+PUBLIC_FOLDERS = set(PUBLIC_CDN_FOLDERS)
 
 PRIVATE_DOCUMENT_FOLDERS = {
     "private/customer-documents",
@@ -904,7 +897,7 @@ async def upload_google_profile_picture(picture_url: str) -> str:
             )
             result = await _upload_file_to_folder(file, "profile-picture")
             published_path = result["path"]
-            return result["url"]
+            return result["path"]
     except HTTPException:
         raise
     except httpx.HTTPError as exc:

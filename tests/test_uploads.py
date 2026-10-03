@@ -21,6 +21,8 @@ from app.db.database import get_db
 from app.middleware.upload_request_limit import UploadRequestSizeLimitMiddleware
 from app.models.cdn_upload_rate_limit import CDNUploadRateLimit
 from app.services import cdn_service as cdn
+from app.schemas.base import SchemaBase
+from app.utils.cdn_urls import cdn_storage_value
 
 
 @pytest.fixture
@@ -41,6 +43,52 @@ def image_bytes(image_format: str = "JPEG", size: tuple[int, int] = (32, 24)) ->
     output = io.BytesIO()
     Image.new("RGB", size, (32, 120, 200)).save(output, format=image_format)
     return output.getvalue()
+
+
+def test_schema_serialization_expands_only_public_relative_cdn_paths(monkeypatch):
+    class AssetResponse(SchemaBase):
+        image_url: str
+        gallery: list[dict[str, str]]
+        private_file_url: str
+
+    monkeypatch.setattr(settings, "CDN_BASE_URL", "https://cdn.example.test")
+
+    relative = AssetResponse(
+        image_url="destination-images/place.jpg",
+        gallery=[{"url": "hotel-images/lobby.jpg"}],
+        private_file_url="private/admin-documents/proof.pdf",
+    )
+    assert relative.model_dump()["image_url"] == "destination-images/place.jpg"
+    json_data = relative.model_dump(mode="json")
+    assert json_data["image_url"] == "https://cdn.example.test/destination-images/place.jpg"
+    assert json_data["gallery"] == [
+        {"url": "https://cdn.example.test/hotel-images/lobby.jpg"}
+    ]
+    assert json_data["private_file_url"] == "private/admin-documents/proof.pdf"
+    assert cdn_storage_value(
+        "https://cdn.example.test/profile-picture/customer.jpg"
+    ) == "profile-picture/customer.jpg"
+    assert cdn_storage_value("https://images.example.org/avatar.jpg") == (
+        "https://images.example.org/avatar.jpg"
+    )
+
+    legacy = AssetResponse(
+        image_url="https://cdn.example.test/profile-picture/customer.jpg",
+        gallery=[],
+        private_file_url="private/admin-documents/proof.pdf",
+    )
+    assert legacy.model_dump(mode="json")["image_url"] == (
+        "https://cdn.example.test/profile-picture/customer.jpg"
+    )
+
+    external = AssetResponse(
+        image_url="https://images.example.org/place.jpg",
+        gallery=[],
+        private_file_url="private/admin-documents/proof.pdf",
+    )
+    assert external.model_dump(mode="json")["image_url"] == (
+        "https://images.example.org/place.jpg"
+    )
 
 
 def _upload_file(data: bytes, content_type: str, filename: str | None = None) -> UploadFile:
@@ -200,7 +248,7 @@ def test_google_profile_picture_uploads_directly_to_permanent_folder(
             "https://lh3.googleusercontent.com/a/avatar.png"
         )
     )
-    assert result_url.startswith("https://cdn.example.test/profile-picture/")
+    assert result_url.startswith("profile-picture/")
     stored_files = list((cdn_root / "profile-picture").iterdir())
     assert len(stored_files) == 1
     assert stored_files[0].suffix == ".png"

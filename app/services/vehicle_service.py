@@ -10,6 +10,7 @@ from app.models.vehicle import Vehicle
 from app.repository.vehicle_repo import VehicleRepository
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate
 from app.services.cdn_service import promote_cdn_asset
+from app.utils.cdn_urls import cdn_storage_value
 
 
 async def _promote_vehicle_images(image_items: list[Any]) -> list[dict[str, Any]]:
@@ -22,7 +23,7 @@ async def _promote_vehicle_images(image_items: list[Any]) -> list[dict[str, Any]
                 item_dict["url"],
                 "vehicle-images",
             )
-            item_dict["url"] = promoted["url"]
+            item_dict["url"] = cdn_storage_value(promoted.get("path") or promoted["url"])
         promoted_items.append(item_dict)
     return promoted_items
 

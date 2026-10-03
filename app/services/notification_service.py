@@ -12,6 +12,7 @@ from app.models.notification import Notification
 from app.models.notification_campaign import NotificationCampaign
 from app.schemas.notification import NotificationCreate, NotificationResponse
 from app.services.socket_service import publish_notification
+from app.utils.cdn_urls import cdn_storage_value
 
 
 class NotificationConnectionManager:
@@ -181,7 +182,7 @@ class NotificationService:
             notification_type=payload.notification_type,
             title=payload.title,
             message=payload.message,
-            image_url=payload.image_url,
+            image_url=cdn_storage_value(payload.image_url),
             action_url=payload.action_url,
             data=payload.data,
             expires_at=payload.expires_at,

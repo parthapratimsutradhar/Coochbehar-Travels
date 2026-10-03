@@ -1,11 +1,20 @@
 from collections.abc import Mapping
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, model_serializer, model_validator
+
+from app.utils.cdn_urls import serialize_cdn_urls
 
 
 class SchemaBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
+
+    @model_serializer(mode="wrap")
+    def serialize_cdn_paths(self, handler: Any, info: Any) -> Any:
+        data = handler(self)
+        if info.mode == "json":
+            return serialize_cdn_urls(data)
+        return data
 
     @model_validator(mode="before")
     @classmethod

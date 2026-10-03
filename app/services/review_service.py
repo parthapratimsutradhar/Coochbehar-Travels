@@ -24,6 +24,7 @@ from app.schemas.review import (
 from app.schemas.tour_package import ReviewItemResponse
 from app.services.cdn_service import promote_cdn_asset
 from app.services.notification_service import NotificationService
+from app.utils.cdn_urls import cdn_storage_value
 
 
 async def _promote_gallery(gallery_items: list[Any] | None) -> list[dict[str, Any]]:
@@ -41,7 +42,7 @@ async def _promote_gallery(gallery_items: list[Any] | None) -> list[dict[str, An
                 url,
                 "review-gallery",
             )
-            item_dict["url"] = promoted["url"]
+            item_dict["url"] = cdn_storage_value(promoted.get("path") or promoted["url"])
         promoted_items.append(item_dict)
     return promoted_items
 

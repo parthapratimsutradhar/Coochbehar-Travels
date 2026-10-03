@@ -37,6 +37,7 @@ from app.schemas.pagination import PaginationMeta
 from app.schemas.referral import ReferralHistoryItemResponse
 from app.schemas.review import ReviewResponse
 from app.services.cdn_service import promote_cdn_asset
+from app.utils.cdn_urls import cdn_storage_value
 
 
 class CustomerService:
@@ -125,7 +126,7 @@ class CustomerService:
                 profile_pic,
                 "profile-picture",
             )
-            profile_pic = promoted["url"]
+            profile_pic = cdn_storage_value(promoted.get("path") or promoted["url"])
 
         customer = self.repo.create_customer(
             name=payload.name.strip(),
@@ -169,7 +170,7 @@ class CustomerService:
                     profile_pic,
                     "profile-picture",
                 )
-                profile_pic = promoted["url"]
+                profile_pic = cdn_storage_value(promoted.get("path") or promoted["url"])
             update_data["profile_pic"] = profile_pic
 
         updated = self.repo.update_customer(customer, update_data)
