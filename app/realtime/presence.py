@@ -68,6 +68,9 @@ def upsert_active_visitor(
     visitor_type: str | None = None,       # "customer" | "visitor"
     visitor_code: str | None = None,
     customer_name: str | None = None,
+    customer_email: str | None = None,
+    customer_mobile: str | None = None,
+    customer_profile_pic: str | None = None,
     is_anonymous: bool = True,
     page: str | None = None,
     previous_page: str | None = None,
@@ -102,6 +105,9 @@ def upsert_active_visitor(
             "visitor_type": visitor_type or ("customer" if customer_id else "visitor"),
             "visitor_code": visitor_code,
             "customer_name": customer_name,
+            "customer_email": customer_email,
+            "customer_mobile": customer_mobile,
+            "customer_profile_pic": customer_profile_pic,
             "is_anonymous": is_anonymous,
             "page": page,
             "previous_page": previous_page,
@@ -141,6 +147,12 @@ def upsert_active_visitor(
         record["visitor_code"] = visitor_code
     if customer_name is not None:
         record["customer_name"] = customer_name
+    if customer_email is not None:
+        record["customer_email"] = customer_email
+    if customer_mobile is not None:
+        record["customer_mobile"] = customer_mobile
+    if customer_profile_pic is not None:
+        record["customer_profile_pic"] = customer_profile_pic
     # is_anonymous always updated
     record["is_anonymous"] = is_anonymous
 

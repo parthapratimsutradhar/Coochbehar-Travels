@@ -150,6 +150,7 @@ GOOGLE_CLIENT_ID_ENDUSER=your-enduser-web-client-id
 GOOGLE_CLIENT_ID_ANDROID=your-android-client-id
 CDN_BASE_URL=https://cdn.gantabyaa.com
 CDN_STORAGE_PATH=/home/gantabyaa-cdn/htdocs/cdn.gantabyaa.com
+GEOLITE2_CITY_DB_PATH=/opt/geoip/GeoLite2-City.mmdb
 CDN_MAX_IMAGE_SIZE_MB=10
 CDN_MAX_VIDEO_SIZE_MB=100
 CDN_MAX_PDF_SIZE_MB=20
@@ -162,6 +163,11 @@ CDN_ANTIVIRUS_SOCKET=/run/clamav/clamd.ctl
 CDN_UPLOAD_RATE_LIMIT=10
 CDN_UPLOAD_RATE_WINDOW_SECONDS=3600
 ```
+
+Visitor location fallback uses a local MaxMind GeoLite2 City database. Install the
+`geoip2` Python dependency and place the licensed `GeoLite2-City.mmdb` file at
+`GEOLITE2_CITY_DB_PATH`; if the file is unavailable, visitor identification
+continues without IP-derived location.
 
 Set `CORS_ORIGINS` in Render to the exact browser origin(s) that call this API,
 separated by commas. Include the scheme and port when needed, but do not add a

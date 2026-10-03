@@ -14,7 +14,9 @@ from typing import Any
 
 import socketio
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
+from app.core.enums import AccountRole
 from app.db.database import SessionLocal
 from app.models.account import Account
 from app.realtime.constants import (
@@ -30,6 +32,7 @@ from app.realtime.presence import (
     get_live_counts,
     upsert_active_visitor,
 )
+from app.utils.cdn_urls import cdn_url_for_value
 from app.utils.security import decode_access_token
 
 logger = logging.getLogger(__name__)
@@ -68,6 +71,9 @@ def _build_visitor_payload(visitor_id: str) -> dict[str, Any]:
         "visitor_type": record.get("visitor_type", "visitor"),
         "visitor_code": record.get("visitor_code"),
         "customer_name": record.get("customer_name"),
+        "customer_email": record.get("customer_email"),
+        "customer_mobile": record.get("customer_mobile"),
+        "customer_profile_pic": record.get("customer_profile_pic"),
         "is_anonymous": record.get("is_anonymous", True),
         "page": record.get("page"),
         "previous_page": record.get("previous_page"),
@@ -93,30 +99,62 @@ def _build_visitor_payload(visitor_id: str) -> dict[str, Any]:
     }
 
 
-async def _broadcast_live_stats() -> None:
-    """Push current live visitor/customer counts to all admin sockets."""
+async def _broadcast_live_stats(
+    *, sid: str | None = None, include_visitors: bool = True
+) -> None:
+    """Send a snapshot to one admin or counts to all admins."""
     counts = get_live_counts()
     payload = {
         **counts,
-        "active_visitors": list(ACTIVE_VISITORS.values()),
         "timestamp": _now_iso(),
     }
+    if include_visitors:
+        payload["active_visitors"] = list(ACTIVE_VISITORS.values())
+    room = sid or ADMIN_REALTIME_ROOM
     try:
-        await sio.emit("live_stats", payload, room=ADMIN_REALTIME_ROOM)
+        await sio.emit("live_stats", payload, room=room)
     except Exception:
         logger.exception("Failed to broadcast live_stats")
-    try:
-        await sio.emit("live_stats", payload, room=ANALYTICS_REALTIME_ROOM)
-    except Exception:
-        logger.exception("Failed to broadcast live_stats to analytics room")
 
 
 async def _broadcast(event_name: str, payload: dict[str, Any]) -> None:
-    for room in [ADMIN_REALTIME_ROOM, ANALYTICS_REALTIME_ROOM]:
-        try:
-            await sio.emit(event_name, payload, room=room)
-        except Exception:
-            logger.exception("Failed to emit %s to %s", event_name, room)
+    try:
+        await sio.emit(event_name, payload, room=ADMIN_REALTIME_ROOM)
+    except Exception:
+        logger.exception("Failed to emit %s to admin room", event_name)
+
+
+def _load_visitor_identity(
+    visitor_id: uuid.UUID,
+) -> tuple[str | None, dict[str, str | None] | None]:
+    from app.models.visitor import Visitor
+
+    db = SessionLocal()
+    try:
+        visitor = db.scalar(
+            select(Visitor)
+            .options(joinedload(Visitor.customer))
+            .where(Visitor.id == visitor_id)
+        )
+        if visitor is None:
+            return None, None
+        customer = visitor.customer
+        if customer is None or customer.role != AccountRole.CUSTOMER:
+            return visitor.visitor_code, None
+        return visitor.visitor_code, {
+            "customer_id": str(customer.id),
+            "customer_name": customer.name,
+            "customer_email": customer.email,
+            "customer_mobile": customer.mobile,
+            "customer_profile_pic": cdn_url_for_value(customer.profile_pic)
+            if customer.profile_pic
+            else None,
+        }
+    except Exception:
+        logger.exception("Failed to load visitor identity from database")
+        return None, None
+    finally:
+        db.close()
 
 
 async def _broadcast_admin_presence(
@@ -229,36 +267,19 @@ async def connect(sid: str, environ: dict, auth: dict | None = None) -> bool:
             )
         logger.debug("Admin %s connected (sid=%s)", actor_id, sid)
         # Send current live stats snapshot immediately
-        await _broadcast_live_stats()
+        await _broadcast_live_stats(sid=sid)
         return True
 
     # ── Visitor / Customer path ───────────────────────────────────────
     visitor_id = str(handshake.get("visitor_id") or handshake.get("visitorId") or uuid.uuid4())
     session_id = handshake.get("session_id") or handshake.get("sessionId")
-    customer_id = handshake.get("customer_id") or handshake.get("customerId")
-
-    # Optionally look up extra visitor data from DB
     visitor_code: str | None = None
-    customer_name: str | None = None
+    customer_data: dict[str, str | None] | None = None
     db_visitor_id = _safe_uuid(visitor_id)
     if db_visitor_id:
-        db = SessionLocal()
-        try:
-            from app.models.visitor import Visitor
-            vis = db.scalar(select(Visitor).where(Visitor.id == db_visitor_id))
-            if vis:
-                visitor_code = vis.visitor_code
-                if vis.customer_id and not customer_id:
-                    customer_id = str(vis.customer_id)
-                # Try to get customer name
-                if customer_id:
-                    cust = db.scalar(select(Account).where(Account.id == _safe_uuid(customer_id)))
-                    if cust:
-                        customer_name = cust.name
-        except Exception:
-            logger.exception("Failed to look up visitor from DB during connect")
-        finally:
-            db.close()
+        visitor_code, customer_data = _load_visitor_identity(db_visitor_id)
+    customer_data = customer_data or {}
+    customer_id = customer_data.get("customer_id")
 
     referrer = handshake.get("referrer")
     utm_source = handshake.get("utm_source") or handshake.get("utmSource")
@@ -274,7 +295,10 @@ async def connect(sid: str, environ: dict, auth: dict | None = None) -> bool:
         customer_id=str(customer_id) if customer_id else None,
         visitor_type="customer" if customer_id else "visitor",
         visitor_code=visitor_code,
-        customer_name=customer_name,
+        customer_name=customer_data.get("customer_name"),
+        customer_email=customer_data.get("customer_email"),
+        customer_mobile=customer_data.get("customer_mobile"),
+        customer_profile_pic=customer_data.get("customer_profile_pic"),
         is_anonymous=customer_id is None,
         source=source,
         utm_source=utm_source,
@@ -302,7 +326,7 @@ async def connect(sid: str, environ: dict, auth: dict | None = None) -> bool:
 
     payload = _build_visitor_payload(visitor_id)
     await _broadcast("visitor_connected", payload)
-    await _broadcast_live_stats()
+    await _broadcast_live_stats(include_visitors=False)
 
     logger.debug("Visitor %s connected (sid=%s, type=%s)", visitor_id, sid, record.get("visitor_type"))
     return True
@@ -355,7 +379,7 @@ async def disconnect(sid: str) -> None:
         }
         await _broadcast("visitor_disconnected", payload)
 
-    await _broadcast_live_stats()
+    await _broadcast_live_stats(include_visitors=False)
     logger.debug("Visitor %s disconnected (sid=%s)", visitor_id, sid)
 
 
@@ -380,28 +404,13 @@ async def visitor_identify(sid: str, data: dict | None = None) -> None:
     VISITOR_SOCKETS[visitor_id].add(sid)
     VISITOR_SOCKET_INDEX[sid] = visitor_id
 
-    # Fetch visitor/customer info from DB
-    visitor_code: str | None = data.get("visitor_code")
-    customer_name: str | None = data.get("customer_name")
-    customer_id = data.get("customer_id")
+    visitor_code: str | None = None
+    customer_data: dict[str, str | None] | None = None
     db_vid = _safe_uuid(visitor_id)
-    if db_vid and (not visitor_code or (customer_id and not customer_name)):
-        db = SessionLocal()
-        try:
-            from app.models.visitor import Visitor
-            vis = db.scalar(select(Visitor).where(Visitor.id == db_vid))
-            if vis:
-                visitor_code = vis.visitor_code
-                if vis.customer_id and not customer_id:
-                    customer_id = str(vis.customer_id)
-            if customer_id:
-                cust = db.scalar(select(Account).where(Account.id == _safe_uuid(customer_id)))
-                if cust:
-                    customer_name = cust.name
-        except Exception:
-            logger.exception("Failed DB lookup in visitor_identify")
-        finally:
-            db.close()
+    if db_vid:
+        visitor_code, customer_data = _load_visitor_identity(db_vid)
+    customer_data = customer_data or {}
+    customer_id = customer_data.get("customer_id")
 
     referrer = data.get("referrer")
     utm_source = data.get("utm_source")
@@ -417,7 +426,10 @@ async def visitor_identify(sid: str, data: dict | None = None) -> None:
         customer_id=str(customer_id) if customer_id else None,
         visitor_type="customer" if customer_id else "visitor",
         visitor_code=visitor_code,
-        customer_name=customer_name,
+        customer_name=customer_data.get("customer_name"),
+        customer_email=customer_data.get("customer_email"),
+        customer_mobile=customer_data.get("customer_mobile"),
+        customer_profile_pic=customer_data.get("customer_profile_pic"),
         is_anonymous=not bool(customer_id),
         page=data.get("page"),
         current_url=data.get("current_url"),
@@ -449,7 +461,7 @@ async def visitor_identify(sid: str, data: dict | None = None) -> None:
     )
     await sio.enter_room(sid, f"{VISITOR_REALTIME_ROOM_PREFIX}{visitor_id}")
     await _broadcast("visitor_identified", _build_visitor_payload(visitor_id))
-    await _broadcast_live_stats()
+    await _broadcast_live_stats(include_visitors=False)
 
 
 @sio.event
@@ -599,7 +611,7 @@ async def join_analytics(sid: str, data: dict | None = None) -> None:
     if isinstance(session, dict) and session.get("actor_type") in {"ADMIN", "STAFF"}:
         await sio.enter_room(sid, ANALYTICS_REALTIME_ROOM)
         # Send immediate snapshot
-        await _broadcast_live_stats()
+        await _broadcast_live_stats(sid=sid)
 
 
 @sio.event

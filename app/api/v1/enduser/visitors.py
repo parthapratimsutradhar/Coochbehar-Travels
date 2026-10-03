@@ -19,6 +19,7 @@ from app.schemas.visitor import (
     VisitorResponse,
     VisitorSessionResponse,
 )
+from app.services.ip_geolocation_service import lookup_ip_location
 from app.services.tracking_service import TrackingService
 
 router = APIRouter(
@@ -34,25 +35,33 @@ router = APIRouter(
     summary="Identify or upsert a web visitor",
     description="Identify visitor by browser fingerprint. Creates a new visitor record or updates device/location data for existing visitors.",
 )
-def identify_visitor(
+async def identify_visitor(
     payload: VisitorIdentifyRequest,
     request: Request,
     db: Session = Depends(get_db),
 ):
-    ip_address = payload.ip_address or (request.client.host if request.client else None)
+    ip_address = request.client.host if request.client else payload.ip_address
+    country = payload.country
+    state = payload.state
+    city = payload.city
+    if not country or not state or not city:
+        location = await lookup_ip_location(ip_address)
+        country = country or location.get("country")
+        state = state or location.get("state")
+        city = city or location.get("city")
     user_agent = request.headers.get("user-agent")
 
     service = TrackingService(db)
     visitor, is_new = service.identify_visitor(
         fingerprint=payload.fingerprint,
         ip_address=ip_address,
-        country=payload.country,
-        state=payload.state,
-        city=payload.city,
+        country=country,
+        state=state,
+        city=city,
         browser=payload.browser or user_agent,
         os=payload.os,
         device=payload.device,
-        customer_id=payload.customer_id,
+        customer_id=None,
     )
 
     return SuccessResponse(

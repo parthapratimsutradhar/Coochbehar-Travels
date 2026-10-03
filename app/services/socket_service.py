@@ -20,6 +20,7 @@ from app.db.database import SessionLocal
 from app.models.account import Account
 from app.realtime.constants import ANALYTICS_REALTIME_ROOM, ADMIN_REALTIME_ROOM
 from app.realtime.socket_manager import sio
+from app.utils.cdn_urls import cdn_url_for_value
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +34,12 @@ def _safe_broadcast(
     Safe to call from sync code — schedules a task if a loop is running,
     otherwise uses asyncio.run().
     """
+    target_rooms = rooms
+    if ADMIN_REALTIME_ROOM in rooms and ANALYTICS_REALTIME_ROOM in rooms:
+        target_rooms = [room for room in rooms if room != ANALYTICS_REALTIME_ROOM]
+
     async def _emit() -> None:
-        for room in rooms:
+        for room in target_rooms:
             for event_name in event_names:
                 try:
                     await sio.emit(event_name, payload, room=room)
@@ -224,17 +229,29 @@ def emit_notification_read_all(
 # ── Visitor Analytics Broadcasts ──────────────────────────────────────
 
 def emit_visitor_identified(visitor: Any, *, is_new: bool) -> None:
+    customer = visitor.customer if visitor.customer_id else None
+    if customer is not None and getattr(customer.role, "value", customer.role) != "CUSTOMER":
+        customer = None
     payload = {
         "visitor_id": str(visitor.id),
         "visitor_code": visitor.visitor_code,
         "fingerprint": visitor.fingerprint,
         "ip_address": visitor.ip_address,
         "country": visitor.country,
+        "state": visitor.state,
         "city": visitor.city,
         "browser": visitor.browser,
         "os": visitor.os,
         "device": visitor.device,
         "customer_id": str(visitor.customer_id) if visitor.customer_id else None,
+        "customer_name": customer.name if customer else None,
+        "customer_email": customer.email if customer else None,
+        "customer_mobile": customer.mobile if customer else None,
+        "customer_profile_pic": (
+            cdn_url_for_value(customer.profile_pic)
+            if customer and customer.profile_pic
+            else None
+        ),
         "is_new": is_new,
         "first_seen": visitor.first_seen.isoformat() if visitor.first_seen else None,
     }

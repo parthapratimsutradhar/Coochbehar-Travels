@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 import os
+from pathlib import Path
 
 load_dotenv()
 
@@ -99,6 +100,9 @@ class Settings:
     
     CDN_BASE_URL: str = _env("CDN_BASE_URL") or "https://cdn.gantabyaa.com"
     CDN_STORAGE_PATH: str = _env("CDN_STORAGE_PATH") or "/home/gantabyaa-cdn/htdocs/cdn.gantabyaa.com"
+    GEOLITE2_CITY_DB_PATH: str = _env("GEOLITE2_CITY_DB_PATH") or str(
+        Path(__file__).resolve().parents[2] / "GeoLite2-City.mmdb"
+    )
     CDN_MAX_IMAGE_SIZE_MB: int = int(_env("CDN_MAX_IMAGE_SIZE_MB") or "10")
     CDN_MAX_VIDEO_SIZE_MB: int = int(_env("CDN_MAX_VIDEO_SIZE_MB") or "100")
     CDN_MAX_PDF_SIZE_MB: int = int(_env("CDN_MAX_PDF_SIZE_MB") or "20")

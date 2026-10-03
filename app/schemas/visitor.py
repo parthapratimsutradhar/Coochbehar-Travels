@@ -152,6 +152,9 @@ class LiveVisitorItem(SchemaBase):
     visitor_type: str = Field(default="visitor", description="'customer' or 'visitor'")
     visitor_code: str | None = None
     customer_name: str | None = None
+    customer_email: str | None = None
+    customer_mobile: str | None = None
+    customer_profile_pic: str | None = None
     is_anonymous: bool = True
     page: str | None = None
     activity: str | None = None
