@@ -211,7 +211,7 @@ class CustomerRepository:
         }
 
         for field, value in update_data.items():
-            if value is not None:
+            if value is not None or field == "profile_pic":
                 if field in account_fields:
                     setattr(customer, field, value)
                 elif field in profile_fields:

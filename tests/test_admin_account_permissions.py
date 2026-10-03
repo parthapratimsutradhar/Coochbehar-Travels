@@ -276,6 +276,32 @@ def test_admin_can_fetch_customer_detail_even_when_customer_is_inactive(client, 
     assert response.json()["data"]["is_active"] is False
 
 
+def test_admin_can_clear_customer_profile_picture(client, admin_user, db_session):
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+    customer = Account(
+        account_code="CUS-CLEAR-PIC",
+        name="Customer With Picture",
+        email="customer.picture@example.com",
+        mobile="+919000000099",
+        profile_pic="https://cdn.gantabyaa.com/profile-picture/customer.jpg",
+        role=AccountRole.CUSTOMER,
+        is_active=True,
+    )
+    db_session.add(customer)
+    db_session.commit()
+    db_session.refresh(customer)
+
+    response = client.patch(
+        f"/api/v1/admin/customers/{customer.id}",
+        headers=auth_header,
+        json={"profile_pic": ""},
+    )
+
+    assert response.status_code == 200
+    db_session.refresh(customer)
+    assert customer.profile_pic is None
+
+
 def test_admin_can_deactivate_own_account(client, admin_user, db_session):
     auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
     raw_otp = request_otp_for_delete(db_session, admin_user.email)
