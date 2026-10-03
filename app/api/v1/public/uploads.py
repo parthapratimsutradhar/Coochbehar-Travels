@@ -6,6 +6,7 @@ from app.db.database import get_db
 from app.schemas.response import SuccessResponse
 from app.schemas.upload import FileUploadResponse
 from app.services.cdn_service import enforce_upload_rate_limit, upload_file_to_cdn
+from app.services.client_ip_service import get_client_ip
 
 
 router = APIRouter(
@@ -26,7 +27,7 @@ async def upload_file(
     actor=Depends(get_current_actor),
     db: Session = Depends(get_db),
 ):
-    client_ip = request.client.host if request.client else None
+    client_ip = get_client_ip(request)
     enforce_upload_rate_limit(db, actor, client_ip)
     result = await upload_file_to_cdn(file=file)
 

@@ -15,6 +15,7 @@ from app.schemas.auth import (
 )
 from app.schemas.response import SuccessResponse, ActionResponse, ErrorResponse
 from app.services.auth_service import AuthService
+from app.services.client_ip_service import get_client_ip
 
 router = APIRouter(
     prefix="/admin/auth",
@@ -63,7 +64,7 @@ def verify_admin_otp(
     db: Session = Depends(get_db),
 ):
     user_agent = request.headers.get("user-agent")
-    ip_address = request.client.host if request.client else None
+    ip_address = get_client_ip(request)
 
     auth_service = AuthService(db)
     access_token, raw_refresh_token = auth_service.verify_admin_otp(
@@ -101,7 +102,7 @@ async def google_login_admin(
     db: Session = Depends(get_db),
 ):
     user_agent = request.headers.get("user-agent")
-    ip_address = request.client.host if request.client else None
+    ip_address = get_client_ip(request)
 
     auth_service = AuthService(db)
     access_token, raw_refresh_token = await auth_service.google_login_admin(

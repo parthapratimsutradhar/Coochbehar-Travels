@@ -19,6 +19,7 @@ from app.schemas.visitor import (
     VisitorResponse,
     VisitorSessionResponse,
 )
+from app.services.client_ip_service import get_client_ip
 from app.services.ip_geolocation_service import lookup_ip_location
 from app.services.tracking_service import TrackingService
 
@@ -40,7 +41,7 @@ async def identify_visitor(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    ip_address = request.client.host if request.client else payload.ip_address
+    ip_address = get_client_ip(request) or payload.ip_address
     country = payload.country
     state = payload.state
     city = payload.city

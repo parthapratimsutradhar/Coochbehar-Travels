@@ -19,6 +19,7 @@ from app.schemas.auth import (
 )
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.auth_service import AuthService
+from app.services.client_ip_service import get_client_ip
 
 router = APIRouter(
     prefix="/sessions",
@@ -43,7 +44,7 @@ def refresh(
         or extract_refresh_token(request)
     )
     user_agent = request.headers.get("user-agent")
-    ip_address = request.client.host if request.client else None
+    ip_address = get_client_ip(request)
 
     auth_service = AuthService(db)
     try:
