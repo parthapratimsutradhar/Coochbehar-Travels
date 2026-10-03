@@ -247,6 +247,49 @@ def test_admin_can_download_private_document_without_public_cache(
     assert response.headers["cache-control"] == "private, no-store"
 
 
+def test_admin_document_list_returns_accessible_protected_file_url(
+    client, db_session, tmp_path, monkeypatch
+):
+    customer = create_account(db_session, AccountRole.CUSTOMER, "admin-list-owner@example.com")
+    admin = create_account(db_session, AccountRole.ADMIN, "admin-list-user@example.com")
+    private_folder = tmp_path / "private" / "admin-documents"
+    private_folder.mkdir(parents=True)
+    filename = "private-document.pdf"
+    (private_folder / filename).write_bytes(b"protected document content")
+    monkeypatch.setattr(cdn_service, "CDN_ROOT", tmp_path)
+    doc = create_document(
+        db_session,
+        customer.id,
+        admin.id,
+        file_url=f"private/admin-documents/{filename}",
+    )
+
+    app.dependency_overrides[get_current_admin] = lambda: admin
+    try:
+        response = client.get("/api/v1/admin/documents")
+    finally:
+        app.dependency_overrides.pop(get_current_admin, None)
+
+    assert response.status_code == 200
+    document = response.json()["data"][0]
+    assert document["id"] == str(doc.id)
+    assert document["file_url"] == (
+        f"http://testserver/api/v1/admin/documents/{doc.id}/download"
+    )
+
+    unauthenticated = client.get(document["file_url"])
+    assert unauthenticated.status_code == 401
+
+    app.dependency_overrides[get_current_admin] = lambda: admin
+    try:
+        download = client.get(document["file_url"])
+    finally:
+        app.dependency_overrides.pop(get_current_admin, None)
+
+    assert download.status_code == 200
+    assert download.content == b"protected document content"
+
+
 def test_customer_documents_tab_builds_valid_payload(db_session):
     customer = create_account(db_session, AccountRole.CUSTOMER, "cust4@example.com")
     admin = create_account(db_session, AccountRole.ADMIN, "admin2@example.com")

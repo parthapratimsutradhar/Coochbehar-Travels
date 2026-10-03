@@ -41,14 +41,14 @@ class AdminDocumentService:
     def _serialize(document: Document) -> AdminDocumentResponse:
         uploader = document.uploaded_by_account
         customer_upload = uploader is not None and uploader.role == AccountRole.CUSTOMER
-        proxy_url = f"/api/v1/admin/documents/{document.id}/download"
+        download_url = f"/api/v1/admin/documents/{document.id}/download"
         return AdminDocumentResponse(
             id=document.id, document_type=document.document_type, title=document.title,
             description=document.description, customer_id=document.customer_id,
             customer_name=document.customer.name if document.customer else None,
             customer_profile_pic=document.customer.profile_pic if document.customer else None,
             uploaded_by_account_id=document.uploaded_by_account_id, uploaded_at=document.uploaded_at,
-            file_url=proxy_url, file_name=document.file_name, mime_type=document.mime_type,
+            file_url=download_url, file_name=document.file_name, mime_type=document.mime_type,
             file_size=document.file_size, uploader_name=uploader.name if uploader else None,
             uploader_profile_pic=uploader.profile_pic if uploader else None,
             type="incoming" if customer_upload else "outgoing",

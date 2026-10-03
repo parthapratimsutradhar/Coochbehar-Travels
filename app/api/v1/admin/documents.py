@@ -3,7 +3,7 @@ import uuid
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -31,6 +31,7 @@ router = APIRouter(prefix="/admin/documents", tags=["Admin - Documents"])
     responses={401: {"model": ErrorResponse}}
 )
 def list_documents(
+    request: Request,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     from_date: date | None = Query(None),
@@ -49,8 +50,18 @@ def list_documents(
         customer_id=customer_id, uploaded_by=uploaded_by,
     )
     total_pages = result["total_pages"]
+    items = [
+        item.model_copy(
+            update={
+                "file_url": str(
+                    request.url_for("download_document", document_id=item.id)
+                )
+            }
+        )
+        for item in result["items"]
+    ]
     return PaginatedResponse(
-        message="Items fetched successfully", data=result["items"],
+        message="Items fetched successfully", data=items,
         pagination=PaginationMeta(
             current_page=page, page_size=page_size, total_items=result["total_items"],
             total_pages=total_pages, has_next=page < total_pages, has_previous=page > 1,
