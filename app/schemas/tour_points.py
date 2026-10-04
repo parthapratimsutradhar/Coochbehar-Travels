@@ -41,6 +41,10 @@ class TourPointConfigurationHistoryResponse(BaseModel):
     previous_amount_per_point: Decimal | None = Field(description="Rate before this change; null for the initial rate.")
     amount_per_point: Decimal = Field(description="New INR amount required to earn one point.")
     changed_by_account_id: uuid.UUID | None = Field(description="Admin account that made the change, if available.")
+    changed_by_account_profile_pic: str | None = Field(default=None, description="Admin profile picture URL, if available.")
+    changed_by_account_name: str | None = Field(default=None, description="Name of the admin who made the change, if available.")
+    changed_by_account_email: str | None = Field(default=None, description="Email of the admin who made the change, if available.")
+    changed_by_account_mobile: str | None = Field(default=None, description="Mobile number of the admin who made the change, if available.")
     changed_at: datetime = Field(description="When this configuration change was recorded.")
 
 
@@ -62,10 +66,12 @@ class TourPointTransactionResponse(BaseModel):
 
 
 class AdminTourPointTransactionResponse(TourPointTransactionResponse):
-    account_id: uuid.UUID
-    account_code: str
-    account_name: str
-    email: str | None
+    customer_id: uuid.UUID
+    customer_code: str
+    customer_name: str
+    customer_email: str | None
+    customer_mobile: str | None
+    customer_profile_pic: str | None
 
 
 class PublicUserRankingItem(BaseModel):

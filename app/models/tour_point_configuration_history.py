@@ -3,7 +3,7 @@ from decimal import Decimal
 import uuid
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.enums import TourType
 from app.models.base import UUIDEntity
@@ -23,6 +23,7 @@ class TourPointConfigurationHistory(UUIDEntity):
     changed_by_account_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True
     )
+    changed_by_account = relationship("Account", foreign_keys=[changed_by_account_id])
     changed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

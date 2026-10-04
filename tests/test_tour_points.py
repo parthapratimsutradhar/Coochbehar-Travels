@@ -384,6 +384,8 @@ def test_accepting_quotation_reserves_departure_seats_for_travellers(db):
 
 def test_public_and_customer_rankings_use_latest_balances_without_private_data(db):
     customer = make_account(db, role=AccountRole.CUSTOMER, code="C-POINTS-4", name="Private Customer Name")
+    customer.email = "private.customer@example.test"
+    customer.mobile = "+15555550123"
     customer.points_balance = Decimal("3.7500")
     other = make_account(db, role=AccountRole.CUSTOMER, code="C-POINTS-5", name="Another Private Name")
     other.points_balance = Decimal("1.0000")
@@ -406,6 +408,9 @@ def test_public_and_customer_rankings_use_latest_balances_without_private_data(d
             points_balance=Decimal("5.0000"),
         ))
     admin = make_account(db, role=AccountRole.ADMIN, code="A-POINTS-3", name="Admin Three")
+    admin.email = "admin.points@example.test"
+    admin.mobile = "+15555550987"
+    admin.profile_pic = "https://images.example.test/admin.jpg"
     wallet = FinancialAccount(
         account_code=f"WALLET-{customer.id.hex[:12]}",
         name="Ranking Customer Wallet",
@@ -529,6 +534,10 @@ def test_public_and_customer_rankings_use_latest_balances_without_private_data(d
                 headers={"Authorization": f"Bearer {admin_token}"},
                 json={"amount_per_point": "7500.00"},
             )
+            config_history_response = client.get(
+                "/api/v1/admin/points/config/history?tour_type=DOMESTIC",
+                headers={"Authorization": f"Bearer {admin_token}"},
+            )
             config_response = client.get(
                 "/api/v1/admin/points/config",
                 headers={"Authorization": f"Bearer {admin_token}"},
@@ -578,13 +587,29 @@ def test_public_and_customer_rankings_use_latest_balances_without_private_data(d
         "point_balance": "3.7500",
     }
     assert config_update.status_code == 200
+    assert config_history_response.status_code == 200
+    changed_history = next(
+        item
+        for item in config_history_response.json()["data"]
+        if item["changed_by_account_id"] == str(admin.id)
+    )
+    assert changed_history["changed_by_account_name"] == admin.name
+    assert changed_history["changed_by_account_email"] == admin.email
+    assert changed_history["changed_by_account_mobile"] == admin.mobile
+    assert changed_history["changed_by_account_profile_pic"] == admin.profile_pic
     assert config_response.status_code == 200
     domestic_config = next(
         row for row in config_response.json()["data"] if row["tour_type"] == "DOMESTIC"
     )
     assert domestic_config["amount_per_point"] == "7500.00"
     assert transaction_response.status_code == 200
-    assert transaction_response.json()["data"][0]["account_name"] == "Private Customer Name"
+    transaction_customer = transaction_response.json()["data"][0]
+    assert transaction_customer["customer_id"] == str(customer.id)
+    assert transaction_customer["customer_code"] == customer.account_code
+    assert transaction_customer["customer_name"] == customer.name
+    assert transaction_customer["customer_email"] == customer.email
+    assert transaction_customer["customer_mobile"] == customer.mobile
+    assert transaction_customer["customer_profile_pic"] is None
     assert ranking_response.status_code == 200
     ranking_customer = next(
         row for row in ranking_response.json()["data"] if row["customer_id"] == str(customer.id)
@@ -660,7 +685,23 @@ def test_public_and_customer_rankings_use_latest_balances_without_private_data(d
         "has_previous": False,
     }
     assert "amount_per_point" in admin_schemas["TourPointConfigurationResponse"]["properties"]
-    assert {"account_name", "booking_code", "points", "balance_after"}.issubset(
+    assert {
+        "changed_by_account_profile_pic",
+        "changed_by_account_name",
+        "changed_by_account_email",
+        "changed_by_account_mobile",
+    }.issubset(admin_schemas["TourPointConfigurationHistoryResponse"]["properties"])
+    assert {
+        "customer_id",
+        "customer_code",
+        "customer_name",
+        "customer_email",
+        "customer_mobile",
+        "customer_profile_pic",
+        "booking_code",
+        "points",
+        "balance_after",
+    }.issubset(
         admin_schemas["AdminTourPointTransactionResponse"]["properties"]
     )
     assert {"success", "message", "error"}.issubset(admin_schemas["ErrorResponse"]["properties"])

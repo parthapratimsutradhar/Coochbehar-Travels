@@ -42,7 +42,9 @@ class TourPointsRepository:
         )
 
     def list_configuration_history(self, tour_type: TourType | None = None) -> list[TourPointConfigurationHistory]:
-        stmt = select(TourPointConfigurationHistory)
+        stmt = select(TourPointConfigurationHistory).options(
+            joinedload(TourPointConfigurationHistory.changed_by_account)
+        )
         if tour_type is not None:
             stmt = stmt.where(TourPointConfigurationHistory.tour_type == tour_type)
         return list(self.db.execute(

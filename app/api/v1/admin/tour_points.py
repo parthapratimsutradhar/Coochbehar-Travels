@@ -71,7 +71,32 @@ def get_point_configuration_history(
     rows = TourPointsService(db).get_configuration_history(tour_type)
     return SuccessResponse(
         message="Tour point configuration history fetched successfully",
-        data=[TourPointConfigurationHistoryResponse.model_validate(item) for item in rows],
+        data=[
+            TourPointConfigurationHistoryResponse(
+                id=item.id,
+                configuration_id=item.configuration_id,
+                tour_type=item.tour_type,
+                previous_amount_per_point=item.previous_amount_per_point,
+                amount_per_point=item.amount_per_point,
+                changed_by_account_id=item.changed_by_account_id,
+                changed_by_account_profile_pic=(
+                    cdn_url_for_value(item.changed_by_account.profile_pic)
+                    if item.changed_by_account and item.changed_by_account.profile_pic
+                    else None
+                ),
+                changed_by_account_name=(
+                    item.changed_by_account.name if item.changed_by_account else None
+                ),
+                changed_by_account_email=(
+                    item.changed_by_account.email if item.changed_by_account else None
+                ),
+                changed_by_account_mobile=(
+                    item.changed_by_account.mobile if item.changed_by_account else None
+                ),
+                changed_at=item.changed_at,
+            )
+            for item in rows
+        ],
     )
 
 
@@ -164,10 +189,14 @@ def list_point_transactions(
             amount_per_point=row.amount_per_point,
             reason=row.reason,
             created_at=row.created_at,
-            account_id=row.account_id,
-            account_code=row.account.account_code,
-            account_name=row.account.name,
-            email=row.account.email,
+            customer_id=row.account_id,
+            customer_code=row.account.account_code,
+            customer_name=row.account.name,
+            customer_email=row.account.email,
+            customer_mobile=row.account.mobile,
+            customer_profile_pic=(
+                cdn_url_for_value(row.account.profile_pic) if row.account.profile_pic else None
+            ),
         ) for row in rows],
         pagination=PaginationMeta(
             current_page=page,
