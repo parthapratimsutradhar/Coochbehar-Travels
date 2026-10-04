@@ -11,6 +11,16 @@ class AccountRole(AppEnum):
     CUSTOMER = "CUSTOMER"
 
 
+class BackupGroup(AppEnum):
+    CUSTOMERS = "customers"
+    STAFF = "staff"
+    TOURS = "tours"
+    DESTINATIONS = "destinations"
+    HOTELS = "hotels"
+    VENDORS = "vendors"
+    VEHICLES = "vehicles"
+
+
 class AdminOtpPurpose(AppEnum):
     LOGIN = "LOGIN"
     VERIFY_MOBILE = "VERIFY_MOBILE"

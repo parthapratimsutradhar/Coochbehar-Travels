@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1.admin.account import router as account_router
 from app.api.v1.admin.analytics import router as analytics_router
 from app.api.v1.admin.auth import router as auth_router
+from app.api.v1.admin.backup import router as backup_router
 from app.api.v1.admin.bookings import router as bookings_router
 from app.api.v1.admin.customer import router as customer_router
 from app.api.v1.admin.dashboard import router as dashboard_router
@@ -28,6 +29,7 @@ from app.api.v1.admin.vehicle import router as vehicle_router
 router = APIRouter()
 
 router.include_router(auth_router)
+router.include_router(backup_router)
 router.include_router(account_router)
 router.include_router(analytics_router)
 router.include_router(dashboard_router)

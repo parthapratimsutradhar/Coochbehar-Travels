@@ -102,3 +102,7 @@ class FinancialAccountSuccess(StrEnum):
     CREATED = "Financial account created successfully."
     UPDATED = "Financial account updated successfully."
     DELETED = "Financial account deleted successfully."
+
+
+class BackupSuccess(StrEnum):
+    IMPORTED = "Backup imported successfully."

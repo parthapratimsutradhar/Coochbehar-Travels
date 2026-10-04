@@ -79,6 +79,14 @@ class FinancialAccountError(StrEnum):
     DUPLICATE_OWNER_ACCOUNT = "This owner already has a financial account for the selected account type."
 
 
+class BackupError(StrEnum):
+    FILE_TOO_LARGE = "Backup file exceeds the 25 MB limit."
+    FILE_EMPTY = "Backup file is empty."
+    INVALID_BACKUP = "Backup file is invalid, unsupported, or contains invalid records."
+    DATA_CONFLICT = "Backup records conflict with existing data or database constraints."
+    XLSX_FIELD_TOO_LARGE = "A field exceeds Excel's cell limit. Export as JSON or CSV instead."
+
+
 class SystemError(StrEnum):
     VALIDATION_FAILED = "Validation failed"
     UNEXPECTED = "An unexpected error occurred"
