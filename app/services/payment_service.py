@@ -50,7 +50,9 @@ class PaymentService:
 
         # Update booking paid and due amounts
         if payment.status == FinancialTransactionStatus.COMPLETED:
-            self.booking_repo.update_financials(booking, payment.amount)
+            self.booking_repo.update_financials(booking, payment.amount, commit=False)
+            from app.services.tour_points_service import TourPointsService
+            TourPointsService(self.db).award_booking_points(booking)
 
         self.db.add(AuditLog(
             account_id=recorded_by.id,

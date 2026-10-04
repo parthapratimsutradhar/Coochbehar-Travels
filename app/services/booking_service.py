@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.enums import BookingSource, BookingStatus, LeadSource, PaymentStatus, TourType
 from app.models.account import Account
 from app.models.booking import Booking
+from app.models.destination import Destination
 from app.repository.booking_repo import BookingRepository
 from app.repository.customer_repo import CustomerRepository
 from app.services.financial_service import FinancialService
@@ -32,7 +33,7 @@ class BookingService:
     def _resolve_booking_travel_fields(
         self,
         payload: OfflineBookingCreate | OnlineBookingCreate,
-    ) -> tuple[uuid.UUID | None, date | None, date | None]:
+    ) -> tuple[uuid.UUID | None, date | None, date | None, TourType, uuid.UUID | None, uuid.UUID | None]:
         package, variant, enquiry, departure = self.booking_repo.get_booking_reference_data(
             package_id=payload.package_id,
             variant_id=payload.variant_id,
@@ -63,10 +64,30 @@ class BookingService:
             elif variant is not None and variant.duration_days > 0:
                 return_date = departure_date + timedelta(days=variant.duration_days - 1)
 
-        return destination_id, departure_date, return_date
+        destination = self.db.get(Destination, destination_id) if destination_id else None
+        booking_type = (
+            package.type
+            if package
+            else TourType.DOMESTIC if destination is None or destination.is_domestic else TourType.INTERNATIONAL
+        )
+        return (
+            destination_id,
+            departure_date,
+            return_date,
+            booking_type,
+            package.id if package else payload.package_id or (enquiry.package_id if enquiry else None),
+            variant.id if variant else payload.variant_id or (enquiry.variant_id if enquiry else None),
+        )
 
-    def create_offline_booking(self, payload: OfflineBookingCreate, staff_user: Account) -> Booking:
-        destination_id, departure_date, return_date = self._resolve_booking_travel_fields(payload)
+    def create_offline_booking(
+        self,
+        payload: OfflineBookingCreate,
+        staff_user: Account,
+        idempotency_key: str | None = None,
+    ) -> Booking:
+        destination_id, departure_date, return_date, booking_type, package_id, variant_id = (
+            self._resolve_booking_travel_fields(payload)
+        )
         primary_traveler = payload.travellers[0] if payload.travellers else None
         customer = None
 
@@ -93,8 +114,12 @@ class BookingService:
                 detail="A customer must be supplied either directly or via the first traveller record.",
             )
 
+        if idempotency_key:
+            existing = self.booking_repo.get_by_idempotency_key(customer.id, idempotency_key)
+            if existing is not None:
+                return existing
+
         booking_code = f"BK-OFF-{uuid.uuid4().hex[:6].upper()}"
-        package_id = payload.package_id
         offer_id = payload.tour_offer_id
         total_amount = payload.total_selling_price
         advance = min(payload.advance_received, total_amount)
@@ -108,17 +133,18 @@ class BookingService:
 
         booking_data = {
             "booking_code": booking_code,
+            "idempotency_key": idempotency_key,
             "customer_id": customer.id,
             "enquiry_id": payload.enquiry_id,
             "quotation_id": payload.quotation_id,
             "offer_id": offer_id,
             "package_id": package_id,
-            "variant_id": payload.variant_id,
+            "variant_id": variant_id,
             "departure_id": payload.departure_id,
             "destination_id": destination_id,
             "departure_date": departure_date,
             "return_date": return_date,
-            "booking_type": TourType.DOMESTIC,
+            "booking_type": booking_type,
             "source": payload.source or BookingSource.OFFLINE,
             "sales_account_id": payload.sales_account_id or staff_user.id,
             "status": status_val,
@@ -171,7 +197,12 @@ class BookingService:
             hotels=[hotel.model_dump(exclude_none=True) for hotel in payload.hotels],
             vehicles=[vehicle.model_dump(exclude_none=True) for vehicle in payload.vehicles],
             itinerary=itinerary_data,
+            commit=False,
         )
+        from app.services.tour_points_service import TourPointsService
+        TourPointsService(self.db).award_booking_points(booking)
+        self.db.commit()
+        self.db.refresh(booking)
 
         # 2. Record advance payment if present
         if advance > Decimal(0):
@@ -194,20 +225,22 @@ class BookingService:
         return booking
 
     def create_online_booking(self, payload: OnlineBookingCreate, customer: Account) -> Booking:
-        destination_id, departure_date, return_date = self._resolve_booking_travel_fields(payload)
+        destination_id, departure_date, return_date, booking_type, package_id, variant_id = (
+            self._resolve_booking_travel_fields(payload)
+        )
         booking_code = f"BK-{uuid.uuid4().hex[:8].upper()}"
         booking_data = {
             "booking_code": booking_code,
             "customer_id": customer.id,
             "enquiry_id": payload.enquiry_id,
             "quotation_id": payload.quotation_id,
-            "package_id": payload.package_id,
-            "variant_id": payload.variant_id,
+            "package_id": package_id,
+            "variant_id": variant_id,
             "departure_id": payload.departure_id,
             "destination_id": destination_id,
             "departure_date": departure_date,
             "return_date": return_date,
-            "booking_type": TourType.DOMESTIC,
+            "booking_type": booking_type,
             "source": payload.source or BookingSource.WEBSITE,
             "status": BookingStatus.TENTATIVE,
             "adult_count": payload.adult_count,
@@ -307,16 +340,33 @@ class BookingService:
         reason: str | None = None,
         changed_by_id: uuid.UUID | None = None,
     ) -> Booking:
-        booking = self.get_booking(booking_id)
-        return self.booking_repo.update_status(
-            booking,
-            new_status,
-            reason=reason,
-            changed_by_id=changed_by_id,
-        )
+        booking = self.booking_repo.get_for_update(booking_id)
+        if booking is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
+        try:
+            self.booking_repo.update_status(
+                booking,
+                new_status,
+                reason=reason,
+                changed_by_id=changed_by_id,
+                commit=False,
+            )
+            from app.services.tour_points_service import TourPointsService
+            points_service = TourPointsService(self.db)
+            points_service.award_booking_points(booking)
+            points_service.reverse_booking_points(booking)
+            self.db.commit()
+            self.db.refresh(booking)
+            return booking
+        except Exception:
+            self.db.rollback()
+            raise
 
     def delete_booking(self, booking_id: uuid.UUID) -> None:
-        self.booking_repo.delete(self.get_booking(booking_id))
+        booking = self.booking_repo.get_for_update(booking_id)
+        if booking is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
+        self.booking_repo.delete(booking)
 
     def list_bookings_for_day(self, travel_day: date) -> list[Booking]:
         return self.booking_repo.list_for_day(travel_day)
@@ -352,14 +402,22 @@ class BookingService:
     ) -> dict:
         booking = self.get_booking(booking_id)
         self._ensure_booking_customer(booking, customer_id)
+        booking = self.booking_repo.get_for_update(booking_id)
+        if booking is None:
+            raise HTTPException(status_code=404, detail="Booking not found.")
         ensure_unique_booking_travellers([payload.model_dump()], existing=booking.travellers)
         from app.models.booking_traveler import BookingTraveler
-        traveler = BookingTraveler(booking=booking, **payload.model_dump())
-        self.db.add(traveler)
-        self.booking_repo.sync_primary_travellers(booking)
-        self.db.commit()
-        self.db.refresh(traveler)
-        return traveler
+        try:
+            self.booking_repo.adjust_departure_seats(booking, 1)
+            traveler = BookingTraveler(booking=booking, **payload.model_dump())
+            self.db.add(traveler)
+            self.booking_repo.sync_primary_travellers(booking)
+            self.db.commit()
+            self.db.refresh(traveler)
+            return traveler
+        except Exception:
+            self.db.rollback()
+            raise
 
     def update_traveller(
         self,
@@ -383,10 +441,19 @@ class BookingService:
     ) -> None:
         booking = self.get_booking(booking_id)
         self._ensure_booking_customer(booking, customer_id)
+        booking = self.booking_repo.get_for_update(booking_id)
+        if booking is None:
+            raise HTTPException(status_code=404, detail="Booking not found.")
         traveller = next((item for item in booking.travellers if item.id == traveller_id), None)
         if traveller is None:
             raise HTTPException(status_code=404, detail="Traveller not found.")
-        self.booking_repo.delete_traveller(traveller)
+        try:
+            self.booking_repo.adjust_departure_seats(booking, -1)
+            self.booking_repo.delete_traveller(traveller, commit=False)
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
 
     @staticmethod
     def _ensure_booking_customer(booking: Booking, customer_id: uuid.UUID | None) -> None:

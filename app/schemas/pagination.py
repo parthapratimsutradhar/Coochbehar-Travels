@@ -2,14 +2,26 @@
 
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel, Field
-from app.schemas.base import SchemaBase
+from pydantic import BaseModel, ConfigDict, Field
 
 T = TypeVar("T")
 
 
-class PaginationMeta(SchemaBase):
+class PaginationMeta(BaseModel):
     """Metadata about the current page of results."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "current_page": 1,
+                "page_size": 20,
+                "total_items": 42,
+                "total_pages": 3,
+                "has_next": True,
+                "has_previous": False,
+            }
+        }
+    )
 
     current_page: int = Field(..., description="Current page number (1-indexed)")
     page_size: int = Field(..., description="Number of items per page")

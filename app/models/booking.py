@@ -1,14 +1,16 @@
 from decimal import Decimal
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from sqlalchemy import (
+    DateTime,
     Enum,
     ForeignKey,
     Integer,
     Numeric,
     String,
-    Text
+    Text,
+    UniqueConstraint,
 )
 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -23,6 +25,9 @@ class Booking(BaseEntity):
     tour details, and booking status.
     """
     __tablename__ = "bookings"
+    __table_args__ = (
+        UniqueConstraint("customer_id", "idempotency_key", name="uq_booking_customer_idempotency_key"),
+    )
 
     booking_code: Mapped[str] = mapped_column(
         String(20),
@@ -36,6 +41,8 @@ class Booking(BaseEntity):
         nullable=False,
         index=True,
     )
+
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     enquiry_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("enquiries.id", ondelete="SET NULL"),
@@ -94,6 +101,13 @@ class Booking(BaseEntity):
         index=True,
     )
 
+    departure_seats_reserved: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
     destination_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("destinations.id", ondelete="SET NULL"),
         nullable=True,
@@ -133,6 +147,34 @@ class Booking(BaseEntity):
     total_amount: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
+    )
+
+    points_awarded: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4),
+        nullable=False,
+        default=Decimal("0.0000"),
+        server_default="0",
+    )
+
+    points_processed: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
+
+    points_amount_per_point: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True,
+    )
+
+    points_configuration_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tour_point_configurations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    points_reversed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     paid_amount: Mapped[Decimal] = mapped_column(

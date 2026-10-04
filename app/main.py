@@ -226,6 +226,7 @@ def _public_openapi() -> dict:
         description="Public APIs.",
         include={
             "/api/v1/public/files",
+            "/api/v1/public/ranking",
         },
     )
 

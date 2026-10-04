@@ -1,5 +1,6 @@
 from decimal import Decimal
 import uuid
+from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 from app.models.account import Account
@@ -96,6 +97,14 @@ class BookingRepository:
         )
         return self.db.execute(stmt).unique().scalar_one_or_none()
 
+    def get_for_update(self, booking_id: uuid.UUID) -> Booking | None:
+        return self.db.execute(
+            select(Booking)
+            .where(Booking.id == booking_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+
     def get_by_code(self, booking_code: str) -> Booking | None:
         stmt = (
             select(Booking)
@@ -110,6 +119,14 @@ class BookingRepository:
             .where(Booking.booking_code == booking_code)
         )
         return self.db.execute(stmt).unique().scalar_one_or_none()
+
+    def get_by_idempotency_key(self, customer_id: uuid.UUID, idempotency_key: str) -> Booking | None:
+        return self.db.execute(
+            select(Booking).where(
+                Booking.customer_id == customer_id,
+                Booking.idempotency_key == idempotency_key,
+            )
+        ).scalar_one_or_none()
 
     def list_all(
         self,
@@ -167,6 +184,10 @@ class BookingRepository:
         variant = self.db.get(TourVariant, variant_id) if variant_id else None
         enquiry = self.db.get(Enquiry, enquiry_id) if enquiry_id else None
         departure = self.db.get(TourDeparture, departure_id) if departure_id else None
+        if package is None and enquiry is not None and enquiry.package_id:
+            package = self.db.get(TourPackage, enquiry.package_id)
+        if variant is None and enquiry is not None and enquiry.variant_id:
+            variant = self.db.get(TourVariant, enquiry.variant_id)
         if variant is None and departure is not None:
             variant = departure.variant
         if package is None and variant is not None:
@@ -278,8 +299,17 @@ class BookingRepository:
         hotels: list[dict] | None = None,
         vehicles: list[dict] | None = None,
         itinerary: list[dict] | None = None,
+        commit: bool = True,
     ) -> Booking:
         booking = Booking(**booking_data)
+        seat_count = self._booking_seat_count(booking, travellers)
+        if booking.departure_id is not None and seat_count > 0:
+            self._reserve_departure_seats(
+                booking.departure_id,
+                seat_count,
+                expected_variant_id=booking.variant_id,
+            )
+            booking.departure_seats_reserved = seat_count
         travellers = [dict(traveller) for traveller in travellers or []]
         ensure_unique_booking_travellers(travellers)
         self._apply_primary_traveller_flags(booking.customer_id, travellers)
@@ -319,8 +349,9 @@ class BookingRepository:
         )
         self.db.add(history)
 
-        self.db.commit()
-        self.db.refresh(booking)
+        if commit:
+            self.db.commit()
+            self.db.refresh(booking)
         return booking
 
     def update(self, booking: Booking, update_data: dict) -> Booking:
@@ -337,8 +368,24 @@ class BookingRepository:
         new_status: BookingStatus,
         reason: str | None = None,
         changed_by_id: uuid.UUID | None = None,
+        commit: bool = True,
     ) -> Booking:
         old_status = booking.status
+        old_is_cancelled = old_status in {BookingStatus.CANCELLED, BookingStatus.REFUNDED}
+        new_is_cancelled = new_status in {BookingStatus.CANCELLED, BookingStatus.REFUNDED}
+        if booking.departure_id is not None and not old_is_cancelled and new_is_cancelled:
+            if booking.departure_seats_reserved > 0:
+                self._restore_departure_seats(booking.departure_id, booking.departure_seats_reserved)
+                booking.departure_seats_reserved = 0
+        elif booking.departure_id is not None and old_is_cancelled and not new_is_cancelled:
+            seat_count = self._booking_seat_count(booking, booking.travellers)
+            if seat_count > 0:
+                self._reserve_departure_seats(
+                    booking.departure_id,
+                    seat_count,
+                    expected_variant_id=booking.variant_id,
+                )
+                booking.departure_seats_reserved = seat_count
         booking.status = new_status
 
         history = BookingStatusHistory(
@@ -349,13 +396,74 @@ class BookingRepository:
             notes=reason,
         )
         self.db.add(history)
-        self.db.commit()
-        self.db.refresh(booking)
+        if commit:
+            self.db.commit()
+            self.db.refresh(booking)
         return booking
 
     def delete(self, booking: Booking) -> None:
+        if booking.departure_id is not None and booking.departure_seats_reserved > 0:
+            self._restore_departure_seats(booking.departure_id, booking.departure_seats_reserved)
         self.db.delete(booking)
         self.db.commit()
+
+    def adjust_departure_seats(self, booking: Booking, count_delta: int) -> None:
+        if booking.departure_id is None or booking.status in {
+            BookingStatus.CANCELLED,
+            BookingStatus.REFUNDED,
+        }:
+            return
+        if count_delta > 0:
+            self._reserve_departure_seats(
+                booking.departure_id,
+                count_delta,
+                expected_variant_id=booking.variant_id,
+            )
+            booking.departure_seats_reserved += count_delta
+        elif count_delta < 0:
+            seats_to_restore = min(-count_delta, booking.departure_seats_reserved)
+            if seats_to_restore:
+                self._restore_departure_seats(booking.departure_id, seats_to_restore)
+                booking.departure_seats_reserved -= seats_to_restore
+
+    def _reserve_departure_seats(
+        self,
+        departure_id: uuid.UUID,
+        count: int,
+        *,
+        expected_variant_id: uuid.UUID | None,
+    ) -> None:
+        departure = self.db.execute(
+            select(TourDeparture)
+            .where(TourDeparture.id == departure_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if departure is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tour departure not found.")
+        if not departure.is_active:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tour departure is not active.")
+        if expected_variant_id is not None and departure.variant_id != expected_variant_id:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Departure does not match the selected tour variant.")
+        if departure.available_seats < count:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Not enough seats available for this departure.")
+        departure.available_seats -= count
+
+    def _restore_departure_seats(self, departure_id: uuid.UUID, count: int) -> None:
+        departure = self.db.execute(
+            select(TourDeparture)
+            .where(TourDeparture.id == departure_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if departure is not None:
+            departure.available_seats = min(departure.total_seats, departure.available_seats + count)
+
+    @staticmethod
+    def _booking_seat_count(booking: Booking, travellers: list | None) -> int:
+        if travellers:
+            return len(travellers)
+        return booking.adult_count + booking.child_count + booking.senior_count
 
     def update_traveller(self, traveller: BookingTraveler, data: dict) -> BookingTraveler:
         identity_fields = ("full_name", "mobile", "email")
@@ -386,17 +494,25 @@ class BookingRepository:
         self.db.refresh(traveller)
         return traveller
 
-    def delete_traveller(self, traveller: BookingTraveler) -> None:
+    def delete_traveller(self, traveller: BookingTraveler, *, commit: bool = True) -> None:
         self.db.delete(traveller)
-        self.db.commit()
+        if commit:
+            self.db.commit()
 
-    def update_financials(self, booking: Booking, payment_amount: Decimal) -> Booking:
+    def update_financials(
+        self,
+        booking: Booking,
+        payment_amount: Decimal,
+        *,
+        commit: bool = True,
+    ) -> Booking:
         booking.paid_amount += payment_amount
         booking.due_amount = max(Decimal(0), booking.total_amount - booking.paid_amount)
         if booking.due_amount == Decimal(0):
             booking.status = BookingStatus.FULLY_PAID
         elif booking.paid_amount > Decimal(0):
             booking.status = BookingStatus.PARTIALLY_PAID
-        self.db.commit()
-        self.db.refresh(booking)
+        if commit:
+            self.db.commit()
+            self.db.refresh(booking)
         return booking

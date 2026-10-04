@@ -13,6 +13,18 @@ class TourDepartureRepository:
         stmt = select(TourDeparture).where(TourDeparture.id == departure_id)
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def list_by_variant_and_date(self, variant_id: uuid.UUID, departure_date: date) -> list[TourDeparture]:
+        stmt = (
+            select(TourDeparture)
+            .where(
+                TourDeparture.variant_id == variant_id,
+                TourDeparture.departure_date == departure_date,
+                TourDeparture.is_active.is_(True),
+            )
+            .order_by(TourDeparture.created_at.asc())
+        )
+        return list(self.db.execute(stmt).scalars().all())
+
     def list_by_variant(
         self,
         variant_id: uuid.UUID,

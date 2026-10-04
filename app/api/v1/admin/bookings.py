@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin_or_staff
@@ -36,11 +36,12 @@ router = APIRouter(prefix="/admin/bookings", tags=["Admin - Bookings"])
 )
 def create_booking(
     payload: OfflineBookingCreate,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=128),
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ) -> SuccessResponse[BookingDetailResponse]:
     service = BookingService(db)
-    booking = service.create_offline_booking(payload, current_user)
+    booking = service.create_offline_booking(payload, current_user, idempotency_key=idempotency_key)
     return SuccessResponse(
         message="Booking created successfully",
         data=service.get_booking_detail(booking.id),

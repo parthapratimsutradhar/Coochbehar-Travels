@@ -34,6 +34,9 @@ from app.models.tour_offer import TourOffer
 from app.models.tour_offer_package import TourOfferPackage
 from app.models.tour_offer_usage import TourOfferUsage
 from app.models.tour_package import TourPackage
+from app.models.tour_point_configuration import TourPointConfiguration
+from app.models.tour_point_configuration_history import TourPointConfigurationHistory
+from app.models.tour_point_transaction import TourPointTransaction
 from app.models.tour_variant import TourVariant
 from app.models.tour_wishlist import TourWishlist
 from app.models.vehicle import Vehicle
@@ -82,6 +85,9 @@ __all__ = [
     "TourOfferPackage",
     "TourOfferUsage",
     "TourPackage",
+    "TourPointConfiguration",
+    "TourPointConfigurationHistory",
+    "TourPointTransaction",
     "TourVariant",
     "TourWishlist",
     "Vehicle",

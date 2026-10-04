@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import BookingSource, BookingStatus, EnquiryStatus, QuotationStatus, TourType
 from app.models.account import Account
+from app.models.destination import Destination
 from app.models.quotation import Quotation
+from app.models.tour_package import TourPackage
+from app.models.tour_variant import TourVariant
+from app.repository.tour_departure_repo import TourDepartureRepository
 from app.repository.enquiry_repo import EnquiryRepository
 from app.repository.quotation_repo import QuotationRepository
 from app.schemas.quotation import QuotationCreate, QuotationUpdate, QuotationVersionCreate
@@ -55,6 +59,7 @@ class QuotationService:
             "enquiry_id": payload.enquiry_id,
             "package_id": payload.package_id,
             "variant_id": payload.variant_id,
+            "departure_id": payload.departure_id,
             "destination_id": payload.destination_id,
             "tour_name": payload.tour_name,
             "travel_date": payload.travel_date,
@@ -222,6 +227,7 @@ class QuotationService:
             "enquiry_id": previous.enquiry_id,
             "package_id": values.pop("package_id", previous.package_id),
             "variant_id": values.pop("variant_id", previous.variant_id),
+            "departure_id": values.pop("departure_id", previous.departure_id),
             "destination_id": values.pop("destination_id", previous.destination_id),
             "tour_name": values.pop("tour_name", previous.tour_name),
             "travel_date": values.pop("travel_date", previous.travel_date),
@@ -346,6 +352,11 @@ class QuotationService:
             "enquiry_id": quotation.enquiry_id,
             "package_id": quotation.package_id,
             "variant_id": quotation.variant_id,
+            "departure_id": self._resolve_quotation_departure_id(
+                quotation,
+                booking_fields,
+                travellers,
+            ),
             "quotation_id": quotation.id,
             "subtotal": quotation.subtotal,
             "discount_amount": quotation.discount_amount,
@@ -354,7 +365,47 @@ class QuotationService:
             "due_amount": quotation.total_amount,
         }
         booking_data.update(booking_fields)
-        return BookingRepository(self.db).create(booking_data, travellers=travellers)
+        booking = BookingRepository(self.db).create(booking_data, travellers=travellers, commit=False)
+        from app.services.tour_points_service import TourPointsService
+        TourPointsService(self.db).award_booking_points(booking)
+        self.db.commit()
+        self.db.refresh(booking)
+        return booking
+
+    def _resolve_quotation_departure_id(
+        self,
+        quotation: Quotation,
+        booking_fields: dict,
+        travellers: list[dict] | None,
+    ) -> uuid.UUID | None:
+        if quotation.departure_id is not None:
+            return quotation.departure_id
+
+        enquiry = quotation.enquiry
+        variant_id = quotation.variant_id or (enquiry.variant_id if enquiry else None)
+        travel_date = quotation.travel_date.date() if quotation.travel_date else (
+            enquiry.travel_date if enquiry else None
+        )
+        if variant_id is None or travel_date is None:
+            return None
+
+        departures = TourDepartureRepository(self.db).list_by_variant_and_date(variant_id, travel_date)
+        if len(departures) == 1:
+            return departures[0].id
+        if not departures:
+            return None
+
+        seat_count = len(travellers) if travellers else sum(
+            booking_fields.get(field, 0) or 0
+            for field in ("adult_count", "child_count", "senior_count")
+        )
+        available = [departure for departure in departures if departure.available_seats >= seat_count]
+        if len(available) == 1:
+            return available[0].id
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Select a specific departure for this quotation before accepting it.",
+        )
 
     def accept_quotation(
         self,
@@ -376,22 +427,42 @@ class QuotationService:
         quotation.status = QuotationStatus.ACCEPTED
 
         enquiry = quotation.enquiry
-        return self._create_booking_from_quotation(
-            quotation,
-            {
-                "booking_type": TourType.DOMESTIC,
-                "source": BookingSource.WEBSITE,
-                "status": BookingStatus.CONFIRMED,
-                "departure_date": quotation.travel_date.date() if quotation.travel_date else None,
-                "return_date": quotation.return_date.date() if quotation.return_date else None,
-                "adult_count": (enquiry.adult_count if enquiry and enquiry.adult_count else len(travellers)),
-                "child_count": enquiry.child_count if enquiry and enquiry.child_count else 0,
-                "senior_count": enquiry.senior_count if enquiry and enquiry.senior_count else 0,
-                "notes": None,
-                "created_by": customer.id,
-            },
-            travellers=travellers,
+        package = self.db.get(TourPackage, quotation.package_id) if quotation.package_id else None
+        if package is None and quotation.variant_id:
+            variant = self.db.get(TourVariant, quotation.variant_id)
+            package = self.db.get(TourPackage, variant.package_id) if variant else None
+        destination = self.db.get(Destination, quotation.destination_id) if quotation.destination_id else None
+        booking_type = (
+            package.type
+            if package
+            else TourType.DOMESTIC if destination is None or destination.is_domestic else TourType.INTERNATIONAL
         )
+        booking_fields = {
+            "booking_type": booking_type,
+            "source": BookingSource.WEBSITE,
+            "status": BookingStatus.CONFIRMED,
+            "departure_date": quotation.travel_date.date() if quotation.travel_date else None,
+            "return_date": quotation.return_date.date() if quotation.return_date else None,
+            "adult_count": (enquiry.adult_count if enquiry and enquiry.adult_count else len(travellers)),
+            "child_count": enquiry.child_count if enquiry and enquiry.child_count else 0,
+            "senior_count": enquiry.senior_count if enquiry and enquiry.senior_count else 0,
+            "notes": None,
+            "created_by": customer.id,
+        }
+        try:
+            booking_fields["departure_id"] = self._resolve_quotation_departure_id(
+                quotation,
+                booking_fields,
+                travellers,
+            )
+            return self._create_booking_from_quotation(
+                quotation,
+                booking_fields,
+                travellers=travellers,
+            )
+        except Exception:
+            self.db.rollback()
+            raise
 
     def reject_quotation(
         self,

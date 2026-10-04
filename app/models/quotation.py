@@ -89,6 +89,13 @@ class Quotation(BaseEntity):
         index=True,
     )
 
+    departure_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tour_departures.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     destination_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("destinations.id", ondelete="SET NULL"),

@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import HotelCategory, VehicleType
 from app.db.database import get_db
-from app.schemas.destination import DestinationPublicResponse
+from app.schemas.destination import DestinationPublicResponse, DestinationResponse
 from app.schemas.hotel import HotelPublicResponse
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
+from app.schemas.response import ErrorResponse, SuccessResponse
 from app.schemas.vehicle import VehiclePublicResponse
 from app.services.destination_service import DestinationService
 from app.services.hotel_service import HotelService
@@ -40,6 +41,24 @@ def list_destinations(
 			has_previous=page > 1 and total_pages > 0,
 		),
 	)
+
+
+@router.get(
+    "/destinations/{slug}",
+    response_model=SuccessResponse[DestinationResponse],
+    responses={404: {"model": ErrorResponse}},
+    summary="Get destination by slug (Public)",
+)
+def get_destination_by_slug(
+    slug: str,
+    db: Session = Depends(get_db),
+):
+    service = DestinationService(db)
+    destination = service.get_by_slug(slug)
+    return SuccessResponse(
+        message="Destination fetched successfully",
+        data=DestinationResponse.model_validate(destination),
+    )
 
 
 @router.get(

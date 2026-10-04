@@ -249,6 +249,12 @@ class BookingStatus(AppEnum):
     ON_HOLD = "ON_HOLD"
     CANCELLED = "CANCELLED"
     REFUNDED = "REFUNDED"    
+
+
+class PointTransactionType(AppEnum):
+    BOOKING_EARNED = "BOOKING_EARNED"
+    BOOKING_REVERSED = "BOOKING_REVERSED"
+    MANUAL_ADJUSTMENT = "MANUAL_ADJUSTMENT"
     
 class BookingSource(AppEnum):
     APP = "APP"

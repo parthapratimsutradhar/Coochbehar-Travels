@@ -1,4 +1,5 @@
-from sqlalchemy import DateTime, Enum, Index, String, text
+from decimal import Decimal
+from sqlalchemy import DateTime, Enum, Index, Numeric, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from app.core.enums import AccountRole
@@ -90,6 +91,13 @@ class Account(ActiveEntity):
     profile_pic: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
+    )
+
+    points_balance: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4),
+        nullable=False,
+        default=Decimal("0.0000"),
+        server_default="0",
     )
     
 # ── Relationships ───────────────────────────────────────────────────────    
