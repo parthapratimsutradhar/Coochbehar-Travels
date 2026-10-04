@@ -576,7 +576,7 @@ def test_public_and_customer_rankings_use_latest_balances_without_private_data(d
     customer_data = customer_response.json()["data"]
     assert customer_data["rank"] == 12
     assert customer_data["points_balance"] == "3.7500"
-    assert any(row["customer_name"] == "You" for row in customer_data["around"])
+    assert "around" not in customer_data
     assert customer_data["transactions"][0]["points"] == "3.7500"
     assert customer_data["transaction_pagination"]["total_items"] == 1
     assert rank_position_response.status_code == 200
@@ -662,7 +662,6 @@ def test_public_and_customer_rankings_use_latest_balances_without_private_data(d
     assert set(customer_points_schema["properties"]) == {
         "points_balance",
         "rank",
-        "around",
         "transactions",
         "transaction_pagination",
     }

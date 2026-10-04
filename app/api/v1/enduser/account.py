@@ -11,13 +11,11 @@ from app.schemas.pagination import PaginationMeta
 from app.schemas.tour_points import (
     CustomerPointsResponse,
     CustomerRankPositionResponse,
-    PublicUserRankingItem,
     TourPointTransactionResponse,
 )
 from app.services.auth_service import AuthService
 from app.services.customer_service import CustomerService
 from app.services.tour_points_service import DEFAULT_RANKING_PAGE_SIZE, TourPointsService
-from app.utils.cdn_urls import cdn_url_for_value
 
 router = APIRouter(
     prefix="/account",
@@ -34,15 +32,6 @@ def get_customer_points(
 ):
     service = TourPointsService(db)
     ranking = service.get_customer_ranking(current_customer.id)
-    around = [PublicUserRankingItem(
-        rank=row.rank,
-        customer_name="You" if row.account_id == current_customer.id else row.name,
-        customer_profile_picture=(
-            cdn_url_for_value(row.profile_pic) if row.profile_pic else None
-        ),
-        customer_joined_at=row.customer_joined_at,
-        point_balance=row.points,
-    ) for row in ranking["peers"]]
     transactions, total = service.list_transactions(
         page=page,
         page_size=page_size,
@@ -54,7 +43,6 @@ def get_customer_points(
         data=CustomerPointsResponse(
             points_balance=ranking["current"].points,
             rank=ranking["current"].rank,
-            around=around,
             transactions=[TourPointTransactionResponse.model_validate(row) for row in transactions],
             transaction_pagination=PaginationMeta(
                 current_page=page,
