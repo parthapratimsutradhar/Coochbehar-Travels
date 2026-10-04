@@ -229,3 +229,93 @@ def test_backup_import_skips_existing_unique_values_with_different_id(db: Sessio
     assert result == {"inserted": 0, "updated": 0}
     assert db.scalar(select(Destination)).name == "Database version"
     assert len(db.scalars(select(Destination)).all()) == 1
+
+
+def test_backup_import_remaps_foreign_keys_for_duplicate_tour_rows(db: Session):
+    destination = Destination(name="Egypt", slug="egypt-remap")
+    db.add(destination)
+    db.flush()
+    package = TourPackage(
+        tour_code="EGYPT-REMAP",
+        slug="egypt-remap-tour",
+        title="Egypt Tour",
+        destination_id=destination.id,
+        type=TourType.INTERNATIONAL,
+    )
+    db.add(package)
+    db.flush()
+    variant = TourVariant(
+        package_id=package.id,
+        slug="egypt-remap-variant",
+        name="Standard",
+        valid_from=date(2026, 10, 17),
+        valid_to=date(2026, 10, 25),
+        duration_days=9,
+        duration_nights=8,
+        list_price=Decimal("95000.00"),
+        selling_price=Decimal("95000.00"),
+        is_default=True,
+    )
+    db.add(variant)
+    db.flush()
+    detail = TourDetail(
+        variant_id=variant.id,
+        banner={},
+        gallery=[],
+        highlights=[],
+        inclusions=[],
+        exclusions=[],
+        itinerary=[],
+        route_stops=[],
+    )
+    departure = TourDeparture(
+        variant_id=variant.id,
+        departure_date=date(2026, 10, 17),
+        return_date=date(2026, 10, 25),
+        total_seats=20,
+        available_seats=12,
+    )
+    db.add_all([detail, departure])
+    db.flush()
+
+    backup_destination_id = uuid.uuid4()
+    backup_package_id = uuid.uuid4()
+    backup_variant_id = uuid.uuid4()
+    destination_row = BackupService._serialize_model(destination)
+    destination_row["id"] = str(backup_destination_id)
+    package_row = BackupService._serialize_model(package)
+    package_row["id"] = str(backup_package_id)
+    package_row["destination_id"] = str(backup_destination_id)
+    variant_row = BackupService._serialize_model(variant)
+    variant_row["id"] = str(backup_variant_id)
+    variant_row["package_id"] = str(backup_package_id)
+    detail_row = BackupService._serialize_model(detail)
+    detail_row["id"] = str(uuid.uuid4())
+    detail_row["variant_id"] = str(backup_variant_id)
+    departure_row = BackupService._serialize_model(departure)
+    departure_row["id"] = str(uuid.uuid4())
+    departure_row["variant_id"] = str(backup_variant_id)
+    manifest = {
+        "format": "ct-admin-backup",
+        "version": 1,
+        "groups": ["tours"],
+        "tables": {
+            "destinations": [destination_row],
+            "tour_packages": [package_row],
+            "tour_variants": [variant_row],
+            "tour_details": [detail_row],
+            "tour_departures": [departure_row],
+        },
+    }
+
+    result = BackupService(db).import_backup(json.dumps(manifest).encode(), "json")
+
+    assert result == {"inserted": 0, "updated": 0}
+    assert len(db.scalars(select(Destination)).all()) == 1
+    assert len(db.scalars(select(TourPackage)).all()) == 1
+    assert len(db.scalars(select(TourVariant)).all()) == 1
+    assert len(db.scalars(select(TourDetail)).all()) == 1
+    assert len(db.scalars(select(TourDeparture)).all()) == 1
+    assert db.scalar(select(TourPackage)).destination_id == destination.id
+    assert db.scalar(select(TourVariant)).package_id == package.id
+    assert db.scalar(select(TourDeparture)).variant_id == variant.id

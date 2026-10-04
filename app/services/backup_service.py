@@ -163,6 +163,7 @@ class BackupService:
                 raise ValueError("Backup contains too many records")
             result = {"inserted": 0, "updated": 0}
             seen_ids: set[tuple[str, Any]] = set()
+            imported_ids: dict[tuple[str, Any], Any] = {}
             for table_name in IMPORT_ORDER:
                 rows = tables.get(table_name, [])
                 model = TABLE_MODELS.get(table_name)
@@ -174,6 +175,13 @@ class BackupService:
                     if row_id in seen_ids:
                         continue
                     seen_ids.add(row_id)
+                    for column in model.__table__.columns:
+                        for foreign_key in column.foreign_keys:
+                            referenced_table = foreign_key.column.table.name
+                            reference = values.get(column.name)
+                            reference_key = (referenced_table, reference)
+                            if reference_key in imported_ids:
+                                values[column.name] = imported_ids[reference_key]
                     if model is Account:
                         validate_backup_account_role(
                             values,
@@ -186,7 +194,9 @@ class BackupService:
                         account = self.repo.get_by_id(Account, values["account_id"])
                         if account is None or account.role != AccountRole.CUSTOMER:
                             raise ValueError("Customer profile references a missing customer account")
-                    if self.repo.insert_if_missing(model, values):
+                    inserted, record = self.repo.insert_if_missing(model, values)
+                    imported_ids[row_id] = record.id
+                    if inserted:
                         result["inserted"] += 1
             self.db.commit()
             return result
