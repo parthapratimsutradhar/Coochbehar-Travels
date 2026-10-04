@@ -1,6 +1,6 @@
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import Index, UniqueConstraint, select
 from sqlalchemy.orm import Session
 
 from app.core.enums import AccountRole
@@ -38,6 +38,24 @@ class BackupRepository:
         record = self.db.get(model, values["id"])
         if record is not None:
             return False
+        unique_column_sets = [
+            tuple(constraint.columns)
+            for constraint in model.__table__.constraints
+            if isinstance(constraint, UniqueConstraint)
+        ]
+        unique_column_sets.extend(
+            tuple(index.columns)
+            for index in model.__table__.indexes
+            if isinstance(index, Index) and index.unique
+        )
+        for columns in unique_column_sets:
+            if any(values.get(column.name) is None for column in columns):
+                continue
+            statement = select(model).where(
+                *(column == values[column.name] for column in columns)
+            )
+            if self.db.scalar(statement.limit(1)) is not None:
+                return False
         record = model()
         for field_name, value in values.items():
             setattr(record, field_name, value)

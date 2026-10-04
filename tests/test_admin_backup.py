@@ -1,4 +1,5 @@
 import json
+import uuid
 from io import BytesIO
 from datetime import date
 from decimal import Decimal
@@ -207,3 +208,24 @@ def test_backup_import_rejects_admin_account_records_without_partial_write(db: S
     with pytest.raises(ValueError, match="Admin accounts cannot be imported"):
         BackupService(db).import_backup(json.dumps(manifest).encode(), "json")
     assert db.scalar(select(Account)) is None
+
+
+def test_backup_import_skips_existing_unique_values_with_different_id(db: Session):
+    destination = Destination(name="Database version", slug="shared-destination")
+    db.add(destination)
+    db.flush()
+    backup_row = BackupService._serialize_model(destination)
+    backup_row["id"] = str(uuid.uuid4())
+    backup_row["name"] = "Backup version"
+    manifest = {
+        "format": "ct-admin-backup",
+        "version": 1,
+        "groups": ["destinations"],
+        "tables": {"destinations": [backup_row]},
+    }
+
+    result = BackupService(db).import_backup(json.dumps(manifest).encode(), "json")
+
+    assert result == {"inserted": 0, "updated": 0}
+    assert db.scalar(select(Destination)).name == "Database version"
+    assert len(db.scalars(select(Destination)).all()) == 1
