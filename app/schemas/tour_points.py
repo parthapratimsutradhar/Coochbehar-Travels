@@ -122,7 +122,7 @@ class AdminUserRankingItem(BaseModel):
     )
 
 
-class CustomerPointsResponse(SchemaBase):
+class CustomerPointsResponse(BaseModel):
     points_balance: Decimal
     rank: int
     around: list[PublicUserRankingItem]

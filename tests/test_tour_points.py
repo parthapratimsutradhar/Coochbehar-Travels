@@ -656,7 +656,16 @@ def test_public_and_customer_rankings_use_latest_balances_without_private_data(d
     )
     assert page_size_parameter["schema"]["default"] == 10
     assert enduser_openapi_response.status_code == 200
-    assert "/api/v1/account/points/rank-position" in enduser_openapi_response.json()["paths"]
+    enduser_openapi = enduser_openapi_response.json()
+    assert "/api/v1/account/points/rank-position" in enduser_openapi["paths"]
+    customer_points_schema = enduser_openapi["components"]["schemas"]["CustomerPointsResponse"]
+    assert set(customer_points_schema["properties"]) == {
+        "points_balance",
+        "rank",
+        "around",
+        "transactions",
+        "transaction_pagination",
+    }
     assert admin_openapi_response.status_code == 200
     admin_openapi = admin_openapi_response.json()
     admin_paths = admin_openapi["paths"]
