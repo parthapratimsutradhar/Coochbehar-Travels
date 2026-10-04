@@ -115,9 +115,9 @@ class AdminAccountService:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=UserError.MOBILE_ALREADY_EXISTS)
 
         update_data = payload.model_dump(exclude_unset=True)
-        if "email" in update_data:
+        if "email" in update_data and update_data["email"] is not None:
             update_data["email"] = update_data["email"].strip().lower()
-        if "mobile" in update_data:
+        if "mobile" in update_data and update_data["mobile"] is not None:
             update_data["mobile"] = update_data["mobile"].strip()
         if "profile_pic" in update_data:
             profile_pic = update_data["profile_pic"].strip() if update_data["profile_pic"] else None

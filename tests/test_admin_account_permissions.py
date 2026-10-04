@@ -140,17 +140,22 @@ def request_otp_for_delete(db_session, identifier: str):
     return raw_otp
 
 
-def test_admin_can_update_any_staff_account(client, admin_user, staff_user):
+def test_admin_can_update_any_staff_account(client, admin_user, staff_user, db_session):
     auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
 
     response = client.patch(
         f"/api/v1/admin/account/{staff_user.id}",
-        json={"name": "Updated Staff Name"},
+        json={
+            "name": "Updated Staff Name",
+            "email": "staff@example.com",
+            "mobile": None,
+        },
         headers=auth_header,
     )
 
     assert response.status_code == 200
     assert response.json()["message"] == "User updated successfully."
+    assert db_session.get(Account, staff_user.id).mobile is None
 
 
 def test_admin_can_create_staff_account(client, admin_user, db_session):
