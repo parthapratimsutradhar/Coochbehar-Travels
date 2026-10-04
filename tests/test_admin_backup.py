@@ -177,8 +177,14 @@ def test_backup_round_trip_preserves_selected_relationships(db: Session, format:
         assert departure.available_seats == 12
         assert target.scalar(select(Hotel)).destination_ref.name == "Darjeeling"
 
+        package = target.scalar(select(TourPackage))
+        package.title = "Database version"
+        departure.available_seats = 5
+        target.flush()
         second_import = BackupService(target).import_backup(content, format)
-        assert second_import == {"inserted": 0, "updated": 11}
+        assert second_import == {"inserted": 0, "updated": 0}
+        assert package.title == "Database version"
+        assert departure.available_seats == 5
     target_engine.dispose()
 
 

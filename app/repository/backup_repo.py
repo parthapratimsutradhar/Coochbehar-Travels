@@ -34,14 +34,13 @@ class BackupRepository:
     def get_by_id(self, model: type, record_id: Any) -> Any | None:
         return self.db.get(model, record_id)
 
-    def upsert(self, model: type, values: dict[str, Any]) -> bool:
+    def insert_if_missing(self, model: type, values: dict[str, Any]) -> bool:
         record = self.db.get(model, values["id"])
-        inserted = record is None
-        if inserted:
-            record = model()
+        if record is not None:
+            return False
+        record = model()
         for field_name, value in values.items():
-            if inserted or field_name != "id":
-                setattr(record, field_name, value)
+            setattr(record, field_name, value)
         self.db.add(record)
         self.db.flush()
-        return inserted
+        return True

@@ -172,7 +172,7 @@ class BackupService:
                     values = deserialize_backup_row(model, raw_row)
                     row_id = (table_name, values["id"])
                     if row_id in seen_ids:
-                        raise ValueError(f"Duplicate {table_name} record id in backup")
+                        continue
                     seen_ids.add(row_id)
                     if model is Account:
                         validate_backup_account_role(
@@ -186,10 +186,8 @@ class BackupService:
                         account = self.repo.get_by_id(Account, values["account_id"])
                         if account is None or account.role != AccountRole.CUSTOMER:
                             raise ValueError("Customer profile references a missing customer account")
-                    if self.repo.upsert(model, values):
+                    if self.repo.insert_if_missing(model, values):
                         result["inserted"] += 1
-                    else:
-                        result["updated"] += 1
             self.db.commit()
             return result
         except ValueError:
