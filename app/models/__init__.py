@@ -28,6 +28,7 @@ from app.models.referral import Referral
 from app.models.referral_config import ReferralRewardConfig
 from app.models.referral_reward_history import ReferralRewardHistory
 from app.models.review import Review
+from app.models.rule_regulation import RuleRegulation
 from app.models.tour_departure import TourDeparture
 from app.models.tour_detail import TourDetail
 from app.models.tour_offer import TourOffer
@@ -79,6 +80,7 @@ __all__ = [
     "ReferralRewardConfig",
     "ReferralRewardHistory",
     "Review",
+    "RuleRegulation",
     "TourDeparture",
     "TourDetail",
     "TourOffer",

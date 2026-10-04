@@ -16,6 +16,7 @@ from app.api.v1.admin.notifications import router as notifications_router
 from app.api.v1.admin.quotations import router as quotations_router
 from app.api.v1.admin.referral import router as referral_router
 from app.api.v1.admin.review import router as review_router
+from app.api.v1.admin.rule_regulations import router as rule_regulations_router
 from app.api.v1.admin.tour_detail import router as tour_detail_router
 from app.api.v1.admin.tour_offer import router as tour_offer_router
 from app.api.v1.admin.tour_package import router as tour_package_router
@@ -44,6 +45,7 @@ router.include_router(tour_detail_router)
 router.include_router(tour_offer_router)
 router.include_router(quotations_router)
 router.include_router(review_router)
+router.include_router(rule_regulations_router)
 router.include_router(bookings_router)
 router.include_router(destinations_router)
 router.include_router(financial_router)

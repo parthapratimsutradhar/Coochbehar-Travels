@@ -9,6 +9,7 @@ from app.api.v1.enduser.ground_services import router as ground_services_router
 from app.api.v1.enduser.quotations import router as quotations_router
 from app.api.v1.enduser.referral import router as referral_router
 from app.api.v1.enduser.review import router as review_router
+from app.api.v1.enduser.rule_regulations import router as rule_regulations_router
 from app.api.v1.enduser.tour_packages import router as tour_packages_router
 from app.api.v1.enduser.visitors import router as visitors_router
 from app.api.v1.enduser.wishlist import router as wishlist_router
@@ -25,6 +26,7 @@ router.include_router(enquiries_router)
 router.include_router(ground_services_router)
 router.include_router(quotations_router)
 router.include_router(review_router)
+router.include_router(rule_regulations_router)
 router.include_router(referral_router)
 router.include_router(visitors_router)
 router.include_router(wishlist_router)
