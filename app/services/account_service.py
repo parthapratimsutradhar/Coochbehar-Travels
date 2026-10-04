@@ -69,11 +69,13 @@ class AdminAccountService:
                 detail=UserError.STAFF_ONLY,
             )
 
-        email = payload.email.strip().lower()
-        mobile = payload.mobile.strip()
-        if self.repo.exists_email_for_role(email, AccountRole.STAFF):
+        email = payload.email.strip().lower() if payload.email else None
+        mobile = payload.mobile.strip() if payload.mobile else None
+        email = email or None
+        mobile = mobile or None
+        if email and self.repo.exists_email_for_role(email, AccountRole.STAFF):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=UserError.EMAIL_ALREADY_EXISTS)
-        if self.repo.exists_mobile_for_role(mobile, AccountRole.STAFF):
+        if mobile and self.repo.exists_mobile_for_role(mobile, AccountRole.STAFF):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=UserError.MOBILE_ALREADY_EXISTS)
 
         profile_pic = payload.profile_pic.strip() if payload.profile_pic else None

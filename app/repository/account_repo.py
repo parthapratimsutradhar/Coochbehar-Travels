@@ -21,8 +21,8 @@ class AccountRepository:
     def create_staff(
         self,
         name: str,
-        email: str,
-        mobile: str,
+        email: str | None,
+        mobile: str | None,
         profile_pic: str | None,
         is_active: bool,
     ) -> Account:

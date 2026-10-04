@@ -708,6 +708,7 @@ def test_admin_upload_rate_limit_uses_admin_quota(monkeypatch: pytest.MonkeyPatc
 def test_authenticated_upload_response_contract(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, actor_type: str
 ):
+    monkeypatch.setattr(settings, "CDN_BASE_URL", "https://cdn.example.test/")
     client.app.dependency_overrides[get_current_actor] = lambda: (
         SimpleNamespace(id=uuid.uuid4()), actor_type
     )
@@ -735,8 +736,9 @@ def test_authenticated_upload_response_contract(
     assert response.status_code == 201
     assert response.json()["message"] == "File uploaded successfully"
     assert response.json()["data"]["bytes"] == 123
-    assert response.json()["data"]["url"].startswith(
-        "/api/v1/public/files/temporary/"
+    assert response.json()["data"]["url"] == (
+        "https://cdn.example.test/temporary-uploads/"
+        "0123456789abcdef0123456789abcdef.jpg"
     )
 
 
