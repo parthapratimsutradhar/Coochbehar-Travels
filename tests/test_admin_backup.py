@@ -6,11 +6,15 @@ from decimal import Decimal
 
 import app.models
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 from app.api.v1.admin.backup import router as admin_backup_router
+from app.api.deps import get_current_admin_only
 from app.core.enums import AccountRole, TourType, VehicleType
 from app.models.account import Account
 from app.models.base import Base
@@ -25,6 +29,8 @@ from app.models.vehicle import Vehicle
 from app.models.vendor import Vendor
 from app.services.backup_service import BackupService
 from app.schemas.response import ActionResponse
+from app.core.exception_handlers import register_exception_handlers
+from app.db.database import get_db
 
 
 @pytest.fixture
@@ -319,3 +325,46 @@ def test_backup_import_remaps_foreign_keys_for_duplicate_tour_rows(db: Session):
     assert db.scalar(select(TourPackage)).destination_id == destination.id
     assert db.scalar(select(TourVariant)).package_id == package.id
     assert db.scalar(select(TourDeparture)).variant_id == variant.id
+
+
+def test_backup_import_conflict_response_includes_database_field():
+    test_app = FastAPI()
+    register_exception_handlers(test_app)
+    test_app.include_router(admin_backup_router, prefix="/api/v1")
+    test_app.dependency_overrides[get_current_admin_only] = lambda: object()
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+
+    def override_get_db():
+        with Session(engine) as session:
+            yield session
+
+    test_app.dependency_overrides[get_db] = override_get_db
+    manifest = {
+        "format": "ct-admin-backup",
+        "version": 1,
+        "groups": ["destinations"],
+        "tables": {
+            "destinations": [
+                {"id": str(uuid.uuid4()), "name": None, "slug": "missing-name"}
+            ]
+        },
+    }
+
+    with TestClient(test_app) as client:
+        response = client.post(
+            "/api/v1/admin/backups/import",
+            files={"file": ("backup.json", json.dumps(manifest), "application/json")},
+        )
+    engine.dispose()
+
+    assert response.status_code == 409
+    assert response.json()["error"]["details"] == {
+        "reason": "not_null_violation",
+        "table": "destinations",
+        "column": "name",
+    }

@@ -1,3 +1,4 @@
+import re
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
@@ -15,6 +16,58 @@ from app.services.backup_service import BackupService, MAX_BACKUP_SIZE
 
 
 router = APIRouter(prefix="/admin/backups", tags=["Admin - Backups"])
+
+
+def _database_conflict_details(exc: SQLAlchemyError) -> dict[str, str]:
+	original = getattr(exc, "orig", exc)
+	diag = getattr(original, "diag", None)
+	if diag is not None:
+		sqlstate = getattr(diag, "sqlstate", None)
+		reasons = {
+			"23502": "not_null_violation",
+			"23505": "unique_constraint_violation",
+			"23503": "foreign_key_violation",
+			"23514": "check_constraint_violation",
+		}
+		details = {
+			key: value
+			for key, value in (
+				("reason", reasons.get(sqlstate, "database_constraint_violation")),
+				("sqlstate", sqlstate),
+				("table", getattr(diag, "table_name", None)),
+				("column", getattr(diag, "column_name", None)),
+				("constraint", getattr(diag, "constraint_name", None)),
+			)
+			if value
+		}
+		if details:
+			return details
+
+	message = str(original)
+	not_null_match = re.search(
+		r"NOT NULL constraint failed: ([\w]+)\.([\w]+)", message, re.IGNORECASE
+	)
+	if not_null_match:
+		return {
+			"reason": "not_null_violation",
+			"table": not_null_match.group(1),
+			"column": not_null_match.group(2),
+		}
+	unique_match = re.search(r"UNIQUE constraint failed: (.+)", message, re.IGNORECASE)
+	if unique_match:
+		return {
+			"reason": "unique_constraint_violation",
+			"columns": unique_match.group(1),
+		}
+	check_match = re.search(r"CHECK constraint failed: (.+)", message, re.IGNORECASE)
+	if check_match:
+		return {
+			"reason": "check_constraint_violation",
+			"constraint": check_match.group(1),
+		}
+	if "FOREIGN KEY constraint failed" in message:
+		return {"reason": "foreign_key_violation"}
+	return {"reason": "database_constraint_violation"}
 
 
 @router.get(
@@ -96,7 +149,10 @@ async def import_admin_backup(
 	except SQLAlchemyError as exc:
 		raise HTTPException(
 			status_code=status.HTTP_409_CONFLICT,
-			detail=BackupError.DATA_CONFLICT,
+			detail={
+				"message": BackupError.DATA_CONFLICT,
+				"details": _database_conflict_details(exc),
+			},
 		) from exc
 
 	return ActionResponse(message=BackupSuccess.IMPORTED)
