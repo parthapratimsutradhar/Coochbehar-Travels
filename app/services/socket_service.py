@@ -296,7 +296,10 @@ def emit_visitor_identified(visitor: Any, *, is_new: bool) -> None:
     )
     _safe_broadcast(
         ["live_stats"],
-        {**get_live_counts(), "timestamp": datetime.now(timezone.utc).isoformat()},
+        {
+            **get_live_counts(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
         rooms=[ADMIN_REALTIME_ROOM],
     )
 

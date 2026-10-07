@@ -370,3 +370,34 @@ def test_live_stats_snapshots_are_targeted_and_updates_are_compact(monkeypatch):
     assert "active_visitors" not in emitted[1][1]
     assert len(emitted) == 3
     assert emitted[2][2] == "ADMIN"
+
+
+def test_final_visitor_disconnect_persists_last_seen(monkeypatch):
+    from app.realtime import socket_manager
+
+    visitor_id = str(uuid.uuid4())
+    touched = []
+    broadcasts = []
+
+    async def fake_broadcast(event_name, payload):
+        broadcasts.append((event_name, payload))
+
+    async def fake_live_stats(**kwargs):
+        return None
+
+    monkeypatch.setattr(socket_manager, "VISITOR_SOCKET_INDEX", {"visitor-sid": visitor_id})
+    monkeypatch.setattr(socket_manager, "VISITOR_SOCKETS", {visitor_id: {"visitor-sid"}})
+    monkeypatch.setattr(
+        socket_manager,
+        "ACTIVE_VISITORS",
+        {visitor_id: {"visitor_id": visitor_id, "visitor_type": "customer", "session_id": "session-1"}},
+    )
+    monkeypatch.setattr(socket_manager, "_touch_visitor_last_seen", touched.append)
+    monkeypatch.setattr(socket_manager, "_broadcast", fake_broadcast)
+    monkeypatch.setattr(socket_manager, "_broadcast_live_stats", fake_live_stats)
+
+    asyncio.run(socket_manager.disconnect("visitor-sid"))
+
+    assert touched == [visitor_id]
+    assert broadcasts[0][0] == "visitor_disconnected"
+    assert broadcasts[0][1]["visitor_id"] == visitor_id

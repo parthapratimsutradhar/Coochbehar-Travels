@@ -369,6 +369,11 @@ def list_visitors(
             | (Visitor.country.ilike(pattern))
             | (Visitor.browser.ilike(pattern))
             | (Visitor.os.ilike(pattern))
+            | Visitor.customer.has(
+                Account.name.ilike(pattern)
+                | Account.email.ilike(pattern)
+                | Account.mobile.ilike(pattern)
+            )
         )
 
     total_items = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()

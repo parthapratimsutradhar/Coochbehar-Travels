@@ -56,6 +56,22 @@ def _safe_uuid(value: Any) -> uuid.UUID | None:
         return None
 
 
+def _touch_visitor_last_seen(visitor_id: str) -> None:
+    db_visitor_id = _safe_uuid(visitor_id)
+    if not db_visitor_id:
+        return
+
+    from app.repository.visitor_repo import VisitorRepository
+
+    db = SessionLocal()
+    try:
+        VisitorRepository(db).update_last_seen(db_visitor_id)
+    except Exception:
+        logger.exception("Failed to update last-seen time for visitor %s", visitor_id)
+    finally:
+        db.close()
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -102,7 +118,7 @@ def _build_visitor_payload(visitor_id: str) -> dict[str, Any]:
 async def _broadcast_live_stats(
     *, sid: str | None = None, include_visitors: bool = True
 ) -> None:
-    """Send a snapshot to one admin or counts to all admins."""
+    """Send a targeted presence snapshot or compact counts to all admins."""
     counts = get_live_counts()
     payload = {
         **counts,
@@ -370,6 +386,7 @@ async def disconnect(sid: str) -> None:
 
     VISITOR_SOCKETS.pop(visitor_id, None)
     record = ACTIVE_VISITORS.pop(visitor_id, None)
+    _touch_visitor_last_seen(visitor_id)
     if record:
         payload = {
             "visitor_id": visitor_id,
@@ -461,7 +478,7 @@ async def visitor_identify(sid: str, data: dict | None = None) -> None:
     )
     await sio.enter_room(sid, f"{VISITOR_REALTIME_ROOM_PREFIX}{visitor_id}")
     await _broadcast("visitor_identified", _build_visitor_payload(visitor_id))
-    await _broadcast_live_stats(include_visitors=False)
+    await _broadcast_live_stats()
 
 
 @sio.event
