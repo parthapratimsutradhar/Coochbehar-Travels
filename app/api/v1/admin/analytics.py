@@ -8,9 +8,10 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, case, func, literal, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_admin_or_staff
+from app.core.enums import AccountRole
 from app.core.lead_scoring import get_event_category
 from app.db.database import get_db
 from app.models.lead import Lead
@@ -41,6 +42,7 @@ from app.schemas.visitor import (
 )
 from app.services.cleanup_service import cleanup_old_data
 from app.services.dashboard_service import DashboardService
+from app.utils.cdn_urls import cdn_url_for_value
 
 router = APIRouter(
     prefix="/admin/analytics",
@@ -48,6 +50,19 @@ router = APIRouter(
 )
 
 DateFilterLiteral = Literal["today", "yesterday", "7d", "30d", "90d"]
+
+
+def _visitor_response(visitor: Visitor) -> VisitorResponse:
+    response = VisitorResponse.model_validate(visitor)
+    customer = visitor.customer
+    if customer and getattr(customer.role, "value", customer.role) == AccountRole.CUSTOMER.value:
+        response.customer_name = customer.name
+        response.customer_email = customer.email
+        response.customer_mobile = customer.mobile
+        response.customer_profile_pic = (
+            cdn_url_for_value(customer.profile_pic) if customer.profile_pic else None
+        )
+    return response
 
 
 def _date_range(date_filter: str) -> tuple[datetime, datetime]:
@@ -334,7 +349,7 @@ def list_visitors(
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
-    stmt = select(Visitor).order_by(Visitor.last_seen.desc())
+    stmt = select(Visitor).options(joinedload(Visitor.customer)).order_by(Visitor.last_seen.desc())
 
     if visitor_type == "customer":
         stmt = stmt.where(Visitor.customer_id.isnot(None))
@@ -363,7 +378,7 @@ def list_visitors(
 
     return PaginatedResponse(
         message="Visitors fetched successfully",
-        data=[VisitorResponse.model_validate(v) for v in visitors],
+        data=[_visitor_response(visitor) for visitor in visitors],
         pagination=PaginationMeta(
             current_page=page,
             page_size=page_size,
@@ -386,7 +401,11 @@ def get_visitor_details(
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
-    visitor = db.execute(select(Visitor).where(Visitor.id == visitor_id)).scalar_one_or_none()
+    visitor = db.execute(
+        select(Visitor)
+        .options(joinedload(Visitor.customer))
+        .where(Visitor.id == visitor_id)
+    ).scalar_one_or_none()
     if not visitor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Visitor {visitor_id} not found")
 
@@ -410,7 +429,7 @@ def get_visitor_details(
     return SuccessResponse(
         message="Visitor details retrieved successfully",
         data=VisitorProfileResponse(
-            visitor=VisitorResponse.model_validate(visitor),
+            visitor=_visitor_response(visitor),
             sessions=[VisitorSessionResponse.model_validate(s) for s in sessions],
             recent_events=[VisitorEventResponse.model_validate(e) for e in recent_events],
             total_events=total_events,

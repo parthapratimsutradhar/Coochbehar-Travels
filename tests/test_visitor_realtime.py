@@ -25,6 +25,42 @@ def test_visitor_realtime_events_are_exposed():
     assert expected.issubset(REALTIME_EVENTS)
 
 
+def test_visitor_response_includes_linked_customer_profile():
+    from app.api.v1.admin.analytics import _visitor_response
+    from app.core.enums import AccountRole
+
+    customer = SimpleNamespace(
+        role=AccountRole.CUSTOMER,
+        name="Analytics Customer",
+        email="analytics@example.com",
+        mobile="+919000000020",
+        profile_pic="profile-picture/analytics-customer.jpg",
+    )
+    visitor = SimpleNamespace(
+        id=uuid.uuid4(),
+        visitor_code="VIS-ANALYTICS-001",
+        fingerprint="analytics-customer-fingerprint",
+        ip_address=None,
+        country=None,
+        state=None,
+        city=None,
+        browser=None,
+        os=None,
+        device=None,
+        customer_id=uuid.uuid4(),
+        customer=customer,
+        first_seen=datetime.now(timezone.utc),
+        last_seen=datetime.now(timezone.utc),
+    )
+
+    response = _visitor_response(visitor)
+
+    assert response.customer_name == customer.name
+    assert response.customer_email == customer.email
+    assert response.customer_mobile == customer.mobile
+    assert response.customer_profile_pic.endswith("/profile-picture/analytics-customer.jpg")
+
+
 def test_identify_visitor_fills_missing_location_from_request_ip(monkeypatch):
     from app.api.v1.enduser import visitors as visitor_api
     from app.schemas.visitor import VisitorIdentifyRequest

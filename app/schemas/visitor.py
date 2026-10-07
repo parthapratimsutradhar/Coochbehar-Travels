@@ -30,6 +30,10 @@ class VisitorResponse(VisitorBase):
 
     id: UUID
     visitor_code: str
+    customer_name: str | None = None
+    customer_email: str | None = None
+    customer_mobile: str | None = None
+    customer_profile_pic: str | None = None
     first_seen: datetime
     last_seen: datetime
 
