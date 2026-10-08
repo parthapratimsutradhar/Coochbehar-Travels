@@ -6,3 +6,10 @@ SOCIAL_LINKS = (
     ("▶️ YouTube", "https://www.youtube.com/@Gantabyaa.Travels"),
     ("💬 WhatsApp", "https://wa.me/919932204885"),
 )
+
+EXPLORE_LINKS = (
+    ("Website", "https://gantabyaa.com"),
+    ("Contact Us", "https://gantabyaa.com/contact"),
+    ("Privacy Policy", "https://gantabyaa.com/privacy-policy"),
+    ("Terms & Conditions", "https://gantabyaa.com/terms-of-service"),
+)

@@ -6,7 +6,7 @@ import pytest
 
 from app.core.config import settings
 from app.email.service import EmailService
-from app.email.social_links import SOCIAL_LINKS
+from app.email.social_links import EXPLORE_LINKS, SOCIAL_LINKS
 from app.email.templates.base import render_base_email
 from app.email.templates.booking import render_booking_email
 from app.email.templates.otp import render_otp_email
@@ -40,6 +40,8 @@ def test_send_email_uses_configured_smtp(monkeypatch, port, smtp_class):
     image_part = next(part for part in sent_message.walk() if part.get_content_type() == "image/jpeg")
     assert text_part.get_content() == "Body\n"
     assert 'src="cid:gantabyaa-logo"' in html_part.get_content()
+    assert 'align="center"' in html_part.get_content()
+    assert 'width="128" height="128"' in html_part.get_content()
     assert image_part["Content-ID"] == "<gantabyaa-logo>"
     assert b"Content-ID: <gantabyaa-logo>" in sent_message.as_bytes()
     if port == 587:
@@ -105,6 +107,9 @@ def test_otp_template_is_responsive_and_escapes_dynamic_content(monkeypatch):
 
     assert "<img src=x>" in text_body
     assert "&lt;img src=x&gt;" in html_body
+    assert "Your verification code" in html_body
+    assert "Your sign-in code" not in html_body
+    assert "complete the action you requested" in html_body
     assert "@media only screen and (max-width:600px)" in html_body
     assert "display:inline-block;margin:0 4px 4px" in html_body
     assert "📸 Instagram" in html_body
@@ -121,6 +126,9 @@ def test_social_links_use_official_hard_coded_destinations():
 
     assert len(SOCIAL_LINKS) == 4
     for _, url in SOCIAL_LINKS:
+        assert f'href="{url}"' in rendered
+    assert "Explore more:" in rendered
+    for _, url in EXPLORE_LINKS:
         assert f'href="{url}"' in rendered
 
 

@@ -10,9 +10,9 @@ def render_otp_email(otp: str, expires_in_minutes: int) -> tuple[str, str]:
     safe_otp = html.escape(otp)
     html_content = (
         '<h1 style="margin:0 0 12px;color:#183b4e;font-size:24px;line-height:1.3;">'
-        'Your sign-in code</h1>'
+        'Your verification code</h1>'
         '<p style="margin:0 0 24px;color:#52666d;font-size:15px;line-height:1.6;">'
-        'Use this one-time code to continue to your Gantabyaa account.</p>'
+        'Use this one-time code to complete the action you requested with Gantabyaa.</p>'
         '<div style="margin:0 0 22px;padding:20px 12px;background:#eef5f2;'
         'border:1px solid #d9e8e1;border-radius:6px;text-align:center;">'
         f'<div style="color:#183b4e;font-size:32px;font-weight:700;'

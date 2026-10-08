@@ -1,7 +1,7 @@
 import html
 from urllib.parse import urlsplit
 
-from app.email.social_links import SOCIAL_LINKS
+from app.email.social_links import EXPLORE_LINKS, SOCIAL_LINKS
 
 
 def _social_footer() -> str:
@@ -30,6 +30,16 @@ def _social_footer() -> str:
     return " ".join(links)
 
 
+def _explore_footer() -> str:
+    links = "&nbsp;·&nbsp;".join(
+        f'<a href="{html.escape(url, quote=True)}" '
+        f'style="color:#315c76;text-decoration:none;white-space:nowrap">'
+        f"{html.escape(label)}</a>"
+        for label, url in EXPLORE_LINKS
+    )
+    return f'<strong style="color:#52666d;">Explore more:</strong>&nbsp;{links}'
+
+
 def render_base_email(content_html: str) -> str:
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
@@ -39,6 +49,7 @@ def render_base_email(content_html: str) -> str:
         '.email-card{width:100%;max-width:600px;}'
         '.email-content{padding:36px 40px;}'
         '.email-footer{padding:22px 24px;}'
+        '.explore-links{line-height:2.2!important;}'
         '@media only screen and (max-width:600px){'
         '.email-card{width:100%!important;}'
         '.email-content{padding:28px 22px!important;}'
@@ -54,15 +65,16 @@ def render_base_email(content_html: str) -> str:
         '<table role="presentation" class="email-card" width="600" cellspacing="0" '
         'cellpadding="0" border="0" style="width:100%;max-width:600px;'
         'background:#ffffff;border:1px solid #e0e8e5;border-radius:8px;overflow:hidden;">'
-        '<tr><td style="padding:26px 40px;border-bottom:1px solid #e8eeeb;">'
-        '<img src="cid:gantabyaa-logo" alt="Gantabyaa" width="180" '
-        'style="display:block;width:180px;max-width:100%;height:auto;border:0;">'
+        '<tr><td align="center" style="padding:16px 24px;border-bottom:1px solid #e8eeeb;">'
+        '<img src="cid:gantabyaa-logo" alt="Gantabyaa" width="128" height="128" '
+        'style="display:block;width:128px;height:128px;max-width:100%;object-fit:contain;border:0;">'
         '</td></tr>'
         f'<tr><td class="email-content" style="padding:36px 40px;">{content_html}</td></tr>'
         '<tr><td class="email-footer" align="center" style="padding:22px 24px;'
         'background:#f7f9f8;border-top:1px solid #e8eeeb;">'
         f'<div class="social-links" style="font-size:12px;line-height:1.8;">{_social_footer()}</div>'
-        '<div style="padding-top:12px;color:#87928e;font-size:11px;line-height:1.5;">'
+        f'<div class="explore-links" style="padding-top:10px;color:#87928e;font-size:12px;line-height:1.8;">{_explore_footer()}</div>'
+        '<div style="padding-top:10px;color:#87928e;font-size:11px;line-height:1.5;">'
         'Gantabyaa · Travel with confidence</div>'
         '</td></tr></table></td></tr></table></body></html>'
     )
