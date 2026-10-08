@@ -11,7 +11,8 @@ from app.models.destination import Destination
 from app.repository.booking_repo import BookingRepository
 from app.repository.customer_repo import CustomerRepository
 from app.services.financial_service import FinancialService
-from app.services.email_service import EmailService
+from app.email.service import EmailService
+from app.email.templates.booking import render_booking_email
 from app.services.booking_pdf_service import build_booking_pdf, generate_and_upload_booking_pdf
 from app.utils.booking_traveller import ensure_unique_booking_travellers
 from app.schemas.booking import (
@@ -381,10 +382,18 @@ class BookingService:
     async def email_booking(self, booking_id: uuid.UUID, recipient_email: str) -> None:
         booking = self.get_booking(booking_id)
         customer_name = booking.customer.name if booking.customer else "Customer"
+        tour_name = booking.package.title if booking.package else "Travel booking"
+        body, html_body = render_booking_email(
+            customer_name,
+            booking.booking_code,
+            tour_name,
+            booking.departure_date,
+            booking.return_date,
+        )
         EmailService().send_email(
             recipient_email,
-            f"Booking {booking.booking_code} - {booking.package.title if booking.package else 'Travel booking'}",
-            f"Dear {customer_name},\n\nYour booking PDF is attached.\n\nRegards,\nGantabyaa",
+            f"Booking details {booking.booking_code} | Gantabyaa",
+            body,
             attachments=[
                 (
                     f"{booking.booking_code}.pdf",
@@ -392,6 +401,7 @@ class BookingService:
                     "application/pdf",
                 )
             ],
+            html_body=html_body,
         )
 
     def add_traveller(

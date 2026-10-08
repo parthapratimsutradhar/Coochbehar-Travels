@@ -5,7 +5,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.core.config import settings
-from app.services.email_service import EmailService
+from app.email.service import EmailService
+from app.email.social_links import SOCIAL_LINKS
+from app.email.templates.base import render_base_email
+from app.email.templates.booking import render_booking_email
+from app.email.templates.otp import render_otp_email
+from app.email.templates.quotation import render_quotation_email
 
 
 @pytest.mark.parametrize("port, smtp_class", [(465, "SMTP_SSL"), (587, "SMTP")])
@@ -14,7 +19,7 @@ def test_send_email_uses_configured_smtp(monkeypatch, port, smtp_class):
     server.send_message.return_value = {}
     smtp_constructor = MagicMock()
     smtp_constructor.return_value.__enter__.return_value = server
-    monkeypatch.setattr("app.services.email_service.smtplib." + smtp_class, smtp_constructor)
+    monkeypatch.setattr("app.email.service.smtplib." + smtp_class, smtp_constructor)
     monkeypatch.setattr(settings, "SMTP_HOST", "smtp.hostinger.com")
     monkeypatch.setattr(settings, "SMTP_PORT", port)
     monkeypatch.setattr(settings, "SMTP_USERNAME", "sender@example.com")
@@ -48,7 +53,7 @@ def test_send_email_raises_when_recipient_is_refused(monkeypatch):
     server.send_message.return_value = {"customer@example.com": (550, b"Mailbox unavailable")}
     smtp_constructor = MagicMock()
     smtp_constructor.return_value.__enter__.return_value = server
-    monkeypatch.setattr("app.services.email_service.smtplib.SMTP_SSL", smtp_constructor)
+    monkeypatch.setattr("app.email.service.smtplib.SMTP_SSL", smtp_constructor)
     monkeypatch.setattr(settings, "SMTP_PORT", 465)
     monkeypatch.setattr(settings, "SMTP_USERNAME", "sender@example.com")
     monkeypatch.setattr(settings, "SMTP_PASSWORD", "mailbox-password")
@@ -62,7 +67,7 @@ def test_send_email_supports_private_pdf_attachments(monkeypatch):
     server.send_message.return_value = {}
     smtp_constructor = MagicMock()
     smtp_constructor.return_value.__enter__.return_value = server
-    monkeypatch.setattr("app.services.email_service.smtplib.SMTP_SSL", smtp_constructor)
+    monkeypatch.setattr("app.email.service.smtplib.SMTP_SSL", smtp_constructor)
     monkeypatch.setattr(settings, "SMTP_PORT", 465)
     monkeypatch.setattr(settings, "SMTP_USERNAME", "sender@example.com")
     monkeypatch.setattr(settings, "SMTP_PASSWORD", "mailbox-password")
@@ -82,3 +87,70 @@ def test_send_email_supports_private_pdf_attachments(monkeypatch):
     )
     assert attachment.get_filename() == "quotation.pdf"
     assert attachment.get_payload(decode=True) == b"private pdf bytes"
+
+
+def test_otp_template_is_responsive_and_escapes_dynamic_content(monkeypatch):
+    monkeypatch.setattr(
+        "app.email.templates.base.SOCIAL_LINKS",
+        (
+            ("📸 Instagram", "https://instagram.com/gantabyaa"),
+            ("👍 Facebook", "javascript:alert(1)"),
+            ("▶️ YouTube", "https:youtube.com/@gantabyaa"),
+            ("💬 WhatsApp", None),
+        ),
+    )
+
+    text_body, otp_content = render_otp_email("<img src=x>", 5)
+    html_body = render_base_email(otp_content)
+
+    assert "<img src=x>" in text_body
+    assert "&lt;img src=x&gt;" in html_body
+    assert "@media only screen and (max-width:600px)" in html_body
+    assert "display:inline-block;margin:0 4px 4px" in html_body
+    assert "📸 Instagram" in html_body
+    assert "👍 Facebook" in html_body
+    assert "▶️ YouTube" in html_body
+    assert "💬 WhatsApp" in html_body
+    assert 'href="https://instagram.com/gantabyaa"' in html_body
+    assert 'href="javascript:alert(1)"' not in html_body
+    assert 'href="https:youtube.com/@gantabyaa"' not in html_body
+
+
+def test_social_links_use_official_hard_coded_destinations():
+    rendered = render_base_email("<p>Message</p>")
+
+    assert len(SOCIAL_LINKS) == 4
+    for _, url in SOCIAL_LINKS:
+        assert f'href="{url}"' in rendered
+
+
+def test_booking_email_template_includes_booking_details_and_escapes_content():
+    text_body, html_body = render_booking_email(
+        "<Customer>",
+        "BK-12345",
+        "Coastal <Escape>",
+        None,
+        None,
+    )
+    rendered = render_base_email(html_body)
+
+    assert "BK-12345" in text_body
+    assert "To be confirmed" in text_body
+    assert "&lt;Customer&gt;" in rendered
+    assert "Coastal &lt;Escape&gt;" in rendered
+
+
+def test_quotation_email_template_includes_offer_validity():
+    text_body, html_body = render_quotation_email(
+        "Customer",
+        "QT-2026-001",
+        "Mountain escape",
+        None,
+        None,
+        None,
+    )
+    rendered = render_base_email(html_body)
+
+    assert "QT-2026-001" in text_body
+    assert "Offer valid until: To be confirmed" in text_body
+    assert "Your trip quotation is ready" in rendered

@@ -17,7 +17,8 @@ from app.repository.tour_departure_repo import TourDepartureRepository
 from app.repository.enquiry_repo import EnquiryRepository
 from app.repository.quotation_repo import QuotationRepository
 from app.schemas.quotation import QuotationCreate, QuotationUpdate, QuotationVersionCreate
-from app.services.email_service import EmailService
+from app.email.service import EmailService
+from app.email.templates.quotation import render_quotation_email
 from app.services.quotation_pdf_service import (
     build_quotation_pdf,
     generate_and_upload_quotation_pdf,
@@ -316,14 +317,19 @@ class QuotationService:
 
     async def email_quotation(self, quotation_id: uuid.UUID, recipient_email: str) -> None:
         quotation = self.get_quotation(quotation_id)
+        customer_name = quotation.customer.name if quotation.customer else "Customer"
+        body, html_body = render_quotation_email(
+            customer_name,
+            quotation.quotation_code,
+            quotation.tour_name,
+            quotation.travel_date,
+            quotation.return_date,
+            quotation.valid_until,
+        )
         EmailService().send_email(
             recipient_email,
-            f"Quotation {quotation.quotation_code} - {quotation.tour_name}",
-            (
-                f"Dear {quotation.customer.name},\n\n"
-                f"Please find your quotation for {quotation.tour_name} attached.\n\n"
-                "Regards, Gantabyaa"
-            ),
+            f"Your trip quotation {quotation.quotation_code} | Gantabyaa",
+            body,
             attachments=[
                 (
                     f"{quotation.quotation_code}.pdf",
@@ -331,6 +337,7 @@ class QuotationService:
                     "application/pdf",
                 )
             ],
+            html_body=html_body,
         )
 
     def send_quotation(self, quotation_id: uuid.UUID) -> Quotation:

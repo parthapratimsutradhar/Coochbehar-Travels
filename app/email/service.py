@@ -1,4 +1,3 @@
-import html
 import logging
 import smtplib
 import ssl
@@ -8,6 +7,8 @@ from pathlib import Path
 from fastapi import HTTPException, status
 
 from app.core.config import settings
+from app.email.templates.base import render_base_email, render_plain_text_email
+from app.email.templates.otp import render_otp_email
 
 logger = logging.getLogger(__name__)
 LOGO_PATH = Path(__file__).resolve().parents[2] / "media" / "gantabyaa-logo.jpg"
@@ -28,14 +29,14 @@ class EmailService:
       return
 
     expires_in_minutes = max(1, expires_in_seconds // 60)
-    body = (
-      "Your Gantabyaa verification code is: "
-      f"{otp}\n\n"
-      f"This code expires in {expires_in_minutes} minute(s).\n\n"
-      "If you did not request this email, you can ignore it."
-    )
+    body, otp_html = render_otp_email(otp, expires_in_minutes)
     try:
-      self.send_email(to_email, "Your Gantabyaa verification code", body)
+      self.send_email(
+        to_email,
+        "Your Gantabyaa verification code",
+        body,
+        html_body=otp_html,
+      )
     except HTTPException:
       raise
     except Exception as exc:
@@ -54,18 +55,15 @@ class EmailService:
     subject: str,
     body: str,
     attachments: list[tuple[str, bytes, str]] | None = None,
+    html_body: str | None = None,
   ) -> dict:
     self._validate_config()
     message = EmailMessage()
     message.set_content(body)
-    html_body = (
-      '<div style="font-family:Arial,sans-serif;color:#17345f;max-width:600px">'
-      '<img src="cid:gantabyaa-logo" alt="Gantabyaa" '
-      'style="display:block;width:220px;max-width:100%;height:auto;margin:0 0 24px">'
-      f'<div style="line-height:1.6">{html.escape(body).replace(chr(10), "<br>")}</div>'
-      "</div>"
+    html_content = render_base_email(
+      html_body if html_body is not None else render_plain_text_email(body)
     )
-    message.add_alternative(html_body, subtype="html")
+    message.add_alternative(html_content, subtype="html")
     html_part = message.get_payload()[-1]
     html_part.add_related(
       LOGO_PATH.read_bytes(),

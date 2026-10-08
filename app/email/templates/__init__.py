@@ -1,0 +1,1 @@
+"""Reusable email layouts and subject-specific content."""
