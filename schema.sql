@@ -626,6 +626,7 @@ CREATE TABLE public.documents (
     title character varying(200) NOT NULL,
     description text,
     customer_id uuid,
+    booking_id uuid,
     uploaded_at timestamp with time zone DEFAULT now() NOT NULL,
     file_url character varying(1000) NOT NULL,
     file_name character varying(255) NOT NULL,
@@ -1981,6 +1982,13 @@ CREATE INDEX ix_documents_customer_id ON public.documents USING btree (customer_
 
 
 --
+-- Name: ix_documents_booking_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX ix_documents_booking_id ON public.documents USING btree (booking_id);
+
+
+--
 -- Name: ix_documents_deleted_by_account_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -2676,6 +2684,14 @@ ALTER TABLE ONLY public.customer_profiles
 
 ALTER TABLE ONLY public.documents
     ADD CONSTRAINT documents_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.accounts(id) ON DELETE SET NULL;
+
+
+--
+-- Name: documents documents_booking_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.documents
+    ADD CONSTRAINT documents_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id) ON DELETE SET NULL;
 
 
 --

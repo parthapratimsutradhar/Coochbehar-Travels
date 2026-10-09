@@ -11,7 +11,7 @@ compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
 
 from app.core.enums import AccountRole, FinancialTransactionType
 from app.db.database import get_db
-from app.main import app
+from app.main import fastapi_app as app
 from app.models.account import Account
 from app.models.base import Base
 from app.utils.security import create_access_token

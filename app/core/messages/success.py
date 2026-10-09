@@ -1,6 +1,10 @@
 from enum import StrEnum
 
 
+class CommonSuccess(StrEnum):
+    ITEMS_RETRIEVED = "Items fetched successfully"
+
+
 class UserSuccess(StrEnum):
     RETRIEVED = "Accounts retrieved successfully."
     CREATED = "User created successfully."

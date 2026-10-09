@@ -1,35 +1,10 @@
 import uuid
 from datetime import datetime
 
-from pydantic import ConfigDict, Field
+from pydantic import Field
 from app.schemas.base import SchemaBase
 
 from app.core.enums import DocumentType
-
-
-class DocumentResponse(SchemaBase):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    document_type: DocumentType
-    title: str
-    description: str | None = None
-    customer_id: uuid.UUID | None = None
-    customer_name: str | None = None
-    customer_profile_pic: str | None = None
-    uploaded_by_customer_id: uuid.UUID | None = None
-    uploaded_by_user_id: uuid.UUID | None = None
-    uploaded_by_account_id: uuid.UUID | None = None
-    uploader_name: str | None = None
-    uploader_profile_pic: str | None = None
-    uploaded_at: datetime
-    file_url: str
-    file_name: str
-    mime_type: str | None = None
-    file_size: int | None = None
-    uploaded_by: str
-    can_delete: bool = False
-    type: str = None # "incoming" for customer uploads, "outgoing" for admin uploads
 
 
 class CustomerDocumentListResponse(SchemaBase):
@@ -37,17 +12,25 @@ class CustomerDocumentListResponse(SchemaBase):
     document_type: DocumentType
     title: str
     description: str | None = None
-    customer_id: uuid.UUID | None = None
-    customer_name: str | None = None
-    customer_profile_pic: str | None = None
     uploaded_by_account_id: uuid.UUID | None = None
     uploader_name: str | None = None
     uploader_profile_pic: str | None = None
     uploaded_at: datetime
-    file_url: str
-    file_name: str
-    mime_type: str | None = None
-    file_size: int | None = None
+    type: str
+    can_delete: bool = False
+
+
+class BookingDocumentListResponse(SchemaBase):
+    id: uuid.UUID
+    document_type: DocumentType
+    booking_id: uuid.UUID
+    booking_code: str
+    title: str
+    description: str | None = None
+    uploaded_by_account_id: uuid.UUID | None = None
+    uploader_name: str | None = None
+    uploader_profile_pic: str | None = None
+    uploaded_at: datetime
     type: str
     can_delete: bool = False
 
@@ -64,16 +47,30 @@ class AdminDocumentResponse(SchemaBase):
     uploader_name: str | None = None
     uploader_profile_pic: str | None = None
     uploaded_at: datetime
-    file_url: str
-    file_name: str
-    mime_type: str | None = None
-    file_size: int | None = None
+    type: str
+    is_active: bool
+    
+class AdminBookingDocumentResponse(SchemaBase):
+    id: uuid.UUID
+    document_type: DocumentType
+    title: str
+    description: str | None = None
+    booking_id: uuid.UUID
+    booking_code: str
+    customer_id: uuid.UUID | None = None
+    customer_name: str | None = None
+    customer_profile_pic: str | None = None
+    uploaded_by_account_id: uuid.UUID | None = None
+    uploader_name: str | None = None
+    uploader_profile_pic: str | None = None
+    uploaded_at: datetime
     type: str
     is_active: bool
 
 
 class AdminDocumentUploadRequest(SchemaBase):
-    customer_id: uuid.UUID
+    customer_id: uuid.UUID | None = None
+    booking_id: uuid.UUID | None = None
     file: str = Field(..., min_length=1, description="Temporary upload API URL or relative path")
     file_name: str = Field(default="document", min_length=1, max_length=255)
     document_type: DocumentType

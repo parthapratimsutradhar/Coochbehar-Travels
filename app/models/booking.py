@@ -275,3 +275,8 @@ class Booking(BaseEntity):
         cascade="all, delete-orphan",
         order_by="TripItinerary.day_number",
     )
+
+    documents = relationship(
+        "Document",
+        back_populates="booking",
+    )

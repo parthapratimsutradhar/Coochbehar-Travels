@@ -6,14 +6,16 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_customer
 from app.core.enums import DocumentType
+from app.core.messages.success import CommonSuccess
 from app.db.database import get_db
 from app.models.account import Account
 from app.schemas.document import (
+	BookingDocumentListResponse,
 	CustomerDocumentListResponse,
 	CustomerDocumentUploadRequest,
 )
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
-from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
+from app.schemas.response import ActionResponse, ErrorResponse
 from app.services.customer_document_service import CustomerDocumentService
 
 router = APIRouter(
@@ -27,11 +29,11 @@ router = APIRouter(
 	response_model=PaginatedResponse[CustomerDocumentListResponse],
 	responses={401: {"model": ErrorResponse}},
 	summary="List the customer's documents",
-	description="Return active documents belonging to the authenticated customer, including customer and admin uploads.",
+	description="Return active ID_PROOF and ADDRESS_PROOF documents for the authenticated customer.",
 )
 def list_documents(
 	page: int = Query(1, ge=1),
-	page_size: int = Query(10, ge=1, le=100),
+	page_size: int = Query(50, ge=1, le=100),
 	document_type: DocumentType | None = Query(None),
 	uploaded_by: str | None = Query(None, pattern="^(CUSTOMER|ADMIN)$"),
 	current_customer: Account = Depends(get_current_customer),
@@ -45,7 +47,7 @@ def list_documents(
 		uploaded_by=uploaded_by,
 	)
 	return PaginatedResponse(
-		message="Items fetched successfully",
+		message=CommonSuccess.ITEMS_RETRIEVED,
 		data=items,
 		pagination=PaginationMeta(
 			current_page=page,
@@ -57,6 +59,38 @@ def list_documents(
 		),
 	)
 
+
+@router.get(
+	"/booking",
+	response_model=PaginatedResponse[BookingDocumentListResponse],
+	responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+	summary="List booking documents, optionally filtered by booking",
+)
+def list_booking_documents(
+	page: int = Query(1, ge=1),
+	page_size: int = Query(50, ge=1, le=100),
+	booking_id: uuid.UUID | None = Query(None),
+	current_customer: Account = Depends(get_current_customer),
+	db: Session = Depends(get_db),
+) -> PaginatedResponse[BookingDocumentListResponse]:
+	items, total_items, total_pages = CustomerDocumentService(db).list_booking_documents(
+		customer_id=current_customer.id,
+		page=page,
+		page_size=page_size,
+		booking_id=booking_id,
+	)
+	return PaginatedResponse(
+		message=CommonSuccess.ITEMS_RETRIEVED,
+		data=items,
+		pagination=PaginationMeta(
+			current_page=page,
+			page_size=page_size,
+			total_items=total_items,
+			total_pages=total_pages,
+			has_next=page < total_pages,
+			has_previous=page > 1,
+		),
+	)
 
 @router.get(
 	"/{document_id}/download",

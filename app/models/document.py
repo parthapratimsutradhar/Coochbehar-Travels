@@ -67,6 +67,15 @@ class Document(ActiveEntity):
         index=True,
     )
 
+    booking_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "bookings.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
     uploaded_by_account_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(
             "accounts.id",
@@ -122,6 +131,11 @@ class Document(ActiveEntity):
         "Account",
         foreign_keys=[customer_id],
         back_populates="documents_owned",
+    )
+
+    booking = relationship(
+        "Booking",
+        back_populates="documents",
     )
 
     uploaded_by_account = relationship(

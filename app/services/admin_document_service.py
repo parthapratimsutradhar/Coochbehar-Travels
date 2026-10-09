@@ -5,11 +5,15 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.core.enums import AccountRole
+from app.core.enums import AccountRole, BOOKING_DOCUMENT_TYPES, DocumentType
 from app.models.account import Account
 from app.models.document import Document
 from app.repository.document_repo import DocumentRepository
-from app.schemas.document import AdminDocumentResponse, DocumentResponse, DocumentUpdate
+from app.schemas.document import (
+    AdminBookingDocumentResponse,
+    AdminDocumentResponse,
+    DocumentUpdate,
+)
 from app.services.cdn_service import (
     get_private_document_path,
     promote_cdn_asset,
@@ -38,11 +42,13 @@ class AdminDocumentService:
         return None, None
 
     @staticmethod
-    def _serialize(document: Document) -> AdminDocumentResponse:
+    def _serialize(
+        document: Document,
+    ) -> AdminDocumentResponse | AdminBookingDocumentResponse:
         uploader = document.uploaded_by_account
         customer_upload = uploader is not None and uploader.role == AccountRole.CUSTOMER
         download_url = f"/api/v1/admin/documents/{document.id}/download"
-        return AdminDocumentResponse(
+        data = dict(
             id=document.id, document_type=document.document_type, title=document.title,
             description=document.description, customer_id=document.customer_id,
             customer_name=document.customer.name if document.customer else None,
@@ -54,6 +60,13 @@ class AdminDocumentService:
             type="incoming" if customer_upload else "outgoing",
             is_active=document.is_active,
         )
+        if document.booking is not None:
+            return AdminBookingDocumentResponse(
+                **data,
+                booking_id=document.booking_id,
+                booking_code=document.booking.booking_code,
+            )
+        return AdminDocumentResponse(**data)
 
     def list_documents(self, current_user: Account, **filters: object) -> dict:
         start, end = self._date_bounds(filters.pop("from_date"), filters.pop("to_date"))
@@ -66,16 +79,26 @@ class AdminDocumentService:
             "page": page, "page_size": page_size, "total_items": total, "total_pages": total_pages,
         }
 
-    async def upload(self, customer_id: uuid.UUID, file: UploadFile, current_user: Account, **data: object) -> AdminDocumentResponse:
-        if not self.repo.get_customer(customer_id):
-            raise HTTPException(status_code=404, detail="Customer not found.")
+    async def upload(
+        self,
+        customer_id: uuid.UUID | None,
+        file: UploadFile,
+        current_user: Account,
+        booking_id: uuid.UUID | None = None,
+        **data: object,
+    ) -> AdminDocumentResponse:
+        document_type = data.get("document_type")
+        if not isinstance(document_type, DocumentType):
+            raise HTTPException(status_code=422, detail="A valid document type is required.")
+        customer_id = self._resolve_customer_id(customer_id, booking_id, document_type)
         result = await upload_file_to_cdn(file=file)
         promoted = await promote_cdn_asset(
             result["url"],
             "private/admin-documents",
         )
         document = self.repo.create(
-            **data, customer_id=customer_id, uploaded_by_account_id=current_user.id,
+            **data, customer_id=customer_id, booking_id=booking_id,
+            uploaded_by_account_id=current_user.id,
             file_url=promoted["path"], file_name=file.filename or "document",
             mime_type=file.content_type, file_size=result.get("bytes"),
         )
@@ -83,22 +106,45 @@ class AdminDocumentService:
 
     async def upload_from_url(
         self,
-        customer_id: uuid.UUID,
+        customer_id: uuid.UUID | None,
         url_or_id: str,
         current_user: Account,
+        document_type: DocumentType,
+        booking_id: uuid.UUID | None = None,
         file_name: str = "document",
         mime_type: str | None = None,
         **data: object,
     ) -> AdminDocumentResponse:
-        if not self.repo.get_customer(customer_id):
-            raise HTTPException(status_code=404, detail="Customer not found.")
+        customer_id = self._resolve_customer_id(customer_id, booking_id, document_type)
         promoted = await promote_cdn_asset(url_or_id, "private/admin-documents")
         document = self.repo.create(
-            **data, customer_id=customer_id, uploaded_by_account_id=current_user.id,
+            **data, customer_id=customer_id, booking_id=booking_id,
+            uploaded_by_account_id=current_user.id,
             file_url=promoted["path"], file_name=file_name,
             mime_type=mime_type or "application/octet-stream", file_size=None,
         )
         return self._serialize(document)
+
+    def _resolve_customer_id(
+        self,
+        customer_id: uuid.UUID | None,
+        booking_id: uuid.UUID | None,
+        document_type: DocumentType,
+    ) -> uuid.UUID:
+        if document_type in BOOKING_DOCUMENT_TYPES and booking_id is None:
+            raise HTTPException(status_code=422, detail="A booking is required for this document type.")
+
+        if booking_id is not None:
+            booking = self.repo.get_booking(booking_id)
+            if booking is None or (customer_id is not None and booking.customer_id != customer_id):
+                raise HTTPException(status_code=404, detail="Booking not found for this customer.")
+            customer_id = customer_id or booking.customer_id
+
+        if customer_id is None:
+            raise HTTPException(status_code=422, detail="A customer or booking is required.")
+        if not self.repo.get_customer(customer_id):
+            raise HTTPException(status_code=404, detail="Customer not found.")
+        return customer_id
 
     def get_file(self, document_id: uuid.UUID) -> tuple[Document, Path]:
         document = self.repo.get_active_by_id(document_id)
@@ -110,7 +156,16 @@ class AdminDocumentService:
         document = self.repo.get_active_by_id(document_id)
         if not document:
             raise HTTPException(status_code=404, detail="Active document not found.")
-        self.repo.update(document, payload.model_dump(exclude_unset=True))
+        changes = payload.model_dump(exclude_unset=True)
+        if (
+            changes.get("document_type") in BOOKING_DOCUMENT_TYPES
+            and document.booking_id is None
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="A booking is required for this document type.",
+            )
+        self.repo.update(document, changes)
 
     def bulk_delete(self, document_ids: list[uuid.UUID], current_user: Account) -> int:
         documents = self.repo.list_active_by_ids(document_ids)

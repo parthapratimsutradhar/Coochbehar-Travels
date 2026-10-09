@@ -149,7 +149,20 @@ class DocumentType(AppEnum):
     ID_PROOF = "ID_PROOF"
     ADDRESS_PROOF = "ADDRESS_PROOF"
     TOUR_DOCUMENT = "TOUR_DOCUMENT"
-    OTHER = "OTHER"    
+    FLIGHT_TICKET = "FLIGHT_TICKET"
+    TRAIN_TICKET = "TRAIN_TICKET"
+    HOTEL_VOUCHER = "HOTEL_VOUCHER"
+    OTHER = "OTHER"
+
+
+IDENTITY_DOCUMENT_TYPES = (DocumentType.ID_PROOF, DocumentType.ADDRESS_PROOF)
+BOOKING_DOCUMENT_TYPES = (
+    DocumentType.TOUR_DOCUMENT,
+    DocumentType.FLIGHT_TICKET,
+    DocumentType.TRAIN_TICKET,
+    DocumentType.HOTEL_VOUCHER,
+    DocumentType.OTHER,
+)
     
     
 class OfferDiscountType(AppEnum):

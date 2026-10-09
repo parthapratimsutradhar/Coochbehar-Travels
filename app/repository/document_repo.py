@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.enums import AccountRole, DocumentType
 from app.models.account import Account
+from app.models.booking import Booking
 from app.models.document import Document
 
 
@@ -23,10 +24,14 @@ class DocumentRepository:
         document_status: str = "active",
         customer_id: uuid.UUID | None = None,
         uploaded_by: str | None = None,
+        document_types: tuple[DocumentType, ...] | None = None,
+        booking_id: uuid.UUID | None = None,
+        booking_required: bool = False,
     ) -> tuple[list[Document], int]:
         stmt = select(Document).options(
             joinedload(Document.customer),
             joinedload(Document.uploaded_by_account),
+            joinedload(Document.booking),
         )
         if document_status == "active":
             stmt = stmt.where(Document.is_active.is_(True))
@@ -36,6 +41,12 @@ class DocumentRepository:
             stmt = stmt.where(Document.customer_id == customer_id)
         if document_type:
             stmt = stmt.where(Document.document_type == document_type)
+        if document_types is not None:
+            stmt = stmt.where(Document.document_type.in_(document_types))
+        if booking_id is not None:
+            stmt = stmt.where(Document.booking_id == booking_id)
+        elif booking_required:
+            stmt = stmt.where(Document.booking_id.is_not(None))
         if uploaded_by:
             role = AccountRole.CUSTOMER if uploaded_by == "CUSTOMER" else AccountRole.ADMIN
             stmt = stmt.join(Document.uploaded_by_account).where(
@@ -58,6 +69,7 @@ class DocumentRepository:
             .options(
                 joinedload(Document.customer),
                 joinedload(Document.uploaded_by_account),
+                joinedload(Document.booking),
             )
             .where(Document.id == document_id)
         ).unique().scalar_one_or_none()
@@ -68,6 +80,7 @@ class DocumentRepository:
             .options(
                 joinedload(Document.customer),
                 joinedload(Document.uploaded_by_account),
+                joinedload(Document.booking),
             )
             .where(Document.id == document_id, Document.is_active.is_(True))
         ).unique().scalar_one_or_none()
@@ -79,6 +92,11 @@ class DocumentRepository:
                 Account.role == AccountRole.CUSTOMER,
                 Account.is_active.is_(True),
             )
+        ).scalar_one_or_none()
+
+    def get_booking(self, booking_id: uuid.UUID) -> Booking | None:
+        return self.db.execute(
+            select(Booking).where(Booking.id == booking_id)
         ).scalar_one_or_none()
 
     def create(self, **data: object) -> Document:

@@ -8,11 +8,12 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.deps import get_current_admin, get_current_customer
-from app.core.enums import AccountRole, DocumentType
+from app.core.enums import AccountRole, BookingSource, BookingStatus, DocumentType, TourType
 from app.db.database import get_db
-from app.main import app
+from app.main import fastapi_app as app
 from app.models.account import Account
 from app.models.base import Base
+from app.models.booking import Booking
 from app.models.document import Document
 from app.services import customer_document_service as customer_document_service_module
 from app.services import cdn_service
@@ -72,12 +73,21 @@ def create_account(db, role=AccountRole.CUSTOMER, email="user@example.com"):
     return account
 
 
-def create_document(db, customer_id, uploaded_by_id, file_name="passport.pdf", file_url="mock://storage/file.pdf"):
+def create_document(
+    db,
+    customer_id,
+    uploaded_by_id,
+    file_name="passport.pdf",
+    file_url="mock://storage/file.pdf",
+    booking_id=None,
+    document_type=DocumentType.ID_PROOF,
+):
     doc = Document(
         id=uuid.uuid4(),
         customer_id=customer_id,
         uploaded_by_account_id=uploaded_by_id,
-        document_type=DocumentType.ID_PROOF,
+        booking_id=booking_id,
+        document_type=document_type,
         title="Passport Copy",
         file_name=file_name,
         file_url=file_url,
@@ -91,7 +101,7 @@ def create_document(db, customer_id, uploaded_by_id, file_name="passport.pdf", f
     return doc
 
 
-def test_customer_list_returns_backend_url_and_download_returns_private_blob(
+def test_customer_list_and_download_returns_private_blob(
     client, db_session, tmp_path, monkeypatch
 ):
     customer = create_account(db_session, AccountRole.CUSTOMER, "cust3@example.com")
@@ -110,11 +120,12 @@ def test_customer_list_returns_backend_url_and_download_returns_private_blob(
 
     app.dependency_overrides[get_current_customer] = lambda: customer
     try:
-        # 1. Listings expose only the authenticated API download path.
+        # 1. Listings expose document metadata without file details.
         list_res = client.get("/api/v1/documents")
         assert list_res.status_code == 200
         doc_item = list_res.json()["data"][0]
-        assert doc_item["file_url"] == f"/api/v1/documents/{doc.id}/download"
+        assert doc_item["id"] == str(doc.id)
+        assert not {"file_url", "file_name", "mime_type", "file_size"} & doc_item.keys()
 
         # 2. The customer endpoint streams the file with private cache headers.
         dl_res = client.get(f"/api/v1/documents/{doc.id}/download")
@@ -143,17 +154,10 @@ def test_customer_list_returns_requested_document_fields(client, db_session):
             "document_type",
             "title",
             "description",
-            "customer_id",
-            "customer_name",
-            "customer_profile_pic",
             "uploaded_by_account_id",
             "uploader_name",
             "uploader_profile_pic",
             "uploaded_at",
-            "file_url",
-            "file_name",
-            "mime_type",
-            "file_size",
             "type",
             "can_delete",
         }
@@ -247,14 +251,14 @@ def test_admin_can_download_private_document_without_public_cache(
     assert response.headers["cache-control"] == "private, no-store"
 
 
-def test_admin_document_list_returns_accessible_protected_file_url(
+def test_admin_document_list_and_download_returns_protected_file(
     client, db_session, tmp_path, monkeypatch
 ):
     customer = create_account(db_session, AccountRole.CUSTOMER, "admin-list-owner@example.com")
     admin = create_account(db_session, AccountRole.ADMIN, "admin-list-user@example.com")
     private_folder = tmp_path / "private" / "admin-documents"
     private_folder.mkdir(parents=True)
-    filename = "private-document.pdf"
+    filename = f"{uuid.uuid4().hex}.pdf"
     (private_folder / filename).write_bytes(b"protected document content")
     monkeypatch.setattr(cdn_service, "CDN_ROOT", tmp_path)
     doc = create_document(
@@ -266,28 +270,149 @@ def test_admin_document_list_returns_accessible_protected_file_url(
 
     app.dependency_overrides[get_current_admin] = lambda: admin
     try:
-        response = client.get("/api/v1/admin/documents")
+        response = client.get("/api/v1/admin/documents/identity")
     finally:
         app.dependency_overrides.pop(get_current_admin, None)
 
     assert response.status_code == 200
     document = response.json()["data"][0]
     assert document["id"] == str(doc.id)
-    assert document["file_url"] == (
-        f"http://testserver/api/v1/admin/documents/{doc.id}/download"
-    )
+    assert not {"file_url", "file_name", "mime_type", "file_size"} & document.keys()
 
-    unauthenticated = client.get(document["file_url"])
+    download_url = f"/api/v1/admin/documents/{doc.id}/download"
+    unauthenticated = client.get(download_url)
     assert unauthenticated.status_code == 401
 
     app.dependency_overrides[get_current_admin] = lambda: admin
     try:
-        download = client.get(document["file_url"])
+        download = client.get(download_url)
     finally:
         app.dependency_overrides.pop(get_current_admin, None)
 
     assert download.status_code == 200
     assert download.content == b"protected document content"
+
+
+def test_admin_can_list_documents_by_booking_id(client, db_session):
+    customer = create_account(db_session, AccountRole.CUSTOMER, "booking-doc-owner@example.com")
+    admin = create_account(db_session, AccountRole.ADMIN, "booking-doc-admin@example.com")
+    booking = Booking(
+        booking_code="BK-DOC-1",
+        customer_id=customer.id,
+        booking_type=TourType.DOMESTIC,
+        source=BookingSource.WEBSITE,
+        status=BookingStatus.CONFIRMED,
+        adult_count=1,
+        child_count=0,
+        senior_count=0,
+        subtotal=1000,
+        discount_amount=0,
+        total_amount=1000,
+        paid_amount=0,
+        due_amount=1000,
+        created_by=admin.id,
+    )
+    other_booking = Booking(
+        booking_code="BK-DOC-2",
+        customer_id=customer.id,
+        booking_type=TourType.DOMESTIC,
+        source=BookingSource.WEBSITE,
+        status=BookingStatus.CONFIRMED,
+        adult_count=1,
+        child_count=0,
+        senior_count=0,
+        subtotal=1000,
+        discount_amount=0,
+        total_amount=1000,
+        paid_amount=0,
+        due_amount=1000,
+        created_by=admin.id,
+    )
+    db_session.add_all([booking, other_booking])
+    db_session.commit()
+    expected = create_document(
+        db_session,
+        customer.id,
+        admin.id,
+        booking_id=booking.id,
+        document_type=DocumentType.TOUR_DOCUMENT,
+    )
+    create_document(
+        db_session,
+        customer.id,
+        admin.id,
+        booking_id=other_booking.id,
+        document_type=DocumentType.TOUR_DOCUMENT,
+    )
+
+    app.dependency_overrides[get_current_admin] = lambda: admin
+    try:
+        response = client.get(
+            "/api/v1/admin/documents/booking",
+            params={"booking_id": str(booking.id)},
+        )
+    finally:
+        app.dependency_overrides.pop(get_current_admin, None)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload["data"]] == [str(expected.id)]
+    assert payload["data"][0]["booking_id"] == str(booking.id)
+
+
+def test_customer_booking_documents_can_be_filtered_by_booking_id(client, db_session):
+    customer = create_account(db_session, AccountRole.CUSTOMER, "customer-booking-docs@example.com")
+    admin = create_account(db_session, AccountRole.ADMIN, "booking-docs-admin@example.com")
+    bookings = [
+        Booking(
+            booking_code=f"BK-CUST-DOC-{number}",
+            customer_id=customer.id,
+            booking_type=TourType.DOMESTIC,
+            source=BookingSource.WEBSITE,
+            status=BookingStatus.CONFIRMED,
+            adult_count=1,
+            child_count=0,
+            senior_count=0,
+            subtotal=1000,
+            discount_amount=0,
+            total_amount=1000,
+            paid_amount=0,
+            due_amount=1000,
+            created_by=admin.id,
+        )
+        for number in (1, 2)
+    ]
+    db_session.add_all(bookings)
+    db_session.commit()
+    documents = [
+        create_document(
+            db_session,
+            customer.id,
+            customer.id,
+            booking_id=booking.id,
+            document_type=DocumentType.TOUR_DOCUMENT,
+        )
+        for booking in bookings
+    ]
+
+    app.dependency_overrides[get_current_customer] = lambda: customer
+    try:
+        all_response = client.get("/api/v1/documents/booking")
+        filtered_response = client.get(
+            "/api/v1/documents/booking",
+            params={"booking_id": str(bookings[0].id)},
+        )
+    finally:
+        app.dependency_overrides.pop(get_current_customer, None)
+
+    assert all_response.status_code == 200
+    assert {item["id"] for item in all_response.json()["data"]} == {
+        str(document.id) for document in documents
+    }
+    assert filtered_response.status_code == 200
+    assert [item["id"] for item in filtered_response.json()["data"]] == [
+        str(documents[0].id)
+    ]
 
 
 def test_customer_documents_tab_builds_valid_payload(db_session):
@@ -308,5 +433,6 @@ def test_customer_documents_tab_builds_valid_payload(db_session):
     item = payload["items"][0]
     assert item["id"] == str(doc.id)
     assert item["uploaded_by_account_id"] == str(admin.id)
-    assert item["uploaded_by"] == "ADMIN"
     assert item["type"] == "incoming"
+    assert item["can_delete"] is False
+    assert not {"file_url", "file_name", "mime_type", "file_size", "uploaded_by"} & item.keys()

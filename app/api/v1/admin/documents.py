@@ -8,29 +8,56 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin, get_current_admin_only
-from app.core.enums import DocumentType
+from app.core.enums import BOOKING_DOCUMENT_TYPES, IDENTITY_DOCUMENT_TYPES, DocumentType
+from app.core.messages.success import CommonSuccess
 from app.db.database import get_db
 from app.models.account import Account
 from app.schemas.document import (
+    AdminBookingDocumentResponse,
     AdminDocumentResponse,
     AdminDocumentUploadRequest,
     BulkDeleteDocumentsRequest,
     DocumentUpdate,
 )
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
-from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
+from app.schemas.response import ActionResponse, ErrorResponse
 from app.services.admin_document_service import AdminDocumentService
 
 
 router = APIRouter(prefix="/admin/documents", tags=["Admin - Documents"])
 
 
+def _paginated_documents_response(request: Request, result: dict, page: int, page_size: int):
+    total_pages = result["total_pages"]
+    items = [
+        item.model_copy(
+            update={
+                "file_url": str(request.url_for("download_document", document_id=item.id))
+            }
+        )
+        for item in result["items"]
+    ]
+    return PaginatedResponse(
+        message=CommonSuccess.ITEMS_RETRIEVED,
+        data=items,
+        pagination=PaginationMeta(
+            current_page=page,
+            page_size=page_size,
+            total_items=result["total_items"],
+            total_pages=total_pages,
+            has_next=page < total_pages,
+            has_previous=page > 1,
+        ),
+    )
+
+
 @router.get(
-    "",
-    response_model=PaginatedResponse[AdminDocumentResponse], 
-    responses={401: {"model": ErrorResponse}}
+    "/identity",
+    response_model=PaginatedResponse[AdminDocumentResponse],
+    responses={401: {"model": ErrorResponse}},
+    summary="List identity documents",
 )
-def list_documents(
+def list_identity_documents(
     request: Request,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -44,29 +71,55 @@ def list_documents(
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[AdminDocumentResponse]:
     result = AdminDocumentService(db).list_documents(
-        current_user=current_user, page=page, page_size=page_size,
-        from_date=from_date, to_date=to_date,
-        document_type=document_type, document_status=document_status,
-        customer_id=customer_id, uploaded_by=uploaded_by,
+        current_user=current_user,
+        page=page,
+        page_size=page_size,
+        from_date=from_date,
+        to_date=to_date,
+        document_type=document_type,
+        document_types=IDENTITY_DOCUMENT_TYPES,
+        document_status=document_status,
+        customer_id=customer_id,
+        uploaded_by=uploaded_by,
     )
-    total_pages = result["total_pages"]
-    items = [
-        item.model_copy(
-            update={
-                "file_url": str(
-                    request.url_for("download_document", document_id=item.id)
-                )
-            }
-        )
-        for item in result["items"]
-    ]
-    return PaginatedResponse(
-        message="Items fetched successfully", data=items,
-        pagination=PaginationMeta(
-            current_page=page, page_size=page_size, total_items=result["total_items"],
-            total_pages=total_pages, has_next=page < total_pages, has_previous=page > 1,
-        ),
+    return _paginated_documents_response(request, result, page, page_size)
+
+
+@router.get(
+    "/booking",
+    response_model=PaginatedResponse[AdminBookingDocumentResponse],
+    responses={401: {"model": ErrorResponse}},
+    summary="List booking documents",
+)
+def list_booking_documents(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+    document_type: DocumentType | None = Query(None),
+    document_status: Literal["active", "deleted", "all"] = Query("active", alias="status"),
+    customer_id: uuid.UUID | None = Query(None),
+    booking_id: uuid.UUID | None = Query(None),
+    uploaded_by: Literal["CUSTOMER", "ADMIN"] | None = Query(None),
+    current_user: Account = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> PaginatedResponse[AdminBookingDocumentResponse]:
+    result = AdminDocumentService(db).list_documents(
+        current_user=current_user,
+        page=page,
+        page_size=page_size,
+        from_date=from_date,
+        to_date=to_date,
+        document_type=document_type,
+        document_types=BOOKING_DOCUMENT_TYPES,
+        document_status=document_status,
+        customer_id=customer_id,
+        booking_id=booking_id,
+        booking_required=True,
+        uploaded_by=uploaded_by,
     )
+    return _paginated_documents_response(request, result, page, page_size)
 
 
 @router.get(
@@ -118,15 +171,16 @@ async def upload_customer_document(
     db: Session = Depends(get_db),
 ) -> ActionResponse:
     data = {
-        "document_type": payload.document_type,
         "title": payload.title.strip(),
         "description": payload.description.strip() if payload.description else None,
     }
     mime_type = mimetypes.guess_type(payload.file_name)[0] or "application/octet-stream"
     await AdminDocumentService(db).upload_from_url(
         customer_id=payload.customer_id,
+        booking_id=payload.booking_id,
         url_or_id=payload.file,
         current_user=current_user,
+        document_type=payload.document_type,
         file_name=payload.file_name,
         mime_type=mime_type,
         **data,
