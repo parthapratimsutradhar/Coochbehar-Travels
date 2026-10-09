@@ -188,7 +188,7 @@ class TrackingService:
 
         # Connect visitor event to associated Lead (if enquiry submitted)
         lead = self.scoring_service.find_lead_for_visitor(visitor_id=visitor_id)
-        if lead:
+        if lead and self.scoring_service.is_lead_scoring_active(lead):
             if not self.scoring_service.is_event_farmed(visitor_id, event_name, metadata):
                 delta = self.scoring_service.calculate_event_score(event_name, metadata)
                 if delta > 0:
@@ -223,7 +223,7 @@ class TrackingService:
 
         for vid, ev_list in visitor_events_map.items():
             lead = self.scoring_service.find_lead_for_visitor(visitor_id=vid)
-            if not lead:
+            if not lead or not self.scoring_service.is_lead_scoring_active(lead):
                 continue
 
             total_delta = 0

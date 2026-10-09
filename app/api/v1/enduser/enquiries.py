@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_customer
+from app.api.deps import get_current_customer, get_optional_customer
 from app.db.database import get_db
 from app.core.messages.success import EnquirySuccess
 from app.models.account import Account
@@ -52,9 +52,14 @@ def list_my_enquiries(
 )
 async def create_enquiry(
     payload: EnquiryCreate,
+    current_customer: Account | None = Depends(get_optional_customer),
     db: Session = Depends(get_db),
 ) -> SuccessResponse[EnquiryResponse]:
-    enquiry = await EnquiryService(db).create_fixed_tour_enquiry(payload, create_lead=False)
+    enquiry = await EnquiryService(db).create_fixed_tour_enquiry(
+        payload,
+        create_lead=True,
+        trusted_customer_id=current_customer.id if current_customer else None,
+    )
     return SuccessResponse(
         message=EnquirySuccess.CREATED,
         data=EnquiryResponse.model_validate(enquiry),

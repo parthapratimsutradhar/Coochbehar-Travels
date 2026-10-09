@@ -8,17 +8,29 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType, LeadSource, LeadStatus, AccountRole
+from app.core.enums import (
+    AccountRole,
+    BookingSource,
+    BookingStatus,
+    EnquiryChannel,
+    EnquiryStatus,
+    EnquiryType,
+    LeadSource,
+    LeadStatus,
+    TourType,
+)
 from app.db.database import get_db
 from app.main import app
 from app.models.base import Base
 from app.models.account import Account
+from app.models.booking import Booking
 from app.models.customer_profile import CustomerProfile
 from app.models.enquiry import Enquiry
 from app.models.lead import Lead
 from app.models.lead_activity import LeadActivity
 from app.models.tour_package import TourPackage
 from app.models.visitor import Visitor
+from app.models.visitor_event import VisitorEvent
 from app.models.visitor_session import VisitorSession
 from app.services.lead_scoring_service import LeadScoringService
 from app.services.tracking_service import TrackingService
@@ -121,6 +133,100 @@ def test_calculate_initial_score_minimal_enquiry(db_session):
     assert score == 20
 
 
+def test_history_score_includes_pre_enquiry_visitor_engagement(db_session):
+    visitor = Visitor(visitor_code="VIS-HISTORY01")
+    db_session.add(visitor)
+    db_session.flush()
+    session = VisitorSession(visitor_id=visitor.id)
+    db_session.add(session)
+    db_session.flush()
+    db_session.add(
+        VisitorEvent(
+            visitor_id=visitor.id,
+            session_id=session.id,
+            event_name="tour_package_view",
+            page="/sikkim-explorer",
+            event_metadata={"package_id": "sikkim-explorer"},
+        )
+    )
+    db_session.commit()
+
+    score = LeadScoringService(db_session).calculate_history_score(visitor_id=visitor.id)
+
+    assert score == 5
+
+
+@pytest.mark.parametrize(
+    ("lead_status", "enquiry_status"),
+    [
+        (LeadStatus.CONVERTED, EnquiryStatus.NEW),
+        (LeadStatus.LOST, EnquiryStatus.NEW),
+        (LeadStatus.NEW, EnquiryStatus.CONVERTED),
+        (LeadStatus.NEW, EnquiryStatus.CANCELLED),
+        (LeadStatus.NEW, EnquiryStatus.CLOSED),
+    ],
+)
+def test_terminal_lead_or_enquiry_stops_activity_scoring(db_session, lead_status, enquiry_status):
+    enquiry = Enquiry(
+        enquiry_code=f"ENQ-TERMINAL-{lead_status.value}-{enquiry_status.value}",
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        status=enquiry_status,
+    )
+    db_session.add(enquiry)
+    db_session.flush()
+    lead = Lead(
+        lead_code=f"LEAD-TERMINAL-{lead_status.value}-{enquiry_status.value}",
+        enquiry_id=enquiry.id,
+        lead_score=42,
+        status=lead_status,
+    )
+    db_session.add(lead)
+    db_session.commit()
+
+    assert not LeadScoringService(db_session).is_lead_scoring_active(lead)
+
+
+def test_booking_creation_stops_activity_scoring(db_session):
+    customer = Account(
+        account_code="CUS-BOOKING01",
+        name="Booking Customer",
+        role=AccountRole.CUSTOMER,
+        is_active=True,
+    )
+    db_session.add(customer)
+    db_session.flush()
+    enquiry = Enquiry(
+        enquiry_code="ENQ-BOOKING01",
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        status=EnquiryStatus.NEW,
+    )
+    db_session.add(enquiry)
+    db_session.flush()
+    lead = Lead(lead_code="LEAD-BOOKING01", enquiry_id=enquiry.id, lead_score=42, status=LeadStatus.NEW)
+    db_session.add(lead)
+    db_session.add(
+        Booking(
+            booking_code="BK-BOOKING01",
+            customer_id=customer.id,
+            enquiry_id=enquiry.id,
+            booking_type=TourType.DOMESTIC,
+            source=BookingSource.WEBSITE,
+            status=BookingStatus.CONFIRMED,
+            adult_count=1,
+            child_count=0,
+            senior_count=0,
+            subtotal=0,
+            total_amount=0,
+            created_by=customer.id,
+        )
+    )
+    db_session.commit()
+
+    assert not LeadScoringService(db_session).is_lead_scoring_active(lead)
+
+
 def test_score_boundaries_clamped(db_session):
     """Verify lead score is strictly bounded in [0, 100]."""
     scoring = LeadScoringService(db_session)
@@ -141,13 +247,28 @@ def test_score_boundaries_clamped(db_session):
 
 # ── 3. Enquiry -> Lead Creation Endpoints ─────────────────────────────
 
-def test_visitor_submits_enquiry_without_creating_lead(client: TestClient, db_session):
-    """Visitor submits an enquiry without creating a sales lead."""
+def test_visitor_submits_enquiry_creates_scored_lead(client: TestClient, db_session):
+    """Visitor enquiry creates a sales lead with its initial form score."""
     # Create visitor
     visitor = Visitor(visitor_code="VIS-ENQ01")
     db_session.add(visitor)
+    db_session.flush()
+    session = VisitorSession(visitor_id=visitor.id)
+    db_session.add(session)
     db_session.commit()
     db_session.refresh(visitor)
+
+    event_res = client.post(
+        "/api/v1/visitors/events",
+        json={
+            "visitor_id": str(visitor.id),
+            "session_id": str(session.id),
+            "event_name": "tour_package_view",
+            "page": "/sikkim-explorer",
+            "event_metadata": {"package_id": "sikkim-explorer"},
+        },
+    )
+    assert event_res.status_code == 201
 
     res = client.post(
         "/api/v1/enquiries",
@@ -167,8 +288,8 @@ def test_visitor_submits_enquiry_without_creating_lead(client: TestClient, db_se
     ).scalar_one()
     lead = db_session.execute(
         select(Lead).where(Lead.enquiry_id == enquiry.id)
-    ).scalar_one_or_none()
-    assert lead is None
+    ).scalar_one()
+    assert lead.lead_score == 45
 
 
 def test_customer_submits_custom_tour_creates_lead(client: TestClient, db_session, monkeypatch):

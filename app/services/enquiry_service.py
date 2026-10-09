@@ -3,6 +3,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType, LeadStatus
+from app.models.account import Account
 from app.models.enquiry import Enquiry
 from app.models.lead import Lead
 from app.models.tour_package import TourPackage
@@ -34,8 +35,10 @@ class EnquiryService:
         self,
         payload: EnquiryCreate,
         create_lead: bool = True,
+        trusted_customer_id: uuid.UUID | None = None,
     ) -> Enquiry:
-        customer = self._resolve_customer(payload.mobile, payload.email)
+        customer = self.db.get(Account, trusted_customer_id) if trusted_customer_id else None
+        customer = customer or self._resolve_customer(payload.mobile, payload.email)
         enquiry_code = f"ENQ-{uuid.uuid4().hex[:8].upper()}"
         enquiry = self.enquiry_repo.create(
             enquiry_code=enquiry_code,
@@ -69,6 +72,12 @@ class EnquiryService:
         emit_enquiry_created(enquiry)
         if create_lead:
             initial_score = self.scoring_service.calculate_initial_score(enquiry)
+            initial_score += self.scoring_service.calculate_history_score(
+                visitor_id=enquiry.visitor_id,
+                customer_id=customer.id if customer else None,
+                exclude_enquiry_id=enquiry.id,
+            )
+            initial_score = min(100, initial_score)
             lead_code = f"LEAD-{uuid.uuid4().hex[:8].upper()}"
             lead = self.lead_repo.create(
                 lead_code=lead_code,
@@ -132,6 +141,12 @@ class EnquiryService:
         )
 
         initial_score = self.scoring_service.calculate_initial_score(enquiry)
+        initial_score += self.scoring_service.calculate_history_score(
+            visitor_id=enquiry.visitor_id,
+            customer_id=customer.id if customer else None,
+            exclude_enquiry_id=enquiry.id,
+        )
+        initial_score = min(100, initial_score)
         lead_code = f"LEAD-{uuid.uuid4().hex[:8].upper()}"
         lead = self.lead_repo.create(
             lead_code=lead_code,

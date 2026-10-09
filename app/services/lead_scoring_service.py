@@ -19,9 +19,12 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.enums import BookingStatus, EnquiryStatus, LeadStatus
+from app.models.booking import Booking
 from app.models.enquiry import Enquiry
 from app.models.lead import Lead
 from app.models.lead_activity import LeadActivity
+from app.models.visitor import Visitor
 from app.models.visitor_event import VisitorEvent
 
 logger = logging.getLogger(__name__)
@@ -50,6 +53,13 @@ MEANINGFUL_EVENT_SCORES: dict[str, int] = {
     "enquiry_started": 5,
     "quote_view": 8,
     "booking_page_view": 8,
+    "page_view": 1,
+    "destination_view": 3,
+    "scroll_depth_50": 1,
+    "scroll_depth_75": 2,
+    "scroll_depth_100": 3,
+    "time_on_page_30s": 2,
+    "time_on_page_60s": 3,
     
     # Conversion events (if tracked via telemetry)
     "enquiry_submit": 25,
@@ -64,11 +74,6 @@ NON_SCORING_EVENTS: set[str] = {
     "session_start",
     "session_end",
     "session_update",
-    "scroll_depth_50",
-    "scroll_depth_75",
-    "scroll_depth_100",
-    "time_on_page_30s",
-    "time_on_page_60s",
     "video_play",
     "login",
     "signup",
@@ -99,6 +104,13 @@ EVENT_DAILY_CAP: dict[str, int] = {
     "phone_click": 16,
     "enquiry_form_open": 10,
     "enquiry_form_fill": 16,
+    "page_view": 10,
+    "destination_view": 9,
+    "scroll_depth_50": 3,
+    "scroll_depth_75": 3,
+    "scroll_depth_100": 3,
+    "time_on_page_30s": 4,
+    "time_on_page_60s": 3,
 }
 DEFAULT_DAILY_CAP: int = 20
 
@@ -166,6 +178,82 @@ class LeadScoringService:
             score += 5
 
         return max(0, min(100, score))
+
+    def calculate_history_score(
+        self,
+        *,
+        visitor_id: uuid.UUID | None = None,
+        customer_id: uuid.UUID | None = None,
+        exclude_enquiry_id: uuid.UUID | None = None,
+    ) -> int:
+        """Score recent engagement and verified customer history for a new lead."""
+        visitor_ids = {visitor_id} if visitor_id else set()
+        if customer_id:
+            visitor_ids.update(
+                self.db.execute(
+                    select(Visitor.id).where(Visitor.customer_id == customer_id)
+                ).scalars().all()
+            )
+
+        engagement_score = 0
+        if visitor_ids:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+            events = self.db.execute(
+                select(VisitorEvent)
+                .where(
+                    VisitorEvent.visitor_id.in_(visitor_ids),
+                    VisitorEvent.created_at >= cutoff,
+                )
+                .order_by(VisitorEvent.created_at.desc())
+            ).scalars().all()
+
+            unique_scores: dict[tuple[str, str], int] = {}
+            for event in events:
+                event_name = event.event_name.lower().strip()
+                if event_name in {"enquiry_submit", "booking_enquiry", "custom_tour_request"}:
+                    continue
+                delta = self.calculate_event_score(event_name, event.event_metadata)
+                if delta <= 0:
+                    continue
+                metadata = event.event_metadata if isinstance(event.event_metadata, dict) else {}
+                resource = (
+                    metadata.get("package_id")
+                    or metadata.get("destination_id")
+                    or metadata.get("slug")
+                    or metadata.get("url")
+                    or event.page
+                    or str(event.session_id)
+                )
+                unique_scores.setdefault((event_name, str(resource)), delta)
+            engagement_score = min(25, sum(unique_scores.values()))
+
+        if not customer_id:
+            return engagement_score
+
+        booking_count = self.db.execute(
+            select(func.count(Booking.id)).where(
+                Booking.customer_id == customer_id,
+                Booking.status.in_(
+                    [
+                        BookingStatus.CONFIRMED,
+                        BookingStatus.PARTIALLY_PAID,
+                        BookingStatus.FULLY_PAID,
+                        BookingStatus.TRAVELLED,
+                        BookingStatus.COMPLETED,
+                    ]
+                ),
+            )
+        ).scalar_one() or 0
+        previous_enquiries = self.db.execute(
+            select(func.count(Enquiry.id)).where(
+                Enquiry.customer_id == customer_id,
+                Enquiry.id != exclude_enquiry_id if exclude_enquiry_id else True,
+            )
+        ).scalar_one() or 0
+
+        purchase_score = min(24, booking_count * 8)
+        enquiry_history_score = min(9, previous_enquiries * 3)
+        return min(40, engagement_score + purchase_score + enquiry_history_score)
 
     # ── Event Delta Scoring ───────────────────────────────────────────
 
@@ -301,6 +389,24 @@ class LeadScoringService:
         actual_delta = new_score - prev_score
         lead.lead_score = new_score
         return prev_score, new_score, actual_delta
+
+    def is_lead_scoring_active(self, lead: Lead) -> bool:
+        """Return whether visitor activity may still change this lead's score."""
+        if lead.status in {LeadStatus.CONVERTED, LeadStatus.LOST}:
+            return False
+
+        enquiry = lead.enquiry
+        if not enquiry or enquiry.status in {
+            EnquiryStatus.CONVERTED,
+            EnquiryStatus.CANCELLED,
+            EnquiryStatus.CLOSED,
+        }:
+            return False
+
+        booking_exists = self.db.execute(
+            select(Booking.id).where(Booking.enquiry_id == enquiry.id).limit(1)
+        ).scalar_one_or_none()
+        return booking_exists is None
 
     def find_lead_for_visitor(
         self,
