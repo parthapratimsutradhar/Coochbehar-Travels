@@ -119,6 +119,7 @@ class AdminDocumentService:
         promoted = await promote_cdn_asset(url_or_id, "private/admin-documents")
         document = self.repo.create(
             **data, customer_id=customer_id, booking_id=booking_id,
+            document_type=document_type,
             uploaded_by_account_id=current_user.id,
             file_url=promoted["path"], file_name=file_name,
             mime_type=mime_type or "application/octet-stream", file_size=None,

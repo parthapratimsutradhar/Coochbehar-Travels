@@ -204,6 +204,65 @@ def test_customer_upload_accepts_admin_style_json_payload(client, db_session, mo
         app.dependency_overrides.pop(get_current_customer, None)
 
 
+def test_admin_upload_promotes_existing_cdn_temp_url(client, db_session, tmp_path, monkeypatch):
+    customer = create_account(db_session, AccountRole.CUSTOMER, "admin-cdn-owner@example.com")
+    admin = create_account(db_session, AccountRole.ADMIN, "admin-cdn-user@example.com")
+    booking = Booking(
+        booking_code="BK-ADMIN-CDN-UPLOAD",
+        customer_id=customer.id,
+        booking_type=TourType.DOMESTIC,
+        source=BookingSource.WEBSITE,
+        status=BookingStatus.CONFIRMED,
+        adult_count=1,
+        child_count=0,
+        senior_count=0,
+        subtotal=1000,
+        discount_amount=0,
+        total_amount=1000,
+        paid_amount=0,
+        due_amount=1000,
+        created_by=admin.id,
+    )
+    db_session.add(booking)
+    db_session.commit()
+
+    filename = "1dc073fa1fa44f9d9195df7ab4b20f93.jpg"
+    temp_directory = tmp_path / "temporary-uploads"
+    temp_directory.mkdir()
+    temp_file = temp_directory / filename
+    temp_file.write_bytes(b"validated upload bytes")
+    monkeypatch.setattr(cdn_service, "CDN_ROOT", tmp_path)
+    monkeypatch.setattr(cdn_service, "CDN_BASE_URL", "https://cdn.gantabyaa.com")
+
+    app.dependency_overrides[get_current_admin] = lambda: admin
+    try:
+        response = client.post(
+            "/api/v1/admin/documents",
+            json={
+                "customer_id": str(customer.id),
+                "booking_id": str(booking.id),
+                "file": f"https://cdn.gantabyaa.com/temporary-uploads/{filename}",
+                "file_name": "flight-ticket.jpg",
+                "document_type": "FLIGHT_TICKET",
+                "title": "Flight ticket",
+                "description": None,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_current_admin, None)
+
+    assert response.status_code == 201, response.text
+    document = db_session.query(Document).one()
+    private_file = tmp_path / "private" / "admin-documents" / filename
+    assert document.document_type == DocumentType.FLIGHT_TICKET
+    assert document.customer_id == customer.id
+    assert document.booking_id == booking.id
+    assert document.uploaded_by_account_id == admin.id
+    assert document.file_url == f"private/admin-documents/{filename}"
+    assert not temp_file.exists()
+    assert private_file.read_bytes() == b"validated upload bytes"
+
+
 def test_customer_cannot_download_document_owned_by_another_customer(
     client, db_session
 ):
