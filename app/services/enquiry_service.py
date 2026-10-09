@@ -1,5 +1,6 @@
 import uuid
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType, LeadStatus
@@ -209,6 +210,9 @@ class EnquiryService:
             search=search,
             customer_id=customer_id,
         )
+        for enquiry in items:
+            if enquiry.lead is None:
+                self.ensure_lead_for_enquiry(enquiry)
         total_pages = (total + page_size - 1) // page_size if total else 0
         return {
             "items": items,
@@ -217,6 +221,38 @@ class EnquiryService:
             "total_items": total,
             "total_pages": total_pages,
         }
+
+    def ensure_lead_for_enquiry(self, enquiry: Enquiry) -> Lead:
+        """Create a scored lead for older enquiries that were saved without one."""
+        lead = self.lead_repo.get_by_enquiry_id(enquiry.id)
+        if lead:
+            enquiry.lead = lead
+            return lead
+
+        initial_score = self.scoring_service.calculate_initial_score(enquiry)
+        initial_score += self.scoring_service.calculate_history_score(
+            visitor_id=enquiry.visitor_id,
+            customer_id=enquiry.customer_id,
+            exclude_enquiry_id=enquiry.id,
+        )
+        try:
+            lead = self.lead_repo.create(
+                lead_code=f"LEAD-{uuid.uuid4().hex[:8].upper()}",
+                enquiry_id=enquiry.id,
+                lead_score=min(100, initial_score),
+                status=LeadStatus.NEW,
+            )
+        except IntegrityError:
+            self.db.rollback()
+            lead = self.lead_repo.get_by_enquiry_id(enquiry.id)
+            if lead is None:
+                raise
+            enquiry.lead = lead
+            return lead
+
+        enquiry.lead = lead
+        emit_lead_created(lead)
+        return lead
 
     def get_enquiry(self, enquiry_id: uuid.UUID) -> Enquiry:
         enquiry = self.enquiry_repo.get_by_id(enquiry_id)

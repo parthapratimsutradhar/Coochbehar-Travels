@@ -85,6 +85,8 @@ def get_enquiry_lead(
     current_user: Account = Depends(get_current_admin_or_staff),
 ):
     del current_user
+    enquiry = EnquiryService(db).get_enquiry(enquiry_id)
+    EnquiryService(db).ensure_lead_for_enquiry(enquiry)
     lead = LeadService(db).get_lead_for_enquiry(enquiry_id)
     return SuccessResponse(
         message=EnquirySuccess.LEAD_RETRIEVED,

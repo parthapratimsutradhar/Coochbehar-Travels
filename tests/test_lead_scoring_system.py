@@ -19,8 +19,9 @@ from app.core.enums import (
     LeadStatus,
     TourType,
 )
+from app.api.deps import get_current_admin_or_staff
 from app.db.database import get_db
-from app.main import app
+from app.main import fastapi_app as app
 from app.models.base import Base
 from app.models.account import Account
 from app.models.booking import Booking
@@ -33,6 +34,7 @@ from app.models.visitor import Visitor
 from app.models.visitor_event import VisitorEvent
 from app.models.visitor_session import VisitorSession
 from app.services.lead_scoring_service import LeadScoringService
+from app.services.enquiry_service import EnquiryService
 from app.services.tracking_service import TrackingService
 
 # Enable JSONB support in SQLite in-memory test database
@@ -154,6 +156,24 @@ def test_history_score_includes_pre_enquiry_visitor_engagement(db_session):
     score = LeadScoringService(db_session).calculate_history_score(visitor_id=visitor.id)
 
     assert score == 5
+
+
+def test_admin_enquiry_list_repairs_missing_lead(db_session):
+    enquiry = Enquiry(
+        enquiry_code="ENQ-REPAIR01",
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        enquirer_name="Previously Unscored",
+    )
+    db_session.add(enquiry)
+    db_session.commit()
+
+    result = EnquiryService(db_session).list_all_enquiries()
+
+    assert len(result["items"]) == 1
+    assert result["items"][0].lead is not None
+    assert result["items"][0].lead.lead_score == 25
+    assert db_session.execute(select(Lead).where(Lead.enquiry_id == enquiry.id)).scalar_one()
 
 
 @pytest.mark.parametrize(
@@ -282,6 +302,18 @@ def test_visitor_submits_enquiry_creates_scored_lead(client: TestClient, db_sess
         },
     )
     assert res.status_code == 201
+    assert res.json()["data"]["lead"]["lead_score"] == 45
+
+    admin = Account(
+        account_code="ADM-LEADSCORE01",
+        name="Lead Score Admin",
+        role=AccountRole.ADMIN,
+        is_active=True,
+    )
+    app.dependency_overrides[get_current_admin_or_staff] = lambda: admin
+    list_res = client.get("/api/v1/admin/enquiries")
+    assert list_res.status_code == 200
+    assert list_res.json()["data"][0]["lead"]["lead_score"] == 45
 
     enquiry = db_session.execute(
         select(Enquiry).where(Enquiry.visitor_id == visitor.id)
@@ -376,9 +408,6 @@ def test_visitor_telemetry_updates_lead_score(client: TestClient, db_session, mo
     lead = Lead(
         lead_code="LEAD-DYN01",
         enquiry_id=enquiry.id,
-        visitor_id=visitor.id,
-        full_name="Telemetry User",
-        mobile="+919876522222",
         lead_score=35,
         status=LeadStatus.NEW,
     )
