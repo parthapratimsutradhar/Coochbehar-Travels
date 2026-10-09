@@ -85,7 +85,9 @@ def get_point_configuration_history(
                     else None
                 ),
                 changed_by_account_name=(
-                    item.changed_by_account.name if item.changed_by_account else None
+                    item.changed_by_account.name
+                    if item.changed_by_account
+                    else "System" if item.previous_amount_per_point is None else None
                 ),
                 changed_by_account_email=(
                     item.changed_by_account.email if item.changed_by_account else None

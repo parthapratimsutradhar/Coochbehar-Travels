@@ -42,7 +42,10 @@ class TourPointConfigurationHistoryResponse(BaseModel):
     amount_per_point: Decimal = Field(description="New INR amount required to earn one point.")
     changed_by_account_id: uuid.UUID | None = Field(description="Admin account that made the change, if available.")
     changed_by_account_profile_pic: str | None = Field(default=None, description="Admin profile picture URL, if available.")
-    changed_by_account_name: str | None = Field(default=None, description="Name of the admin who made the change, if available.")
+    changed_by_account_name: str | None = Field(
+        default=None,
+        description="Admin name, or System for an automatically initialized default rate.",
+    )
     changed_by_account_email: str | None = Field(default=None, description="Email of the admin who made the change, if available.")
     changed_by_account_mobile: str | None = Field(default=None, description="Mobile number of the admin who made the change, if available.")
     changed_at: datetime = Field(description="When this configuration change was recorded.")

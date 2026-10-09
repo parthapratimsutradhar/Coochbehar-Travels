@@ -498,6 +498,7 @@ def test_public_and_customer_rankings_use_latest_balances_without_private_data(d
         reason="Test ranking history",
     ))
     db.commit()
+    TourPointsService(db).get_configurations()
 
     def override_get_db():
         yield db
@@ -588,6 +589,13 @@ def test_public_and_customer_rankings_use_latest_balances_without_private_data(d
     }
     assert config_update.status_code == 200
     assert config_history_response.status_code == 200
+    default_history = next(
+        item
+        for item in config_history_response.json()["data"]
+        if item["previous_amount_per_point"] is None
+    )
+    assert default_history["changed_by_account_id"] is None
+    assert default_history["changed_by_account_name"] == "System"
     changed_history = next(
         item
         for item in config_history_response.json()["data"]
