@@ -255,7 +255,7 @@ class CustomerService:
                         "tour_code": package.tour_code,
                         "slug": package.slug,
                         "title": package.title,
-                        "destination": package.destination,
+                        "destination": package.destination.name if package.destination else None,
                         "type": package.type.value if hasattr(package.type, "value") else str(package.type),
                         "description": package.description,
                         "is_featured": package.is_featured,
@@ -282,7 +282,7 @@ class CustomerService:
             total_items = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
             records = self.db.execute(
                 stmt.order_by(Referral.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
-            ).scalars().all()
+            ).unique().scalars().all()
             from app.services.referral_service import ReferralService
 
             items = [

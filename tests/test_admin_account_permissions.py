@@ -10,11 +10,16 @@ from sqlalchemy.pool import StaticPool
 
 compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
 
-from app.core.enums import AccountRole
+from app.core.enums import AccountRole, ReferralStatus, TourType
 from app.db.database import get_db
-from app.main import app
+from app.main import fastapi_app as app
 from app.models.base import Base
 from app.models.account import Account
+from app.models.customer_profile import CustomerProfile
+from app.models.destination import Destination
+from app.models.referral import Referral
+from app.models.tour_package import TourPackage
+from app.models.tour_wishlist import TourWishlist
 from app.services.auth_service import AuthService
 from app.utils.security import create_access_token
 
@@ -325,6 +330,61 @@ def test_admin_can_fetch_customer_detail_even_when_customer_is_inactive(client, 
     assert response.json()["message"] == "Customer fetched successfully"
     assert response.json()["data"]["id"] == str(inactive_customer.id)
     assert response.json()["data"]["is_active"] is False
+
+
+def test_admin_customer_referral_and_wishlist_tabs_return_json(client, admin_user, db_session):
+    auth_header = {"Authorization": f"Bearer {make_token(admin_user)}"}
+    customer = Account(
+        account_code="CUS-TAB-OWNER",
+        name="Tab Owner",
+        role=AccountRole.CUSTOMER,
+        is_active=True,
+    )
+    referred = Account(
+        account_code="CUS-TAB-REFERRED",
+        name="Referred Customer",
+        role=AccountRole.CUSTOMER,
+        is_active=True,
+    )
+    destination = Destination(name="Test Destination", slug="test-destination", is_domestic=True)
+    db_session.add_all([customer, referred, destination])
+    db_session.flush()
+    db_session.add_all([
+        CustomerProfile(account_id=customer.id, referral_code="TAB-OWNER-CODE"),
+        CustomerProfile(account_id=referred.id, referral_code="TAB-REFERRED-CODE"),
+        Referral(
+            referrer_customer_id=customer.id,
+            referred_customer_id=referred.id,
+            status=ReferralStatus.REGISTERED,
+        ),
+    ])
+    package = TourPackage(
+        tour_code="TP-CUSTOMER-TAB",
+        slug="customer-tab-tour",
+        title="Customer Tab Tour",
+        destination_id=destination.id,
+        type=TourType.DOMESTIC,
+    )
+    db_session.add(package)
+    db_session.flush()
+    db_session.add(TourWishlist(customer_id=customer.id, package_id=package.id))
+    db_session.commit()
+
+    referral_response = client.get(
+        f"/api/v1/admin/customers/{customer.id}",
+        params={"tab": "referral", "page": 1, "page_size": 10},
+        headers=auth_header,
+    )
+    wishlist_response = client.get(
+        f"/api/v1/admin/customers/{customer.id}",
+        params={"tab": "wishlist", "page": 1, "page_size": 10},
+        headers=auth_header,
+    )
+
+    assert referral_response.status_code == 200, referral_response.text
+    assert referral_response.json()["data"]["items"][0]["referred_customer"]["name"] == "Referred Customer"
+    assert wishlist_response.status_code == 200, wishlist_response.text
+    assert wishlist_response.json()["data"]["items"][0]["destination"] == "Test Destination"
 
 
 def test_admin_can_clear_customer_profile_picture(client, admin_user, db_session):
