@@ -282,24 +282,42 @@ def test_dashboard_due_amount_and_outstanding_booking_filters(client, admin_user
         due_amount=80,
         created_by=admin_user.id,
     )
-    db_session.add_all([collectible_booking, cancelled_booking])
+    international_booking = Booking(
+        booking_code="BK-DUE-003",
+        customer_id=customer.id,
+        booking_type=TourType.INTERNATIONAL,
+        source=BookingSource.WEBSITE,
+        sales_account_id=admin_user.id,
+        status=BookingStatus.CONFIRMED,
+        adult_count=1,
+        child_count=0,
+        senior_count=0,
+        subtotal=200,
+        discount_amount=0,
+        total_amount=200,
+        paid_amount=100,
+        due_amount=100,
+        created_by=admin_user.id,
+    )
+    db_session.add_all([collectible_booking, cancelled_booking, international_booking])
     db_session.commit()
     headers = auth_header(admin_user)
 
     dashboard_response = client.get("/api/v1/admin/dashboard", headers=headers)
     assert dashboard_response.status_code == 200, dashboard_response.text
-    assert Decimal(dashboard_response.json()["data"]["summary"]["due_amount"]) == Decimal("125.50")
+    assert Decimal(dashboard_response.json()["data"]["summary"]["due_amount"]) == Decimal("225.50")
 
     unfiltered_response = client.get(
         "/api/v1/admin/financial/outstanding-bookings",
         headers=headers,
     )
     assert unfiltered_response.status_code == 200, unfiltered_response.text
-    assert unfiltered_response.json()["pagination"]["total_items"] == 1
+    assert unfiltered_response.json()["pagination"]["total_items"] == 2
 
-    outstanding_response = client.get(
+    domestic_response = client.get(
         "/api/v1/admin/financial/outstanding-bookings",
         params={
+            "tour_type": "DOMESTIC",
             "status": "PARTIALLY_PAID",
             "min_due": "100",
             "max_due": "150",
@@ -307,11 +325,20 @@ def test_dashboard_due_amount_and_outstanding_booking_filters(client, admin_user
         },
         headers=headers,
     )
-    assert outstanding_response.status_code == 200, outstanding_response.text
-    outstanding_data = outstanding_response.json()
+    assert domestic_response.status_code == 200, domestic_response.text
+    outstanding_data = domestic_response.json()
     assert outstanding_data["pagination"]["total_items"] == 1
     assert outstanding_data["data"][0]["booking_code"] == "BK-DUE-001"
     assert Decimal(outstanding_data["data"][0]["due_amount"]) == Decimal("125.50")
+
+    international_response = client.get(
+        "/api/v1/admin/financial/outstanding-bookings",
+        params={"tour_type": "INTERNATIONAL"},
+        headers=headers,
+    )
+    assert international_response.status_code == 200, international_response.text
+    assert international_response.json()["pagination"]["total_items"] == 1
+    assert international_response.json()["data"][0]["booking_code"] == "BK-DUE-003"
 
     invalid_filter_response = client.get(
         "/api/v1/admin/financial/outstanding-bookings",

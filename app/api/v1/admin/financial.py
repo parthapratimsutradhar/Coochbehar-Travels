@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, st
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin_or_staff
-from app.core.enums import BookingStatus
+from app.core.enums import BookingStatus, TourType
 from app.db.database import get_db
 from app.models.account import Account
 from app.schemas.financial_reports import (
@@ -118,6 +118,7 @@ def list_outstanding_bookings(
     page_size: int = Query(20, ge=1, le=100),
     customer_id: uuid.UUID | None = Query(default=None),
     booking_status: BookingStatus | None = Query(default=None, alias="status"),
+    tour_type: TourType | None = Query(default=None),
     start_date: date | None = Query(default=None, description="Inclusive booking creation date lower bound."),
     end_date: date | None = Query(default=None, description="Inclusive booking creation date upper bound."),
     departure_start_date: date | None = Query(default=None),
@@ -144,6 +145,7 @@ def list_outstanding_bookings(
         page_size=page_size,
         customer_id=customer_id,
         booking_status=booking_status,
+        tour_type=tour_type,
         start_date=start_date,
         end_date=end_date,
         departure_start_date=departure_start_date,

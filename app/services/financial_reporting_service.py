@@ -14,6 +14,7 @@ from app.core.enums import (
     FinancialTransactionStatus,
     FinancialTransactionType,
     NON_COLLECTABLE_BOOKING_STATUSES,
+    TourType,
 )
 from app.models.account import Account
 from app.models.booking import Booking
@@ -117,6 +118,7 @@ class FinancialReportingService:
         page_size: int = 20,
         customer_id: UUID | None = None,
         booking_status: BookingStatus | None = None,
+        tour_type: TourType | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
         departure_start_date: date | None = None,
@@ -135,6 +137,8 @@ class FinancialReportingService:
             query = query.filter(Booking.customer_id == customer_id)
         if booking_status is not None:
             query = query.filter(Booking.status == booking_status)
+        if tour_type is not None:
+            query = query.filter(Booking.booking_type == tour_type)
         if start_date is not None:
             query = query.filter(Booking.created_at >= datetime.combine(start_date, time.min))
         if end_date is not None:
