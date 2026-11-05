@@ -19,6 +19,7 @@ from app.models.lead_activity import LeadActivity
 from app.models.notification import Notification
 from app.models.notification_campaign import NotificationCampaign
 from app.models.otp_challenge import OtpChallenge
+from app.models.promonal_contact import PromonalContact
 from app.models.quotation import Quotation
 from app.models.trip_items import TripItem
 from app.models.trip_itinerary import TripItinerary
@@ -71,6 +72,7 @@ __all__ = [
     "Notification",
     "NotificationCampaign",
     "OtpChallenge",
+    "PromonalContact",
     "Quotation",
     "TripItem",
     "TripItinerary",

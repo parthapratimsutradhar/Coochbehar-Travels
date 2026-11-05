@@ -14,6 +14,7 @@ from app.api.v1.admin.financial import router as financial_router
 from app.api.v1.admin.leads import router as leads_router
 from app.api.v1.admin.hotel import router as hotel_router
 from app.api.v1.admin.notifications import router as notifications_router
+from app.api.v1.admin.promotional_contacts import router as promotional_contacts_router
 from app.api.v1.admin.quotations import router as quotations_router
 from app.api.v1.admin.referral import router as referral_router
 from app.api.v1.admin.review import router as review_router
@@ -39,6 +40,7 @@ router.include_router(documents_router)
 router.include_router(customer_router)
 router.include_router(enquiries_router)
 router.include_router(notifications_router)
+router.include_router(promotional_contacts_router)
 router.include_router(referral_router)
 router.include_router(tour_package_router)
 router.include_router(tour_variant_router)

@@ -304,6 +304,22 @@ End-user enquiry routes are grouped under `/api/v1/enquiries`:
 
 Fixed and custom requests accept `name` and `mobile` contact fields. They are persisted as `enquirer_name` and `enquirer_phone`, which preserves anonymous visitor contact details, and the linked `leads` row is created automatically. Custom requests are stored with `enquiry_type=CUSTOM_TOUR`.
 
+### Promotional Contact Admin API
+
+The admin-only promotional contact management routes are grouped under `/api/v1/admin/promotional-contacts`:
+
+| Method | Path | Purpose |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/promotional-contacts` | List contacts with pagination and optional name, mobile, or email search. |
+| `GET` | `/api/v1/admin/promotional-contacts/{contact_id}` | Retrieve a contact. |
+| `POST` | `/api/v1/admin/promotional-contacts` | Create a contact. |
+| `PATCH` | `/api/v1/admin/promotional-contacts/{contact_id}` | Update a contact. |
+| `DELETE` | `/api/v1/admin/promotional-contacts/{contact_id}` | Delete a contact. |
+| `GET` | `/api/v1/admin/promotional-contacts/export?format=<format>` | Download contacts in JSON, CSV, or XLSX format. |
+| `POST` | `/api/v1/admin/promotional-contacts/import?format=<format>` | Import contacts from a multipart `file` in JSON, CSV, or XLSX format. |
+
+Imports accept a JSON list (or an object with a `contacts` list), or CSV/XLSX files with `name`, `mobile`, and `email` columns. Imports are limited to 25 MB and 10,000 contacts per request.
+
 ---
 
 ## 🗄️ Database Architecture & Entities
@@ -326,4 +342,3 @@ erDiagram
     ROOM ||--o{ ROOM_BOOKING : "booked in"
     VEHICLE ||--o{ VEHICLE_BOOKING : "reserved in"
 ```
-
