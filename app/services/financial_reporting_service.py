@@ -1,17 +1,31 @@
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import extract, func
+from sqlalchemy import extract, func, or_
 from sqlalchemy.orm import Session
 
-from app.core.enums import BookingStatus, FinancialTransactionCategory, FinancialTransactionStatus, FinancialTransactionType, FinancialAccountOwnerType, FinancialAccountType
+from app.core.enums import (
+    BookingStatus,
+    FinancialAccountOwnerType,
+    FinancialAccountType,
+    FinancialTransactionCategory,
+    FinancialTransactionStatus,
+    FinancialTransactionType,
+    NON_COLLECTABLE_BOOKING_STATUSES,
+)
+from app.models.account import Account
 from app.models.booking import Booking
 from app.models.financial_account import FinancialAccount
 from app.models.financial_transaction import FinancialTransaction
 from app.models.financial_transaction_entry import FinancialTransactionEntry
 from app.models.trip_items import TripItem
-from app.schemas.financial_reports import FinancialDashboardResponse, FinancialReportResponse
+from app.schemas.financial_reports import (
+    FinancialDashboardResponse,
+    FinancialReportResponse,
+    OutstandingBookingResponse,
+)
 
 
 CONFIRMED_STATUSES = (
@@ -58,7 +72,8 @@ class FinancialReportingService:
         ).scalar() or 0
         direct_cost = Decimal(self.db.query(func.coalesce(func.sum(TripItem.total_price), 0)).filter(TripItem.booking_id.is_not(None)).scalar() or 0)
         customer_outstanding = Decimal(self.db.query(func.coalesce(func.sum(Booking.due_amount), 0)).filter(
-            Booking.status != BookingStatus.CANCELLED
+            Booking.due_amount > 0,
+            Booking.status.notin_(NON_COLLECTABLE_BOOKING_STATUSES),
         ).scalar() or 0)
         vendor_payables = Decimal(0)
         future_revenue = Decimal(self.db.query(func.coalesce(func.sum(Booking.total_amount), 0)).filter(
@@ -94,6 +109,77 @@ class FinancialReportingService:
             wallet_credits=wallet_credits,
             wallet_debits=wallet_debits,
         )
+
+    def list_outstanding_bookings(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        customer_id: UUID | None = None,
+        booking_status: BookingStatus | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        departure_start_date: date | None = None,
+        departure_end_date: date | None = None,
+        min_due: Decimal | None = None,
+        max_due: Decimal | None = None,
+        search: str | None = None,
+    ) -> tuple[list[OutstandingBookingResponse], int]:
+        query = self.db.query(Booking, Account).join(
+            Account, Account.id == Booking.customer_id
+        ).filter(
+            Booking.due_amount > 0,
+            Booking.status.notin_(NON_COLLECTABLE_BOOKING_STATUSES),
+        )
+        if customer_id is not None:
+            query = query.filter(Booking.customer_id == customer_id)
+        if booking_status is not None:
+            query = query.filter(Booking.status == booking_status)
+        if start_date is not None:
+            query = query.filter(Booking.created_at >= datetime.combine(start_date, time.min))
+        if end_date is not None:
+            query = query.filter(Booking.created_at < datetime.combine(end_date + timedelta(days=1), time.min))
+        if departure_start_date is not None:
+            query = query.filter(Booking.departure_date >= departure_start_date)
+        if departure_end_date is not None:
+            query = query.filter(Booking.departure_date <= departure_end_date)
+        if min_due is not None:
+            query = query.filter(Booking.due_amount >= min_due)
+        if max_due is not None:
+            query = query.filter(Booking.due_amount <= max_due)
+        if search and search.strip():
+            search_term = f"%{search.strip()}%"
+            query = query.filter(
+                or_(
+                    Booking.booking_code.ilike(search_term),
+                    Account.name.ilike(search_term),
+                    Account.email.ilike(search_term),
+                    Account.mobile.ilike(search_term),
+                )
+            )
+
+        total_items = query.count()
+        rows = query.order_by(Booking.created_at.desc(), Booking.id).offset(
+            (page - 1) * page_size
+        ).limit(page_size).all()
+        items = [
+            OutstandingBookingResponse(
+                booking_id=booking.id,
+                booking_code=booking.booking_code,
+                customer_id=customer.id,
+                customer_name=customer.name,
+                customer_email=customer.email,
+                customer_mobile=customer.mobile,
+                status=booking.status.value,
+                departure_date=booking.departure_date,
+                created_at=booking.created_at,
+                total_amount=booking.total_amount,
+                paid_amount=booking.paid_amount,
+                due_amount=booking.due_amount,
+            )
+            for booking, customer in rows
+        ]
+        return items, total_items
 
     def _wallet_entry_sum(self, column: str) -> Decimal:
         value = getattr(FinancialTransactionEntry, column)
@@ -156,7 +242,20 @@ class FinancialReportingService:
             rows = [{"transaction_id": str(item.id), "booking_id": str(item.booking_id) if item.booking_id else None, "customer_id": str(item.customer_id) if item.customer_id else None, "amount": item.amount, "payment_method": item.payment_method.value if item.payment_method else None, "transaction_date": item.transaction_date.isoformat()} for item in transactions.filter(FinancialTransaction.category == FinancialTransactionCategory.BOOKING_PAYMENT).all()]
             totals = {"amount": sum((row["amount"] for row in rows), Decimal(0))}
         elif normalized == "outstanding":
-            rows = [{"booking_id": str(item.id), "booking_code": item.booking_code, "customer_id": str(item.customer_id), "total_amount": item.total_amount, "paid_amount": item.paid_amount, "outstanding": item.due_amount} for item in bookings.filter(Booking.due_amount > 0).all()]
+            rows = [
+                {
+                    "booking_id": str(item.id),
+                    "booking_code": item.booking_code,
+                    "customer_id": str(item.customer_id),
+                    "total_amount": item.total_amount,
+                    "paid_amount": item.paid_amount,
+                    "outstanding": item.due_amount,
+                }
+                for item in bookings.filter(
+                    Booking.due_amount > 0,
+                    Booking.status.notin_(NON_COLLECTABLE_BOOKING_STATUSES),
+                ).all()
+            ]
             totals = {"outstanding": sum((row["outstanding"] for row in rows), Decimal(0))}
         elif normalized in {"expenses", "vendor-payments", "wallet-transactions"}:
             transaction_category = {"expenses": FinancialTransactionCategory.ADJUSTMENT, "vendor-payments": FinancialTransactionCategory.VENDOR_PAYMENT}.get(normalized)

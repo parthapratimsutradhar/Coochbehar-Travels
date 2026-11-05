@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy import func
 from sqlalchemy.orm import Session, aliased
 
-from app.core.enums import AccountRole, BookingStatus
+from app.core.enums import AccountRole, BookingStatus, NON_COLLECTABLE_BOOKING_STATUSES
 from app.models.account import Account
 from app.models.booking import Booking
 from app.models.destination import Destination
@@ -119,14 +119,14 @@ class DashboardService:
             ])
         ).count()
 
-        pending_actions = self.db.query(Booking).filter(
+        outstanding_bookings = self.db.query(Booking).filter(
             Booking.due_amount > 0,
-            Booking.status.notin_([
-                BookingStatus.CANCELLED,
-                BookingStatus.COMPLETED,
-                BookingStatus.REFUNDED,
-            ]),
-        ).count()
+            Booking.status.notin_(NON_COLLECTABLE_BOOKING_STATUSES),
+        )
+        pending_actions = outstanding_bookings.count()
+        due_amount = outstanding_bookings.with_entities(
+            func.coalesce(func.sum(Booking.due_amount), 0)
+        ).scalar() or Decimal(0)
 
         hotel_count = self.db.query(Hotel).count()
         tour_package_count = self.db.query(TourPackage).count()
@@ -264,6 +264,7 @@ class DashboardService:
                 "today_bookings": len(today_bookings),
                 "today_revenue": int(today_revenue),
                 "pending_actions": pending_actions,
+                "due_amount": due_amount,
                 "total_revenue": {
                     "amount": int(total_revenue),
                     "currency": "INR",

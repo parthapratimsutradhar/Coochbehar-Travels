@@ -1,7 +1,10 @@
+from datetime import date, datetime
 from decimal import Decimal
+from uuid import UUID
 
 from pydantic import Field
 
+from app.core.enums import BookingStatus
 from app.schemas.base import SchemaBase
 
 
@@ -40,3 +43,19 @@ class FinancialStatisticsResponse(SchemaBase):
     total_expenses: str | None = None
     referral_income: str | None = None
     net_profit_loss: str | None = None
+
+
+class OutstandingBookingResponse(SchemaBase):
+    booking_id: UUID
+    booking_code: str
+    customer_id: UUID
+    customer_name: str
+    customer_email: str | None = None
+    customer_mobile: str | None = None
+    status: BookingStatus
+    departure_date: date | None = None
+    created_at: datetime
+    total_amount: Decimal
+    paid_amount: Decimal
+    due_amount: Decimal
+    currency: str = "INR"

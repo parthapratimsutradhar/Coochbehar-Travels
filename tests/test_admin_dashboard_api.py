@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -20,7 +22,7 @@ from app.core.enums import (
     VehicleType,
 )
 from app.db.database import get_db
-from app.main import app
+from app.main import fastapi_app as app
 from app.models.account import Account
 from app.models.base import Base
 from app.models.booking import Booking
@@ -64,10 +66,14 @@ def client(db_session):
         finally:
             pass
 
+    original_overrides = app.dependency_overrides.copy()
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
 
 
 @pytest.fixture
@@ -228,3 +234,88 @@ def test_admin_dashboard_route_uses_live_database_values(client, admin_user, db_
     assert destinations["Puri"]["image_url"] == "https://cdn.example.com/puri.jpg"
     assert destinations["Konark"]["image_url"] == "https://cdn.example.com/konark.jpg"
     assert payload["recent_bookings"][0]["booking_id"] in {"BK-DATA-1", "BK-DATA-2"}
+
+
+def test_dashboard_due_amount_and_outstanding_booking_filters(client, admin_user, db_session):
+    customer = Account(
+        account_code="CUST-DUE-001",
+        name="Due Customer",
+        email="due-customer@example.com",
+        mobile="+919000000003",
+        role=AccountRole.CUSTOMER,
+        is_active=True,
+    )
+    db_session.add(customer)
+    db_session.flush()
+
+    collectible_booking = Booking(
+        booking_code="BK-DUE-001",
+        customer_id=customer.id,
+        booking_type=TourType.DOMESTIC,
+        source=BookingSource.WEBSITE,
+        sales_account_id=admin_user.id,
+        status=BookingStatus.PARTIALLY_PAID,
+        adult_count=1,
+        child_count=0,
+        senior_count=0,
+        subtotal=150,
+        discount_amount=0,
+        total_amount=150,
+        paid_amount=Decimal("24.50"),
+        due_amount=Decimal("125.50"),
+        created_by=admin_user.id,
+    )
+    cancelled_booking = Booking(
+        booking_code="BK-DUE-002",
+        customer_id=customer.id,
+        booking_type=TourType.DOMESTIC,
+        source=BookingSource.WEBSITE,
+        sales_account_id=admin_user.id,
+        status=BookingStatus.CANCELLED,
+        adult_count=1,
+        child_count=0,
+        senior_count=0,
+        subtotal=80,
+        discount_amount=0,
+        total_amount=80,
+        paid_amount=0,
+        due_amount=80,
+        created_by=admin_user.id,
+    )
+    db_session.add_all([collectible_booking, cancelled_booking])
+    db_session.commit()
+    headers = auth_header(admin_user)
+
+    dashboard_response = client.get("/api/v1/admin/dashboard", headers=headers)
+    assert dashboard_response.status_code == 200, dashboard_response.text
+    assert Decimal(dashboard_response.json()["data"]["summary"]["due_amount"]) == Decimal("125.50")
+
+    unfiltered_response = client.get(
+        "/api/v1/admin/financial/outstanding-bookings",
+        headers=headers,
+    )
+    assert unfiltered_response.status_code == 200, unfiltered_response.text
+    assert unfiltered_response.json()["pagination"]["total_items"] == 1
+
+    outstanding_response = client.get(
+        "/api/v1/admin/financial/outstanding-bookings",
+        params={
+            "status": "PARTIALLY_PAID",
+            "min_due": "100",
+            "max_due": "150",
+            "search": "Due Customer",
+        },
+        headers=headers,
+    )
+    assert outstanding_response.status_code == 200, outstanding_response.text
+    outstanding_data = outstanding_response.json()
+    assert outstanding_data["pagination"]["total_items"] == 1
+    assert outstanding_data["data"][0]["booking_code"] == "BK-DUE-001"
+    assert Decimal(outstanding_data["data"][0]["due_amount"]) == Decimal("125.50")
+
+    invalid_filter_response = client.get(
+        "/api/v1/admin/financial/outstanding-bookings",
+        params={"min_due": "200", "max_due": "100"},
+        headers=headers,
+    )
+    assert invalid_filter_response.status_code == 422

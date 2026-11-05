@@ -1,13 +1,19 @@
 import uuid
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin_or_staff
+from app.core.enums import BookingStatus
 from app.db.database import get_db
 from app.models.account import Account
-from app.schemas.financial_reports import FinancialReportResponse, FinancialStatisticsResponse
+from app.schemas.financial_reports import (
+    FinancialReportResponse,
+    FinancialStatisticsResponse,
+    OutstandingBookingResponse,
+)
 from app.schemas.financial_transaction import (
     FinancialReportDownloadRequest,
     FinancialTransactionCreate,
@@ -17,6 +23,7 @@ from app.schemas.financial_transaction import (
 )
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
+from app.services.financial_reporting_service import FinancialReportingService
 from app.services.financial_transaction_service import FinancialTransactionService
 
 router = APIRouter(
@@ -94,6 +101,68 @@ def list_transactions(
             total_pages=result["total_pages"],
             has_next=result["page"] < result["total_pages"],
             has_previous=result["page"] > 1,
+        ),
+    )
+
+
+@router.get(
+    "/outstanding-bookings",
+    response_model=PaginatedResponse[OutstandingBookingResponse],
+    status_code=status.HTTP_200_OK,
+    responses={401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    summary="List bookings with amounts still due",
+    description="Returns paginated, collectible booking balances with customer, status, date, due-range, and search filters.",
+)
+def list_outstanding_bookings(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    customer_id: uuid.UUID | None = Query(default=None),
+    booking_status: BookingStatus | None = Query(default=None, alias="status"),
+    start_date: date | None = Query(default=None, description="Inclusive booking creation date lower bound."),
+    end_date: date | None = Query(default=None, description="Inclusive booking creation date upper bound."),
+    departure_start_date: date | None = Query(default=None),
+    departure_end_date: date | None = Query(default=None),
+    min_due: Decimal | None = Query(default=None, ge=0),
+    max_due: Decimal | None = Query(default=None, ge=0),
+    search: str | None = Query(default=None, min_length=1, max_length=100),
+    db: Session = Depends(get_db),
+    current_user: Account = Depends(get_current_admin_or_staff),
+):
+    del current_user
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="start_date cannot be after end_date.")
+    if departure_start_date and departure_end_date and departure_start_date > departure_end_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="departure_start_date cannot be after departure_end_date.",
+        )
+    if min_due is not None and max_due is not None and min_due > max_due:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="min_due cannot be greater than max_due.")
+
+    items, total_items = FinancialReportingService(db).list_outstanding_bookings(
+        page=page,
+        page_size=page_size,
+        customer_id=customer_id,
+        booking_status=booking_status,
+        start_date=start_date,
+        end_date=end_date,
+        departure_start_date=departure_start_date,
+        departure_end_date=departure_end_date,
+        min_due=min_due,
+        max_due=max_due,
+        search=search,
+    )
+    total_pages = (total_items + page_size - 1) // page_size
+    return PaginatedResponse(
+        message="Outstanding bookings fetched successfully",
+        data=items,
+        pagination=PaginationMeta(
+            current_page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            has_next=page < total_pages,
+            has_previous=page > 1,
         ),
     )
 

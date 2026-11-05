@@ -274,6 +274,13 @@ class BookingStatus(AppEnum):
     REFUNDED = "REFUNDED"    
 
 
+NON_COLLECTABLE_BOOKING_STATUSES = (
+    BookingStatus.CANCELLED,
+    BookingStatus.COMPLETED,
+    BookingStatus.REFUNDED,
+)
+
+
 class PointTransactionType(AppEnum):
     BOOKING_EARNED = "BOOKING_EARNED"
     BOOKING_REVERSED = "BOOKING_REVERSED"

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from app.schemas.base import SchemaBase
 
 
@@ -18,6 +20,7 @@ class SummaryMetrics(SchemaBase):
     today_bookings: int
     today_revenue: int
     pending_actions: int
+    due_amount: Decimal
     total_revenue: TotalRevenueMetric
     total_bookings: GrowthMetric
     registered_users: GrowthMetric
