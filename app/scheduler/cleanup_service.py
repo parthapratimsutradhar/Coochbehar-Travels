@@ -1,10 +1,10 @@
-﻿"""Configurable data-retention cleanup service.
+"""Scheduled data-retention cleanup jobs.
 
 Runs at the configured interval. Deletes analytics data older than the
 configured retention period, and expired temporary CDN uploads.
 
 Usage (called by the scheduled cleanup task):
-    from app.services.cleanup_service import run_cleanup
+    from app.scheduler.cleanup_service import run_cleanup
     await run_cleanup()
 """
 from __future__ import annotations

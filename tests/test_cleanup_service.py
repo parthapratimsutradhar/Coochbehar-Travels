@@ -6,8 +6,8 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.core.config import settings
-from app.services import cleanup_service
-from app.services.cleanup_service import _cutoff, next_cleanup_run
+from app.scheduler import cleanup_service
+from app.scheduler.cleanup_service import _cutoff, next_cleanup_run
 
 
 def test_cutoff_uses_configured_retention_days(monkeypatch):

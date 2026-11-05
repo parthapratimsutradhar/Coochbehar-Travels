@@ -40,7 +40,7 @@ from app.schemas.visitor import (
     VisitorResponse,
     VisitorSessionResponse,
 )
-from app.services.cleanup_service import cleanup_old_data
+from app.scheduler.cleanup_service import cleanup_old_data
 from app.services.dashboard_service import DashboardService
 from app.utils.cdn_urls import cdn_url_for_value
 

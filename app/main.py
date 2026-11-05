@@ -32,7 +32,7 @@ async def _scheduled_cleanup_task(
     minute: int,
 ) -> None:
     """Keep one configured cleanup job scheduled while the app is running."""
-    from app.services.cleanup_service import next_cleanup_run
+    from app.scheduler.cleanup_service import next_cleanup_run
 
     while True:
         try:
@@ -63,7 +63,8 @@ async def lifespan(app: FastAPI):
         else:
             logger.error("CDN antivirus is enabled but the scanner is unavailable")
 
-    from app.services.cleanup_service import run_analytics_cleanup, run_cleanup
+    from app.scheduler.cleanup_service import run_analytics_cleanup, run_cleanup
+    from app.scheduler.booking_document_cleanup import run_booking_document_cleanup
 
     tasks = [
         asyncio.create_task(
@@ -80,6 +81,15 @@ async def lifespan(app: FastAPI):
                 "temporary CDN cleanup",
                 run_cleanup,
                 settings.CDN_CLEANUP_INTERVAL_DAYS,
+                settings.CDN_CLEANUP_HOUR,
+                settings.CDN_CLEANUP_MINUTE,
+            )
+        ),
+        asyncio.create_task(
+            _scheduled_cleanup_task(
+                "booking document cleanup",
+                run_booking_document_cleanup,
+                1,
                 settings.CDN_CLEANUP_HOUR,
                 settings.CDN_CLEANUP_MINUTE,
             )

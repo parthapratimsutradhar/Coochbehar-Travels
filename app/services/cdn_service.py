@@ -1231,7 +1231,7 @@ def get_temporary_upload_path(filename: str) -> Path:
     return path
 
 
-def get_private_document_path(relative_path: str) -> Path:
+def _validated_private_document_path(relative_path: str) -> tuple[Path, bool]:
     relative_path = _validate_relative_path(relative_path)
     parts = relative_path.split("/")
     if (
@@ -1248,6 +1248,8 @@ def get_private_document_path(relative_path: str) -> Path:
     try:
         file_stat = path.lstat()
         resolved = path.resolve(strict=True)
+    except FileNotFoundError:
+        return path, False
     except OSError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1263,7 +1265,28 @@ def get_private_document_path(relative_path: str) -> Path:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found",
         )
+    return path, True
+
+
+def get_private_document_path(relative_path: str) -> Path:
+    path, exists = _validated_private_document_path(relative_path)
+    if not exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
     return path
+
+
+def delete_private_document_file(relative_path: str) -> bool:
+    path, exists = _validated_private_document_path(relative_path)
+    if not exists:
+        return False
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return False
+    return True
 
 
 def get_cdn_file_path(relative_path: str) -> Path:
