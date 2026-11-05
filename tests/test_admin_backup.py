@@ -31,6 +31,7 @@ from app.services.backup_service import BackupService
 from app.schemas.response import ActionResponse
 from app.core.exception_handlers import register_exception_handlers
 from app.db.database import get_db
+from app.core.validation import deserialize_backup_row
 
 
 @pytest.fixture
@@ -113,11 +114,10 @@ def add_backup_records(db: Session) -> None:
                 itinerary=[{"day": 1, "title": "Arrival"}],
                 route_stops=[],
             ),
-            Hotel(name="Backup Hotel", image=[], destination_id=destination.id),
+            Hotel(name="Backup Hotel", destination_id=destination.id),
             Vendor(name="Backup Vendor", type="HOTEL", email="vendor@example.com"),
             Vehicle(
                 name="Backup Vehicle",
-                vehicle_image=[],
                 vehicle_type=VehicleType.ANY,
                 capacity=4,
                 price_per_day=Decimal("2000.00"),
@@ -132,6 +132,20 @@ def test_import_endpoint_uses_action_response():
         route for route in admin_backup_router.routes if route.path.endswith("/import")
     )
     assert import_route.response_model is ActionResponse
+
+
+def test_legacy_hotel_and_vehicle_backup_images_are_ignored():
+    hotel_values = deserialize_backup_row(
+        Hotel,
+        {"id": str(uuid.uuid4()), "name": "Legacy Hotel", "image": []},
+    )
+    vehicle_values = deserialize_backup_row(
+        Vehicle,
+        {"id": str(uuid.uuid4()), "name": "Legacy Vehicle", "vehicle_image": []},
+    )
+
+    assert "image" not in hotel_values
+    assert "vehicle_image" not in vehicle_values
 
 
 @pytest.mark.parametrize("format", ["json", "csv", "xlsx"])

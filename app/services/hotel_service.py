@@ -1,5 +1,4 @@
 import uuid
-from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -7,23 +6,6 @@ from sqlalchemy.orm import Session
 from app.models.hotel import Hotel
 from app.repository.hotel_repo import HotelRepository
 from app.schemas.hotel import HotelCreate, HotelUpdate
-from app.services.cdn_service import promote_cdn_asset
-from app.utils.cdn_urls import cdn_storage_value
-
-
-async def _promote_hotel_images(image_items: list[Any]) -> list[dict[str, Any]]:
-    promoted_items: list[dict[str, Any]] = []
-    for item in image_items:
-        item_dict = item.model_dump() if hasattr(item, "model_dump") else dict(item)
-        item_dict.setdefault("id", str(uuid.uuid4()))
-        if item_dict.get("url"):
-            promoted = await promote_cdn_asset(
-                item_dict["url"],
-                "hotel-images",
-            )
-            item_dict["url"] = cdn_storage_value(promoted.get("path") or promoted["url"])
-        promoted_items.append(item_dict)
-    return promoted_items
 
 
 class HotelService:
@@ -63,18 +45,15 @@ class HotelService:
         if destination_id and not self.repo.destination_exists(destination_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Destination not found.")
 
-    async def create_hotel(self, payload: HotelCreate) -> Hotel:
+    def create_hotel(self, payload: HotelCreate) -> Hotel:
         self._validate_destination(payload.destination_id)
         data = payload.model_dump()
-        data["image"] = await _promote_hotel_images(data["image"])
         return self.repo.create(**data)
 
-    async def update_hotel(self, hotel_id: uuid.UUID, payload: HotelUpdate) -> Hotel:
+    def update_hotel(self, hotel_id: uuid.UUID, payload: HotelUpdate) -> Hotel:
         hotel = self.get_hotel(hotel_id)
         data = payload.model_dump(exclude_unset=True)
         self._validate_destination(data.get("destination_id"))
-        if "image" in data:
-            data["image"] = await _promote_hotel_images(data["image"])
         return self.repo.update(hotel, data)
 
     def delete_hotel(self, hotel_id: uuid.UUID) -> None:

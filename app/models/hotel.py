@@ -3,8 +3,6 @@ import uuid
 
 from sqlalchemy import Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import Any
-from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.enums import HotelCategory
 from app.models.base import ActiveEntity
@@ -18,11 +16,6 @@ class Hotel(ActiveEntity):
         nullable=False,
     )
     
-    image: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB,
-        nullable=False,
-    )
-
     destination_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("destinations.id", ondelete="SET NULL"),
         nullable=True,

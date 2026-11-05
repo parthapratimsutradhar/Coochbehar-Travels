@@ -35,13 +35,19 @@ def validate_backup_manifest(
 
 def deserialize_backup_row(model: type, row: dict[str, Any]) -> dict[str, Any]:
     columns = {column.name: column for column in model.__table__.columns}
-    unknown_fields = set(row) - set(columns)
+    removed_image_fields = {
+        "hotels": {"image"},
+        "vehicles": {"vehicle_image"},
+    }.get(model.__tablename__, set())
+    unknown_fields = set(row) - set(columns) - removed_image_fields
     if unknown_fields:
         raise ValueError(f"Unknown fields for {model.__tablename__}: {', '.join(sorted(unknown_fields))}")
     if "id" not in row:
         raise ValueError(f"Every {model.__tablename__} record must include its id")
     values = {}
     for field_name, value in row.items():
+        if field_name not in columns:
+            continue
         column = columns[field_name]
         if value is None:
             values[field_name] = None

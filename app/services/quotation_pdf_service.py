@@ -43,7 +43,7 @@ def build_quotation_pdf(quotation: Quotation) -> bytes:
 
     story = [
         Paragraph("COOCHBEHAR TRAVELS", title),
-        Paragraph("Luxury Stay & Sightseeing Package", styles["Heading3"]),
+        Paragraph("Tour & Sightseeing Package", styles["Heading3"]),
         Spacer(1, 5 * mm),
         Table(
             [
@@ -61,66 +61,6 @@ def build_quotation_pdf(quotation: Quotation) -> bytes:
             ]),
         ),
     ]
-
-    hotel_items = [item for item in quotation.items if item.hotel]
-    if hotel_items:
-        story.append(Paragraph("HOTEL ACCOMMODATION", section))
-        hotel_rows = [[
-            Paragraph("Hotel", small),
-            Paragraph("Check-in", small),
-            Paragraph("Check-out", small),
-            Paragraph("Room", small),
-            Paragraph("Nights", small),
-            Paragraph("Cost", small),
-        ]]
-        for item in hotel_items:
-            hotel = item.hotel
-            hotel_rows.append([
-                Paragraph(f"<b>{_text(hotel.hotel_name)}</b><br/>{_text(hotel.room_type)}", small),
-                Paragraph(_text(hotel.check_in)[:10], small),
-                Paragraph(_text(hotel.check_out)[:10], small),
-                Paragraph(_text(hotel.room_count), small),
-                Paragraph(_text(hotel.nights), small),
-                Paragraph(_text(item.total_price), amount),
-            ])
-        story.append(Table(hotel_rows, colWidths=[52 * mm, 25 * mm, 25 * mm, 18 * mm, 18 * mm, 36 * mm], repeatRows=1, style=TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#16324F")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#B7C6D4")),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("ALIGN", (-1, 1), (-1, -1), "RIGHT"),
-            ("PADDING", (0, 0), (-1, -1), 5),
-        ])))
-
-    vehicle_items = [item for item in quotation.items if item.vehicle]
-    if vehicle_items:
-        story.append(Paragraph("TRANSPORTATION", section))
-        vehicle_rows = [[
-            Paragraph("Vehicle", small),
-            Paragraph("Start", small),
-            Paragraph("End", small),
-            Paragraph("Quantity", small),
-            Paragraph("Service", small),
-            Paragraph("Cost", small),
-        ]]
-        for item in vehicle_items:
-            vehicle = item.vehicle
-            vehicle_rows.append([
-                Paragraph(f"<b>{_text(vehicle.vehicle_name)}</b><br/>{_text(vehicle.vehicle_type)}", small),
-                Paragraph(_text(vehicle.start_date)[:10], small),
-                Paragraph(_text(vehicle.end_date)[:10], small),
-                Paragraph(_text(vehicle.quantity), small),
-                Paragraph(f"{_text(vehicle.rental_minutes)} minutes", small),
-                Paragraph(_text(item.total_price), amount),
-            ])
-        story.append(Table(vehicle_rows, colWidths=[52 * mm, 25 * mm, 25 * mm, 20 * mm, 30 * mm, 22 * mm], repeatRows=1, style=TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#16324F")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#B7C6D4")),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("ALIGN", (-1, 1), (-1, -1), "RIGHT"),
-            ("PADDING", (0, 0), (-1, -1), 5),
-        ])))
 
     story.append(Paragraph("ITINERARY", section))
 
@@ -145,6 +85,8 @@ def build_quotation_pdf(quotation: Quotation) -> bytes:
     story.append(Paragraph("PACKAGE COST", section))
     cost_rows = [[Paragraph("Particulars", small), Paragraph("Quantity", small), Paragraph("Unit price", small), Paragraph("Total", small)]]
     for item in quotation.items:
+        if item.hotel or item.vehicle:
+            continue
         cost_rows.append([
             Paragraph(f"<b>{_text(item.name)}</b><br/>{_text(item.description)}", small),
             Paragraph(_text(item.quantity), small),

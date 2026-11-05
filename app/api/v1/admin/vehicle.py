@@ -27,12 +27,12 @@ router = APIRouter(
 	responses={404: {"model": ErrorResponse}},
 	summary="Add a vehicle",
 )
-async def create_vehicle(
+def create_vehicle(
 	payload: VehicleCreate,
 	db: Session = Depends(get_db),
 	current_user: Account = Depends(get_current_admin_or_staff),
 ):
-	await VehicleService(db).create_vehicle(payload)
+	VehicleService(db).create_vehicle(payload)
 	return ActionResponse(message=VehicleSuccess.CREATED)
 
 
@@ -77,13 +77,13 @@ def list_vehicles(
 	responses={404: {"model": ErrorResponse}},
 	summary="Update a vehicle",
 )
-async def update_vehicle(
+def update_vehicle(
 	vehicle_id: uuid.UUID,
 	payload: VehicleUpdate,
 	db: Session = Depends(get_db),
 	current_user: Account = Depends(get_current_admin_or_staff),
 ):
-	await VehicleService(db).update_vehicle(vehicle_id, payload)
+	VehicleService(db).update_vehicle(vehicle_id, payload)
 	return ActionResponse(message=VehicleSuccess.UPDATED)
 
 

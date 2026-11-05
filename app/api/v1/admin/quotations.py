@@ -14,6 +14,7 @@ from app.schemas.quotation import (
 	QuotationCreate,
 	QuotationEmailRequest,
 	QuotationListResponse,
+	QuotationPdfResponse,
 	QuotationResponse,
 	QuotationStatusUpdate,
 	QuotationUpdate,
@@ -163,23 +164,24 @@ def update_quotation_status(
 
 @router.get(
 	"/{quotation_id}/pdf",
-	response_model=SuccessResponse[dict[str, str | None]],
+	response_model=SuccessResponse[QuotationPdfResponse],
 	responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
-	summary="Get a protected temporary quotation PDF URL (Admin)",
+	summary="Get a quotation PDF without hotel or vehicle details (Admin)",
+	description="Generates a protected temporary PDF containing itinerary, general package costs, totals, and terms. Hotel and vehicle details are excluded.",
 )
 async def download_quotation_pdf(
 	quotation_id: uuid.UUID,
 	db: Session = Depends(get_db),
 	current_user: Account = Depends(get_current_admin_or_staff),
-) -> SuccessResponse[dict[str, str | None]]:
+) -> SuccessResponse[QuotationPdfResponse]:
 	del current_user
 	uploaded = await QuotationService(db).generate_quotation_pdf(quotation_id)
 	return SuccessResponse(
 		message=QuotationSuccess.PDF_GENERATED,
-		data={
-			"url": uploaded.get("url"),
-			"path": uploaded.get("path"),
-		},
+		data=QuotationPdfResponse(
+			url=uploaded.get("url"),
+			path=uploaded.get("path"),
+		),
 	)
 
 

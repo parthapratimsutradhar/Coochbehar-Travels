@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
-from pydantic import AliasChoices, ConfigDict, EmailStr, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, model_validator
 from app.core.enums import CostItemType, QuotationStatus, RoomType, VehicleType
 from app.schemas.base import SchemaBase
 
@@ -235,6 +235,14 @@ class QuotationEmailRequest(SchemaBase):
     recipient_email: EmailStr
 
 
+class QuotationPdfResponse(BaseModel):
+    url: str | None = Field(
+        default=None,
+        description="Temporary URL for a quotation PDF without hotel or vehicle details.",
+    )
+    path: str | None = None
+
+
 class QuotationResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -268,8 +276,6 @@ class QuotationResponse(SchemaBase):
     created_at: datetime
     updated_at: datetime
     items: list[QuotationItemResponse] = Field(default_factory=list)
-    hotels: list[QuotationHotelResponse] = Field(default_factory=list)
-    vehicles: list[QuotationVehicleResponse] = Field(default_factory=list)
     itinerary: list[QuotationItineraryResponse] = Field(default_factory=list)
 
     @model_validator(mode="before")
@@ -280,7 +286,7 @@ class QuotationResponse(SchemaBase):
         data = {
             field: getattr(value, field, None)
             for field in cls.model_fields
-            if field not in {"items", "hotels", "vehicles", "itinerary", "customer", "package", "variant", "destination", "created_by"}
+            if field not in {"items", "itinerary", "customer", "package", "variant", "destination", "created_by"}
         }
         data["customer"] = getattr(value, "customer", None)
         data["package"] = getattr(value, "package", None)
@@ -288,9 +294,11 @@ class QuotationResponse(SchemaBase):
         data["destination"] = getattr(value, "destination", None)
         data["created_by"] = getattr(value, "created_by", None)
         items = list(getattr(value, "items", []) or [])
-        data["items"] = items
-        data["hotels"] = [item.hotel for item in items if getattr(item, "hotel", None)]
-        data["vehicles"] = [item.vehicle for item in items if getattr(item, "vehicle", None)]
+        data["items"] = [
+            item
+            for item in items
+            if not getattr(item, "hotel", None) and not getattr(item, "vehicle", None)
+        ]
         data["itinerary"] = list(getattr(value, "itinerary", []) or [])
         return data
 

@@ -1,10 +1,7 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
 from uuid import uuid4
 
-import pytest
-
-from app.services import hotel_service
+from app.services import hotel_service, vehicle_service
 
 
 class FakeHotelRepository:
@@ -27,42 +24,17 @@ class FakeHotelRepository:
         return data
 
 
-@pytest.mark.anyio
-async def test_hotel_create_and_update_promote_gallery_urls(monkeypatch):
-    promoted_urls = []
-
-    async def fake_promote(url, target_folder):
-        promoted_urls.append((url, target_folder))
-        return {"url": f"permanent/{url.rsplit('/', 1)[-1]}", "path": ""}
-
-    monkeypatch.setattr(hotel_service, "promote_cdn_asset", fake_promote)
+def test_hotel_create_and_update_do_not_include_images():
     service = hotel_service.HotelService.__new__(hotel_service.HotelService)
     service.repo = FakeHotelRepository()
 
-    image = {"id": "image-1", "alt": "Lobby", "url": "temporary/lobby.jpg", "type": "image"}
-    payload = SimpleNamespace(
-        destination_id=None,
-        model_dump=lambda: {
-            "name": "Hotel",
-            "image": [image],
-            "destination_id": None,
-        },
-    )
-    await service.create_hotel(payload)
+    from app.schemas.hotel import HotelCreate, HotelUpdate
 
-    update_payload = SimpleNamespace(
-        model_dump=lambda **kwargs: {
-            "image": [{"id": "image-2", "url": "temporary/room.jpg", "type": "image"}],
-        },
-    )
-    await service.update_hotel(uuid4(), update_payload)
+    service.create_hotel(HotelCreate(name="Hotel"))
+    service.update_hotel(uuid4(), HotelUpdate(name="Updated Hotel"))
 
-    assert promoted_urls == [
-        ("temporary/lobby.jpg", "hotel-images"),
-        ("temporary/room.jpg", "hotel-images"),
-    ]
-    assert service.repo.created["image"][0]["url"] == "permanent/lobby.jpg"
-    assert service.repo.updated["image"][0]["url"] == "permanent/room.jpg"
+    assert "image" not in service.repo.created
+    assert "image" not in service.repo.updated
 
 
 def test_hotel_update_schema_excludes_is_active_flag():
@@ -71,3 +43,46 @@ def test_hotel_update_schema_excludes_is_active_flag():
     payload = HotelUpdate.model_validate({"name": "Updated Hotel"})
     assert "is_active" not in HotelUpdate.model_fields
     assert payload.model_dump(exclude_none=True) == {"name": "Updated Hotel"}
+
+
+def test_hotel_and_vehicle_schemas_do_not_expose_images():
+    from app.schemas.hotel import HotelCreate, HotelResponse, HotelUpdate
+    from app.schemas.vehicle import VehicleCreate, VehicleResponse, VehicleUpdate
+
+    for schema in (HotelCreate, HotelUpdate, HotelResponse):
+        assert "image" not in schema.model_fields
+
+    for schema in (VehicleCreate, VehicleUpdate, VehicleResponse):
+        assert "vehicle_image" not in schema.model_fields
+
+    assert HotelCreate.model_validate({"name": "Hotel", "image": ["legacy"]}).name == "Hotel"
+    assert VehicleCreate.model_validate({"name": "Vehicle", "vehicle_image": ["legacy"]}).name == "Vehicle"
+
+
+def test_vehicle_create_and_update_do_not_include_images():
+    class FakeVehicleRepository:
+        def __init__(self):
+            self.created = None
+            self.updated = None
+
+        def create(self, **data):
+            self.created = data
+            return data
+
+        def get_by_id(self, vehicle_id):
+            return SimpleNamespace(id=vehicle_id, is_active=True)
+
+        def update(self, vehicle, data):
+            self.updated = data
+            return data
+
+    service = vehicle_service.VehicleService.__new__(vehicle_service.VehicleService)
+    service.repo = FakeVehicleRepository()
+
+    from app.schemas.vehicle import VehicleCreate, VehicleUpdate
+
+    service.create_vehicle(VehicleCreate(name="Vehicle"))
+    service.update_vehicle(uuid4(), VehicleUpdate(name="Updated Vehicle"))
+
+    assert "vehicle_image" not in service.repo.created
+    assert "vehicle_image" not in service.repo.updated

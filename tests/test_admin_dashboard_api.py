@@ -163,13 +163,11 @@ def test_admin_dashboard_route_uses_live_database_values(client, admin_user, db_
     )
     hotel = Hotel(
         name="Blue Sea Hotel",
-        image=[],
         destination_id=destination.id,
         category=HotelCategory.STANDARD,
     )
     vehicle = Vehicle(
         name="Tempo Traveller",
-        vehicle_image=[],
         vehicle_type=VehicleType.TEMPO,
         registration_number="WB-26-AB-1234",
         capacity=12,

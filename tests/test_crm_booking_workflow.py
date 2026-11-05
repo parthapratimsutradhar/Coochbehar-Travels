@@ -824,7 +824,6 @@ def test_destination_crud(client, superadmin_auth_header, db_session):
 
     hotel = Hotel(
         name="Linked Hotel",
-        image=[],
         destination_id=uuid.UUID(dest_id),
     )
     db_session.add(hotel)
@@ -1021,7 +1020,51 @@ def test_admin_quotation_detail_response_contract():
     item.accepted_at = None
     item.rejected_at = None
     item.rejected_reason = None
-    item.items = []
+    now = datetime(2026, 9, 25, 9, 34, 51, 979000, tzinfo=timezone.utc)
+    item.items = [
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            quotation_id=item.id,
+            item_type="hotel",
+            name="Hotel Room",
+            description="Hotel description",
+            quantity=1,
+            unit_price=100,
+            total_price=100,
+            created_at=now,
+            updated_at=now,
+            hotel=SimpleNamespace(hotel_name="Hidden Hotel"),
+            vehicle=None,
+        ),
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            quotation_id=item.id,
+            item_type="transport",
+            name="Private Vehicle",
+            description="Vehicle description",
+            quantity=1,
+            unit_price=50,
+            total_price=50,
+            created_at=now,
+            updated_at=now,
+            hotel=None,
+            vehicle=SimpleNamespace(vehicle_name="Hidden Vehicle"),
+        ),
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            quotation_id=item.id,
+            item_type="guide",
+            name="Local Guide",
+            description="Guide service",
+            quantity=1,
+            unit_price=25,
+            total_price=25,
+            created_at=now,
+            updated_at=now,
+            hotel=None,
+            vehicle=None,
+        ),
+    ]
     item.hotels = []
     item.vehicles = []
     item.itinerary = []
@@ -1043,6 +1086,10 @@ def test_admin_quotation_detail_response_contract():
         assert response.data.created_by.name == "Support Admin"
         assert response.data.quotation_code == "QT-1001-V1"
         assert response.data.status == "DRAFT"
+        response_data = response.data.model_dump()
+        assert "hotels" not in response_data
+        assert "vehicles" not in response_data
+        assert [entry.name for entry in response.data.items] == ["Local Guide"]
 
 
 def test_quotation_and_booking_pipeline(client, superadmin_auth_header, test_customer, db_session):
@@ -1415,4 +1462,3 @@ def test_admin_quotation_update_and_status_flow(client, superadmin_auth_header, 
         json={"tour_name": "This update should be blocked"},
     )
     assert locked_update.status_code == 409, locked_update.text
-
