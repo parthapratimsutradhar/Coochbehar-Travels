@@ -9,6 +9,7 @@ from app.models.booking import Booking
 from app.models.booking_status_history import BookingStatusHistory
 from app.models.booking_traveler import BookingTraveler
 from app.models.enquiry import Enquiry
+from app.models.hotel import Hotel
 from app.models.trip_items import TripItem
 from app.models.trip_itinerary import TripItinerary
 from app.models.trip_hotel import TripHotel
@@ -16,6 +17,7 @@ from app.models.trip_vehicle import TripVehicle
 from app.models.tour_departure import TourDeparture
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
+from app.models.vehicle import Vehicle
 from app.utils.booking_traveller import ensure_unique_booking_travellers
 
 
@@ -89,8 +91,11 @@ class BookingRepository:
                 joinedload(Booking.sales_account),
                 joinedload(Booking.created_by_account),
                 joinedload(Booking.status_history),
-                joinedload(Booking.trip_items).joinedload(TripItem.hotel),
-                joinedload(Booking.trip_items).joinedload(TripItem.vehicle),
+                joinedload(Booking.trip_items).joinedload(TripItem.hotel)
+                .joinedload(TripHotel.hotel)
+                .joinedload(Hotel.destination_ref),
+                joinedload(Booking.trip_items).joinedload(TripItem.vehicle)
+                .joinedload(TripVehicle.vehicle),
                 joinedload(Booking.trip_itinerary),
             )
             .where(Booking.id == booking_id)
@@ -112,8 +117,11 @@ class BookingRepository:
                 joinedload(Booking.travellers),
                 joinedload(Booking.package),
                 joinedload(Booking.customer),
-                joinedload(Booking.trip_items).joinedload(TripItem.hotel),
-                joinedload(Booking.trip_items).joinedload(TripItem.vehicle),
+                joinedload(Booking.trip_items).joinedload(TripItem.hotel)
+                .joinedload(TripHotel.hotel)
+                .joinedload(Hotel.destination_ref),
+                joinedload(Booking.trip_items).joinedload(TripItem.vehicle)
+                .joinedload(TripVehicle.vehicle),
                 joinedload(Booking.trip_itinerary),
             )
             .where(Booking.booking_code == booking_code)

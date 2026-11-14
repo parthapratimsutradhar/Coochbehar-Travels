@@ -31,12 +31,6 @@ class Vehicle(ActiveEntity):
         default=1,
     )
 
-    price_per_day: Mapped[Decimal] = mapped_column(
-        Numeric(10, 2),
-        nullable=False,
-        default=0,
-    )
-
     enquiries = relationship(
         "Enquiry",
         back_populates="vehicle",

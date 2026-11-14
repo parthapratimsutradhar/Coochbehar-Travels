@@ -120,7 +120,6 @@ def add_backup_records(db: Session) -> None:
                 name="Backup Vehicle",
                 vehicle_type=VehicleType.ANY,
                 capacity=4,
-                price_per_day=Decimal("2000.00"),
             ),
         ]
     )

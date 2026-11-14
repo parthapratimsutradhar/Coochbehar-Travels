@@ -1,5 +1,6 @@
 import uuid
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy.orm import Session
@@ -125,6 +126,28 @@ def download_booking_pdf(
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'attachment; filename="{booking_code}.pdf"',
+        },
+    )
+
+
+@router.get(
+    "/{booking_id}/vouchers/{voucher_type}.pdf",
+    responses={404: {"model": ErrorResponse}},
+    summary="Download a hotel or vehicle voucher",
+)
+def download_booking_voucher_pdf(
+    booking_id: uuid.UUID,
+    voucher_type: Literal["hotel", "vehicle"],
+    db: Session = Depends(get_db),
+    current_user: Account = Depends(get_current_admin_or_staff),
+) -> Response:
+    del current_user
+    booking_code, pdf_content = BookingService(db).render_booking_voucher_pdf(booking_id, voucher_type)
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{booking_code}-{voucher_type}-voucher.pdf"',
         },
     )
 

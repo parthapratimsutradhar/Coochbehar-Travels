@@ -171,7 +171,6 @@ def test_admin_dashboard_route_uses_live_database_values(client, admin_user, db_
         vehicle_type=VehicleType.TEMPO,
         registration_number="WB-26-AB-1234",
         capacity=12,
-        price_per_day=3500,
     )
 
     db_session.add_all([customer, enquiry, package, hotel, vehicle])

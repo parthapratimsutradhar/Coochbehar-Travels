@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
 import pytest
 import jwt
 from fastapi.testclient import TestClient
@@ -1039,11 +1038,11 @@ def test_existing_customer_google_login_adds_missing_profile_pic(
     )
 
 
-def test_vehicle_price_uses_decimal(db_session):
-    """Vehicle prices remain represented accurately after room removal."""
-    vehicle = Vehicle(name="Innova Crysta", registration_number="WB-64-1234", capacity=7, price_per_day=Decimal("3200.75"), is_active=True)
+def test_vehicle_persists_identity_fields(db_session):
+    vehicle = Vehicle(name="Innova Crysta", registration_number="WB-64-1234", capacity=7, is_active=True)
     db_session.add(vehicle)
     db_session.commit()
     db_session.refresh(vehicle)
 
-    assert float(vehicle.price_per_day) == 3200.75
+    assert vehicle.registration_number == "WB-64-1234"
+    assert vehicle.capacity == 7

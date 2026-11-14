@@ -33,11 +33,6 @@ class Hotel(ActiveEntity):
         nullable=True,
     )
 
-    contact: Mapped[str | None] = mapped_column(
-        String(100),
-        nullable=True,
-    )
-
     description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,

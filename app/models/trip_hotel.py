@@ -5,12 +5,13 @@ from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, Str
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseEntity
+from app.models.base import BaseEntity, Boolean
 from app.core.enums import RoomType
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from app.models.hotel import Hotel
     from app.models.trip_items import TripItem
 
 
@@ -78,9 +79,24 @@ class TripHotel(BaseEntity):
         nullable=True,
     )
 
+    place: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    contact_person: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    contact_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    paid_by_traveller: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+    
 # ── Relationships ───────────────────────────────────────────────────────    
 
     trip_item: Mapped["TripItem"] = relationship(
         back_populates="hotel",
     )
 
+    hotel: Mapped["Hotel | None"] = relationship()

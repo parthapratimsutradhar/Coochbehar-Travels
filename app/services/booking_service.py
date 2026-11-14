@@ -13,7 +13,11 @@ from app.repository.customer_repo import CustomerRepository
 from app.services.financial_service import FinancialService
 from app.email.service import EmailService
 from app.email.templates.booking import render_booking_email
-from app.services.booking_pdf_service import build_booking_pdf, generate_and_upload_booking_pdf
+from app.services.booking_pdf_service import (
+    build_booking_pdf,
+    build_booking_voucher_pdf,
+    generate_and_upload_booking_pdf,
+)
 from app.utils.booking_traveller import ensure_unique_booking_travellers
 from app.schemas.booking import (
     BookingDetailResponse,
@@ -378,6 +382,24 @@ class BookingService:
     def render_booking_pdf(self, booking_id: uuid.UUID) -> tuple[str, bytes]:
         booking = self.get_booking(booking_id)
         return booking.booking_code, build_booking_pdf(booking)
+
+    def render_booking_voucher_pdf(self, booking_id: uuid.UUID, voucher_type: str) -> tuple[str, bytes]:
+        if voucher_type not in {"hotel", "vehicle"}:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Voucher type not found.")
+        booking = self.get_booking(booking_id)
+        has_voucher = (
+            bool(booking.trip_items)
+            and any(
+                getattr(item, voucher_type, None) is not None
+                for item in booking.trip_items
+            )
+        )
+        if not has_voucher:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No {voucher_type} voucher details found for this booking.",
+            )
+        return booking.booking_code, build_booking_voucher_pdf(booking, voucher_type)
 
     async def email_booking(self, booking_id: uuid.UUID, recipient_email: str) -> None:
         booking = self.get_booking(booking_id)

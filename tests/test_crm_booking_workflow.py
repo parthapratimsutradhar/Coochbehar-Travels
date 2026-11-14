@@ -1033,7 +1033,21 @@ def test_admin_quotation_detail_response_contract():
             total_price=100,
             created_at=now,
             updated_at=now,
-            hotel=SimpleNamespace(hotel_name="Hidden Hotel"),
+            hotel=SimpleNamespace(
+                id=uuid.uuid4(),
+                trip_item_id=uuid.uuid4(),
+                hotel_name="Hotel Jagdamba",
+                check_in=now,
+                check_out=now,
+                nights=2,
+                place="Katra",
+                address="Railway Road",
+                contact_person="Front Desk",
+                contact_number="9876543210",
+                paid_by_traveller=False,
+                created_at=now,
+                updated_at=now,
+            ),
             vehicle=None,
         ),
         SimpleNamespace(
@@ -1048,7 +1062,22 @@ def test_admin_quotation_detail_response_contract():
             created_at=now,
             updated_at=now,
             hotel=None,
-            vehicle=SimpleNamespace(vehicle_name="Hidden Vehicle"),
+            vehicle=SimpleNamespace(
+                id=uuid.uuid4(),
+                trip_item_id=uuid.uuid4(),
+                vehicle_name="Innova",
+                start_date=now,
+                end_date=now,
+                rental_minutes=60,
+                pickup_location="Station",
+                drop_location="Hotel",
+                owner_name="Vehicle Owner",
+                driver_name="Driver",
+                registration_number="WB01A1234",
+                paid_by_traveller=True,
+                created_at=now,
+                updated_at=now,
+            ),
         ),
         SimpleNamespace(
             id=uuid.uuid4(),
@@ -1087,8 +1116,10 @@ def test_admin_quotation_detail_response_contract():
         assert response.data.quotation_code == "QT-1001-V1"
         assert response.data.status == "DRAFT"
         response_data = response.data.model_dump()
-        assert "hotels" not in response_data
-        assert "vehicles" not in response_data
+        assert response_data["hotels"][0]["hotel_name"] == "Hotel Jagdamba"
+        assert response_data["hotels"][0]["paid_by_traveller"] is False
+        assert response_data["vehicles"][0]["vehicle_name"] == "Innova"
+        assert response_data["vehicles"][0]["paid_by_traveller"] is True
         assert [entry.name for entry in response.data.items] == ["Local Guide"]
 
 

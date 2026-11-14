@@ -12,7 +12,6 @@ class HotelBase(SchemaBase):
     destination_id: UUID | None = None
     category: HotelCategory | None = None
     address: str | None = Field(default=None, max_length=255)
-    contact: str | None = Field(default=None, max_length=100)
     description: str | None = None
 
 
@@ -25,7 +24,6 @@ class HotelUpdate(SchemaBase):
     destination_id: UUID | None = None
     category: HotelCategory | None = None
     address: str | None = Field(default=None, max_length=255)
-    contact: str | None = Field(default=None, max_length=100)
     description: str | None = None
 
 

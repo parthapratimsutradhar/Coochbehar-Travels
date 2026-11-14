@@ -23,6 +23,11 @@ class QuotationHotelCreate(SchemaBase):
     nights: int = Field(..., ge=1)
     room_count: int = Field(default=1, ge=1)
     room_type: RoomType | None = None
+    place: str | None = Field(default=None, max_length=255)
+    address: str | None = Field(default=None, max_length=500)
+    contact_person: str | None = Field(default=None, max_length=100)
+    contact_number: str | None = Field(default=None, max_length=100)
+    paid_by_traveller: bool = True
 
 
 class QuotationHotelResponse(QuotationHotelCreate):
@@ -42,6 +47,14 @@ class QuotationVehicleCreate(SchemaBase):
     end_date: datetime
     rental_minutes: int = Field(..., ge=1)
     quantity: int = Field(default=1, ge=1)
+    pickup_location: str | None = Field(default=None, max_length=255)
+    drop_location: str | None = Field(default=None, max_length=255)
+    owner_name: str | None = Field(default=None, max_length=100)
+    owner_contact: str | None = Field(default=None, max_length=100)
+    driver_name: str | None = Field(default=None, max_length=100)
+    driver_contact: str | None = Field(default=None, max_length=100)
+    registration_number: str | None = Field(default=None, max_length=50)
+    paid_by_traveller: bool = True
 
 
 class QuotationVehicleResponse(QuotationVehicleCreate):
@@ -276,6 +289,8 @@ class QuotationResponse(SchemaBase):
     created_at: datetime
     updated_at: datetime
     items: list[QuotationItemResponse] = Field(default_factory=list)
+    hotels: list[QuotationHotelResponse] = Field(default_factory=list)
+    vehicles: list[QuotationVehicleResponse] = Field(default_factory=list)
     itinerary: list[QuotationItineraryResponse] = Field(default_factory=list)
 
     @model_validator(mode="before")
@@ -286,7 +301,17 @@ class QuotationResponse(SchemaBase):
         data = {
             field: getattr(value, field, None)
             for field in cls.model_fields
-            if field not in {"items", "itinerary", "customer", "package", "variant", "destination", "created_by"}
+            if field not in {
+                "items",
+                "hotels",
+                "vehicles",
+                "itinerary",
+                "customer",
+                "package",
+                "variant",
+                "destination",
+                "created_by",
+            }
         }
         data["customer"] = getattr(value, "customer", None)
         data["package"] = getattr(value, "package", None)
@@ -294,6 +319,16 @@ class QuotationResponse(SchemaBase):
         data["destination"] = getattr(value, "destination", None)
         data["created_by"] = getattr(value, "created_by", None)
         items = list(getattr(value, "items", []) or [])
+        data["hotels"] = [
+            item.hotel
+            for item in items
+            if getattr(item, "hotel", None) is not None
+        ]
+        data["vehicles"] = [
+            item.vehicle
+            for item in items
+            if getattr(item, "vehicle", None) is not None
+        ]
         data["items"] = [
             item
             for item in items

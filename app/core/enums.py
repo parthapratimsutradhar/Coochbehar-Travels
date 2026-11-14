@@ -312,6 +312,7 @@ class QuotationStatus(AppEnum):
     
         
 class CostItemType(AppEnum):
+    HOTEL = "hotel"
     TRANSPORT = "transport"
     FLIGHT = "flight"
     TRAIN = "train"

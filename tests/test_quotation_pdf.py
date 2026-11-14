@@ -10,9 +10,9 @@ from app.main import fastapi_app
 from app.services.quotation_pdf_service import build_quotation_pdf
 
 
-def test_quotation_response_schema_does_not_expose_hotels_or_vehicles():
-    assert "hotels" not in QuotationResponse.model_fields
-    assert "vehicles" not in QuotationResponse.model_fields
+def test_quotation_response_schema_exposes_hotel_and_vehicle_details():
+    assert "hotels" in QuotationResponse.model_fields
+    assert "vehicles" in QuotationResponse.model_fields
     assert "url" in QuotationPdfResponse.model_fields
     assert "path" in QuotationPdfResponse.model_fields
 

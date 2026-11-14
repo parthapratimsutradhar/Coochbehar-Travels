@@ -1,5 +1,4 @@
 from datetime import datetime
-from decimal import Decimal
 from uuid import UUID
 
 from pydantic import ConfigDict, Field
@@ -13,7 +12,6 @@ class VehicleBase(SchemaBase):
     vehicle_type: VehicleType = VehicleType.ANY
     registration_number: str | None = Field(default=None, max_length=50)
     capacity: int = Field(default=1, ge=1)
-    price_per_day: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
 
 
 class VehicleCreate(VehicleBase):
@@ -25,7 +23,6 @@ class VehicleUpdate(SchemaBase):
     vehicle_type: VehicleType | None = None
     registration_number: str | None = Field(default=None, max_length=50)
     capacity: int | None = Field(default=None, ge=1)
-    price_per_day: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     is_active: bool | None = None
 
 

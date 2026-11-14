@@ -177,6 +177,11 @@ class QuotationService:
                     "nights": item.hotel.nights,
                     "room_count": item.hotel.room_count,
                     "room_type": item.hotel.room_type,
+                    "place": item.hotel.place,
+                    "address": item.hotel.address,
+                    "contact_person": item.hotel.contact_person,
+                    "contact_number": item.hotel.contact_number,
+                    "paid_by_traveller": item.hotel.paid_by_traveller,
                 }
                 for item in previous.items
                 if item.hotel
@@ -191,6 +196,14 @@ class QuotationService:
                     "end_date": item.vehicle.end_date,
                     "rental_minutes": item.vehicle.rental_minutes,
                     "quantity": item.vehicle.quantity,
+                    "pickup_location": item.vehicle.pickup_location,
+                    "drop_location": item.vehicle.drop_location,
+                    "owner_name": item.vehicle.owner_name,
+                    "owner_contact": item.vehicle.owner_contact,
+                    "driver_name": item.vehicle.driver_name,
+                    "driver_contact": item.vehicle.driver_contact,
+                    "registration_number": item.vehicle.registration_number,
+                    "paid_by_traveller": item.vehicle.paid_by_traveller,
                 }
                 for item in previous.items
                 if item.vehicle
@@ -372,7 +385,75 @@ class QuotationService:
             "due_amount": quotation.total_amount,
         }
         booking_data.update(booking_fields)
-        booking = BookingRepository(self.db).create(booking_data, travellers=travellers, commit=False)
+        quotation_items = list(quotation.items or [])
+        items = [
+            {
+                field: getattr(item, field)
+                for field in ("item_type", "name", "description", "quantity", "unit_price", "total_price")
+            }
+            for item in quotation_items
+        ]
+        hotels = [
+            {
+                field: getattr(item.hotel, field)
+                for field in (
+                    "hotel_id",
+                    "hotel_name",
+                    "check_in",
+                    "check_out",
+                    "nights",
+                    "room_count",
+                    "room_type",
+                    "place",
+                    "address",
+                    "contact_person",
+                    "contact_number",
+                    "paid_by_traveller",
+                )
+            }
+            for item in quotation_items
+            if item.hotel is not None
+        ]
+        vehicles = [
+            {
+                field: getattr(item.vehicle, field)
+                for field in (
+                    "vehicle_id",
+                    "vehicle_name",
+                    "vehicle_type",
+                    "start_date",
+                    "end_date",
+                    "rental_minutes",
+                    "quantity",
+                    "pickup_location",
+                    "drop_location",
+                    "owner_name",
+                    "owner_contact",
+                    "driver_name",
+                    "driver_contact",
+                    "registration_number",
+                    "paid_by_traveller",
+                )
+            }
+            for item in quotation_items
+            if item.vehicle is not None
+        ]
+        itinerary = [
+            {
+                field: getattr(day, field)
+                for field in ("day_number", "date", "title", "description", "overnight_location", "meal_plan", "sort_order")
+            }
+            for day in quotation.itinerary or []
+        ]
+        booking = BookingRepository(self.db).create(
+            booking_data,
+            travellers=travellers,
+            items=items,
+            hotels=hotels,
+            vehicles=vehicles,
+            itinerary=itinerary,
+            commit=False,
+        )
         from app.services.tour_points_service import TourPointsService
         TourPointsService(self.db).award_booking_points(booking)
         self.db.commit()
