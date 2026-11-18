@@ -5,8 +5,9 @@ from decimal import Decimal
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.enums import ReferralStatus
+from app.core.enums import BookingStatus, ReferralStatus
 from app.models.account import Account
+from app.models.booking import Booking
 from app.models.customer_profile import CustomerProfile
 from app.models.referral import Referral
 from app.models.referral_config import ReferralRewardConfig
@@ -42,6 +43,39 @@ class ReferralRepository:
             .first()
         )
 
+    def list_reward_candidate_ids(self) -> list[uuid.UUID]:
+        rows = (
+            self.db.query(Referral.id)
+            .join(Booking, Booking.customer_id == Referral.referred_customer_id)
+            .filter(
+                Booking.status == BookingStatus.COMPLETED,
+                Referral.status.in_(
+                    (
+                        ReferralStatus.REGISTERED,
+                        ReferralStatus.BOOKING_COMPLETED,
+                        ReferralStatus.REWARD_ELIGIBLE,
+                        ReferralStatus.REWARD_APPROVED,
+                    )
+                )
+            )
+            .distinct()
+            .all()
+        )
+        return [row[0] for row in rows]
+
+    def get_for_reward_processing(self, referral_id: uuid.UUID) -> Referral | None:
+        return (
+            self.db.query(Referral)
+            .options(
+                joinedload(Referral.reward_history),
+                joinedload(Referral.referred_customer)
+                .joinedload(Account.bookings)
+                .joinedload(Booking.status_history),
+            )
+            .filter(Referral.id == referral_id)
+            .first()
+        )
+
     def list_referrals(
         self,
         *,
@@ -55,6 +89,7 @@ class ReferralRepository:
             .options(
                 joinedload(Referral.referrer).joinedload(Account.customer_profile),
                 joinedload(Referral.referred_customer).joinedload(Account.customer_profile),
+                joinedload(Referral.referred_customer).joinedload(Account.bookings),
                 joinedload(Referral.reward_history).joinedload(ReferralRewardHistory.approved_by),
             )
             .order_by(Referral.created_at.desc())

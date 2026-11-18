@@ -70,6 +70,9 @@ class ReferralListItemResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    referral_sent_at: datetime | None = None
+    referral_accepted_at: datetime | None = None
+    booking_created_at: datetime | None = None
     referrer_id: uuid.UUID | None = None
     referrer_name: str | None = None
     referrer_profile_image: str | None = None

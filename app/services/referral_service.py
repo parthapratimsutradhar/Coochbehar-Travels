@@ -1,17 +1,27 @@
+import logging
 import uuid
 import secrets
 import string
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.enums import AccountRole, LeadSource, PaymentMethod, ReferralStatus
+from app.core.enums import (
+    AccountRole,
+    BookingStatus,
+    FinancialTransactionStatus,
+    LeadSource,
+    PaymentMethod,
+    ReferralStatus,
+)
 from app.core.messages.error import ReferralError
 from app.models.account import Account
+from app.models.booking import Booking
 from app.models.customer_profile import CustomerProfile
+from app.models.financial_transaction import FinancialTransaction
 from app.models.referral import Referral
 from app.models.referral_reward_history import ReferralRewardHistory
 from app.repository.customer_repo import CustomerRepository
@@ -28,6 +38,9 @@ from app.schemas.referral import (
     ReferredCustomerResponse,
 )
 from app.services.notification_service import NotificationService
+from app.services.wallet_service import WalletService
+
+logger = logging.getLogger(__name__)
 
 
 class ReferralService:
@@ -250,10 +263,18 @@ class ReferralService:
         referrer = referral.referrer
         referred = referral.referred_customer
         referrer_profile = referrer.customer_profile if referrer and hasattr(referrer, "customer_profile") else None
+        first_booking = (
+            min(referred.bookings, key=lambda booking: booking.created_at)
+            if referred and referred.bookings
+            else None
+        )
         latest_history = self._latest_reward_history(referral)
         approved_by = latest_history.approved_by if latest_history else None
         return ReferralListItemResponse(
             id=referral.id,
+            referral_sent_at=referral.created_at,
+            referral_accepted_at=referred.created_at if referred else None,
+            booking_created_at=first_booking.created_at if first_booking else None,
             referrer_id=referral.referrer_customer_id,
             referrer_name=referrer.name if referrer else None,
             referrer_profile_image=referrer.profile_pic if referrer else None,
@@ -305,6 +326,7 @@ class ReferralService:
         current_user: Account,
     ) -> None:
         referral = self.get_referral_or_404(referral_id)
+        latest_history = self._latest_reward_history(referral)
         if payload.status is not None:
             referral.status = payload.status
             if payload.status == ReferralStatus.BOOKING_COMPLETED and referral.booking_completed_at is None:
@@ -312,19 +334,150 @@ class ReferralService:
             if payload.status == ReferralStatus.BOOKING_COMPLETED and referral.converted_at is None:
                 referral.converted_at = datetime.now(timezone.utc)
         if payload.reward_amount is not None:
-            latest_history = self._latest_reward_history(referral)
             if latest_history is None:
-                self.db.add(
-                    ReferralRewardHistory(
-                        referral_id=referral.id,
-                        approved_reward_amount=Decimal(str(payload.reward_amount)),
-                        approved_by_account_id=current_user.id,
-                    )
+                latest_history = ReferralRewardHistory(
+                    referral=referral,
+                    approved_reward_amount=Decimal(str(payload.reward_amount)),
+                    approved_by_account_id=current_user.id,
                 )
+                self.db.add(latest_history)
             else:
                 latest_history.approved_reward_amount = Decimal(str(payload.reward_amount))
         if payload.notes is not None:
             referral.notes = payload.notes
+        if referral.status == ReferralStatus.REWARD_APPROVED and latest_history is None:
+            latest_history = ReferralRewardHistory(
+                referral=referral,
+                approved_reward_amount=(
+                    referral.default_reward_amount
+                    if referral.default_reward_amount is not None
+                    else Decimal("500.00")
+                ),
+                approved_by_account_id=current_user.id,
+            )
+            self.db.add(latest_history)
+        if referral.status == ReferralStatus.REWARD_CREDITED:
+            self._credit_referral_reward(referral, current_user.id)
+            return
+        self.db.commit()
+
+    def process_eligible_rewards(self) -> dict[str, int]:
+        candidate_ids = self.repo.list_reward_candidate_ids()
+        credited = 0
+        skipped = 0
+        failed = 0
+
+        for referral_id in candidate_ids:
+            try:
+                referral = self.repo.get_for_reward_processing(referral_id)
+                if (
+                    referral is None
+                    or referral.status
+                    not in {
+                        ReferralStatus.REGISTERED,
+                        ReferralStatus.BOOKING_COMPLETED,
+                        ReferralStatus.REWARD_ELIGIBLE,
+                        ReferralStatus.REWARD_APPROVED,
+                    }
+                    or referral.referred_customer is None
+                ):
+                    skipped += 1
+                    continue
+
+                eligible_bookings = [
+                    booking
+                    for booking in referral.referred_customer.bookings
+                    if booking.status == BookingStatus.COMPLETED
+                    and self._booking_is_within_referral_window(referral, booking)
+                ]
+                if not eligible_bookings:
+                    skipped += 1
+                    continue
+
+                booking = min(eligible_bookings, key=lambda item: item.created_at)
+                completion_dates = [
+                    history.changed_at
+                    for history in booking.status_history
+                    if history.new_status == BookingStatus.COMPLETED
+                ]
+                referral.booking_completed_at = (
+                    referral.booking_completed_at
+                    or min(completion_dates, default=booking.updated_at)
+                )
+                if referral.converted_at is None:
+                    referral.converted_at = referral.booking_completed_at
+                referral.status = ReferralStatus.REWARD_ELIGIBLE
+                self.db.commit()
+
+                self._credit_referral_reward(referral)
+                credited += 1
+            except Exception:
+                self.db.rollback()
+                logger.exception("Failed to process referral reward %s", referral_id)
+                failed += 1
+
+        return {"credited": credited, "skipped": skipped, "failed": failed}
+
+    @staticmethod
+    def _booking_is_within_referral_window(
+        referral: Referral,
+        booking: Booking,
+    ) -> bool:
+        referral_created_at = referral.created_at
+        booking_created_at = booking.created_at
+        referral_created_at_utc = (
+            referral_created_at.replace(tzinfo=timezone.utc)
+            if referral_created_at.tzinfo is None
+            else referral_created_at.astimezone(timezone.utc)
+        )
+        booking_created_at_utc = (
+            booking_created_at.replace(tzinfo=timezone.utc)
+            if booking_created_at.tzinfo is None
+            else booking_created_at.astimezone(timezone.utc)
+        )
+        booking_window_days = (
+            30 if referral.booking_window_days is None else referral.booking_window_days
+        )
+        return (
+            referral_created_at_utc
+            <= booking_created_at_utc
+            <= referral_created_at_utc + timedelta(days=booking_window_days)
+        )
+
+    def _credit_referral_reward(
+        self,
+        referral: Referral,
+        approved_by_account_id: uuid.UUID | None = None,
+    ) -> None:
+        latest_history = self._latest_reward_history(referral)
+        amount = latest_history.approved_reward_amount if latest_history else referral.default_reward_amount
+        if amount is None:
+            amount = Decimal("500.00")
+        transaction = WalletService(self.db).credit_referral_reward(
+            customer_id=referral.referrer_customer_id,
+            referral_id=referral.id,
+            amount=amount,
+            description=f"Referral reward for referral {referral.id}",
+        )
+        if transaction.status != FinancialTransactionStatus.COMPLETED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="The referral reward transaction is not completed.",
+            )
+
+        if latest_history is None:
+            latest_history = ReferralRewardHistory(
+                referral_id=referral.id,
+                approved_reward_amount=amount,
+                approved_by_account_id=approved_by_account_id,
+            )
+            self.db.add(latest_history)
+        latest_history.credit_date = transaction.transaction_date
+        referral.status = ReferralStatus.REWARD_CREDITED
+        if referral.booking_completed_at is None:
+            referral.booking_completed_at = datetime.now(timezone.utc)
+        if referral.converted_at is None:
+            referral.converted_at = referral.booking_completed_at
         self.db.commit()
 
     def get_referral_config(self) -> ReferralRewardConfigResponse:

@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.enums import (
@@ -77,6 +78,61 @@ class WalletService:
             balance=self.balance(wallet),
             currency=wallet.currency,
         )
+
+    def credit_referral_reward(
+        self,
+        *,
+        customer_id: uuid.UUID,
+        referral_id: uuid.UUID,
+        amount: Decimal,
+        description: str,
+    ) -> FinancialTransaction:
+        external_reference = f"referral-reward:{referral_id}"
+        existing = self.db.query(FinancialTransaction).filter(
+            FinancialTransaction.external_reference == external_reference
+        ).one_or_none()
+        if existing is not None:
+            return existing
+
+        wallet = self.get_wallet_account(customer_id)
+        expense = self.financial._system_account(
+            "6000",
+            "Referral Reward Expense",
+            "EXPENSE",
+        )
+        try:
+            return self.financial.create_transaction(
+                transaction_type=FinancialTransactionType.EXPENSE,
+                amount=amount,
+                entries=[
+                    {
+                        "account_id": expense.id,
+                        "debit": amount,
+                        "credit": Decimal("0"),
+                        "description": description,
+                    },
+                    {
+                        "account_id": wallet.id,
+                        "debit": Decimal("0"),
+                        "credit": amount,
+                        "description": description,
+                    },
+                ],
+                external_reference=external_reference,
+                customer_id=customer_id,
+                currency=wallet.currency,
+                payment_method=PaymentMethod.WALLET,
+                category=FinancialTransactionCategory.REFERRAL_REWARD,
+                description=description,
+            )
+        except IntegrityError:
+            self.db.rollback()
+            existing = self.db.query(FinancialTransaction).filter(
+                FinancialTransaction.external_reference == external_reference
+            ).one_or_none()
+            if existing is None:
+                raise
+            return existing
 
     def history(self, customer_id: uuid.UUID, limit: int = 100) -> list[FinancialTransaction]:
         wallet = self.get_wallet_account(customer_id)

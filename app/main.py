@@ -24,14 +24,14 @@ import socketio
 logger = logging.getLogger(__name__)
 
 # ── Scheduled data cleanup ────────────────────────────────────────────
-async def _scheduled_cleanup_task(
+async def _scheduled_calendar_task(
     job_name: str,
-    cleanup,
+    task,
     interval_days: int,
     hour: int,
     minute: int,
 ) -> None:
-    """Keep one configured cleanup job scheduled while the app is running."""
+    """Keep one configured calendar job scheduled while the app is running."""
     from app.scheduler.cleanup_service import next_cleanup_run
 
     while True:
@@ -65,10 +65,11 @@ async def lifespan(app: FastAPI):
 
     from app.scheduler.cleanup_service import run_analytics_cleanup, run_cleanup
     from app.scheduler.booking_document_cleanup import run_booking_document_cleanup
+    from app.scheduler.referral_rewards import run_referral_reward_check
 
     tasks = [
         asyncio.create_task(
-            _scheduled_cleanup_task(
+            _scheduled_calendar_task(
                 "analytics cleanup",
                 run_analytics_cleanup,
                 settings.ANALYTICS_CLEANUP_INTERVAL_DAYS,
@@ -77,7 +78,7 @@ async def lifespan(app: FastAPI):
             )
         ),
         asyncio.create_task(
-            _scheduled_cleanup_task(
+            _scheduled_calendar_task(
                 "temporary CDN cleanup",
                 run_cleanup,
                 settings.CDN_CLEANUP_INTERVAL_DAYS,
@@ -86,12 +87,21 @@ async def lifespan(app: FastAPI):
             )
         ),
         asyncio.create_task(
-            _scheduled_cleanup_task(
+            _scheduled_calendar_task(
                 "booking document cleanup",
                 run_booking_document_cleanup,
                 1,
                 settings.CDN_CLEANUP_HOUR,
                 settings.CDN_CLEANUP_MINUTE,
+            )
+        ),
+        asyncio.create_task(
+            _scheduled_calendar_task(
+                "referral reward check",
+                run_referral_reward_check,
+                1,
+                4,
+                0,
             )
         ),
     ]
