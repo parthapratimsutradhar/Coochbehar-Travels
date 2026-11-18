@@ -61,6 +61,11 @@ class ReferralRewardConfigResponse(SchemaBase):
     updated_at: datetime | None = None
 
 
+class ReferralRewardConfigPublicResponse(SchemaBase):
+    default_reward_amount: Decimal
+    booking_window_days: int
+
+
 class ReferralListItemResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 

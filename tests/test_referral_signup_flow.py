@@ -79,6 +79,20 @@ def test_validate_referral_invite_success(client):
     assert data["referrer_name"] == "Alice Referrer"
 
 
+def test_public_referral_config_returns_reward_settings_without_auth(client):
+    resp = client.get("/api/v1/referrals/config")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "success": True,
+        "message": "Referral reward configuration fetched successfully",
+        "data": {
+            "default_reward_amount": "750.00",
+            "booking_window_days": 45,
+        },
+    }
+
+
 def test_validate_referral_invite_rejects_invalid_code(client):
     resp = client.get("/api/v1/referrals/invite/NONEXISTENT")
     assert resp.status_code == 404

@@ -10,6 +10,7 @@ from app.schemas.referral import (
 	ReferralCodeResponse,
 	ReferralHistoryItemResponse,
 	ReferralInviteResponse,
+	ReferralRewardConfigPublicResponse,
 )
 from app.schemas.response import ErrorResponse, SuccessResponse
 from app.services.referral_service import ReferralService
@@ -38,6 +39,24 @@ def validate_referral_invite(
 	return SuccessResponse(
 		message=ReferralSuccess.INVITE_VALID,
 		data=ReferralService(db).validate_invite(referral_code, identifier=identifier),
+	)
+
+
+@router.get(
+	"/config",
+	response_model=SuccessResponse[ReferralRewardConfigPublicResponse],
+	summary="Get the public referral reward configuration",
+)
+def get_public_referral_config(
+	db: Session = Depends(get_db),
+) -> SuccessResponse[ReferralRewardConfigPublicResponse]:
+	config = ReferralService(db).get_referral_config()
+	return SuccessResponse(
+		message=ReferralSuccess.CONFIG_RETRIEVED,
+		data=ReferralRewardConfigPublicResponse(
+			default_reward_amount=config.default_reward_amount,
+			booking_window_days=config.booking_window_days,
+		),
 	)
 
 

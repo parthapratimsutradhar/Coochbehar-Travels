@@ -58,6 +58,7 @@ class ReferralSuccess(StrEnum):
     INVITE_VALID = "Referral invite is valid"
     CODE_RETRIEVED = "Referral code fetched successfully"
     HISTORY_RETRIEVED = "Items fetched successfully"
+    CONFIG_RETRIEVED = "Referral reward configuration fetched successfully"
 
 
 class EnquirySuccess(StrEnum):
