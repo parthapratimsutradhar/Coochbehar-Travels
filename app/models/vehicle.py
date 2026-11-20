@@ -1,5 +1,5 @@
 from sqlalchemy import Enum, Integer, Numeric, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import ActiveEntity
 from decimal import Decimal
 
@@ -29,9 +29,4 @@ class Vehicle(ActiveEntity):
         Integer,
         nullable=False,
         default=1,
-    )
-
-    enquiries = relationship(
-        "Enquiry",
-        back_populates="vehicle",
     )

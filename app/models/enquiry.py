@@ -2,7 +2,15 @@ import uuid
 from sqlalchemy import Enum, ForeignKey, String, Text, Date, Integer
 from datetime import date
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType, MealPlan
+from app.core.enums import (
+    EnquiryChannel,
+    EnquiryStatus,
+    EnquiryType,
+    HotelCategory,
+    MealPlan,
+    RoomType,
+    VehicleType,
+)
 from app.models.base import BaseEntity
 
 
@@ -78,16 +86,19 @@ class Enquiry(BaseEntity):
         index=True,
     )
 
-    hotel_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("hotels.id", ondelete="SET NULL"),
+    hotel_category: Mapped[HotelCategory | None] = mapped_column(
+        Enum(HotelCategory, name="hotel_category"),
         nullable=True,
-        index=True,
     )
 
-    vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("vehicles.id"),
+    room_type: Mapped[RoomType | None] = mapped_column(
+        Enum(RoomType, name="room_type"),
         nullable=True,
-        index=True,
+    )
+
+    vehicle_type: Mapped[VehicleType | None] = mapped_column(
+        Enum(VehicleType, name="vehicle_type"),
+        nullable=True,
     )
 
     destination_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -180,18 +191,6 @@ class Enquiry(BaseEntity):
     destination_ref = relationship(
         "Destination",
         foreign_keys=[destination_id],
-        back_populates="enquiries",
-    )
-
-    hotel = relationship(
-        "Hotel",
-        foreign_keys=[hotel_id],
-        back_populates="enquiries",
-    )
-
-    vehicle = relationship(
-        "Vehicle",
-        foreign_keys=[vehicle_id],
         back_populates="enquiries",
     )
 

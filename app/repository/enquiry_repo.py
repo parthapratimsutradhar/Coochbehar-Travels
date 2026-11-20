@@ -46,8 +46,6 @@ class EnquiryRepository:
                 joinedload(Enquiry.variant),
                 joinedload(Enquiry.lead),
                 joinedload(Enquiry.destination_ref),
-                joinedload(Enquiry.hotel),
-                joinedload(Enquiry.vehicle),
             )
             .where(Enquiry.customer_id == customer_id)
             .order_by(Enquiry.created_at.desc())

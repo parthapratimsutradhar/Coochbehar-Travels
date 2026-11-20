@@ -299,10 +299,16 @@ def test_visitor_submits_enquiry_creates_scored_lead(client: TestClient, db_sess
             "subject": "Sikkim Explorer",
             "message": "Looking for 5-day package",
             "channel": "WEBSITE",
+            "hotel_category": "STANDARD",
+            "room_type": "DOUBLE",
+            "vehicle_type": "6-seater",
         },
     )
-    assert res.status_code == 201
+    assert res.status_code == 201, res.text
     assert res.json()["data"]["lead"]["lead_score"] == 45
+    assert res.json()["data"]["hotel_category"] == "STANDARD"
+    assert res.json()["data"]["room_type"] == "DOUBLE"
+    assert res.json()["data"]["vehicle_type"] == "6-seater"
 
     admin = Account(
         account_code="ADM-LEADSCORE01",
@@ -318,6 +324,9 @@ def test_visitor_submits_enquiry_creates_scored_lead(client: TestClient, db_sess
     enquiry = db_session.execute(
         select(Enquiry).where(Enquiry.visitor_id == visitor.id)
     ).scalar_one()
+    assert enquiry.hotel_category.value == "STANDARD"
+    assert enquiry.room_type.value == "DOUBLE"
+    assert enquiry.vehicle_type.value == "6-seater"
     lead = db_session.execute(
         select(Lead).where(Lead.enquiry_id == enquiry.id)
     ).scalar_one()

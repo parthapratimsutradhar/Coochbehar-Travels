@@ -4,7 +4,15 @@ from uuid import UUID
 from pydantic import AliasChoices, AliasPath, Field, ConfigDict, model_validator
 from app.schemas.base import SchemaBase
 from app.schemas.lead import LeadSummaryResponse
-from app.core.enums import EnquiryChannel, EnquiryStatus, EnquiryType, MealPlan
+from app.core.enums import (
+    EnquiryChannel,
+    EnquiryStatus,
+    EnquiryType,
+    HotelCategory,
+    MealPlan,
+    RoomType,
+    VehicleType,
+)
 
 
 class EnquiryBase(SchemaBase):
@@ -37,8 +45,9 @@ class EnquiryCreate(SchemaBase):
     adult_count: int | None = Field(default=None, ge=0)
     child_count: int | None = Field(default=None, ge=0)
     senior_count: int | None = Field(default=None, ge=0)
-    hotel_id: UUID | None = None
-    vehicle_id: UUID | None = None
+    hotel_category: HotelCategory | None = None
+    room_type: RoomType | None = None
+    vehicle_type: VehicleType | None = None
     room_count: int | None = Field(default=None, ge=0)
     vehicle_count: int | None = Field(default=None, ge=0)
     budget_min: float | None = Field(default=None, ge=0)
@@ -82,8 +91,9 @@ class CustomerEnquiryUpdate(SchemaBase):
     adult_count: int | None = Field(default=None, ge=0)
     child_count: int | None = Field(default=None, ge=0)
     senior_count: int | None = Field(default=None, ge=0)
-    hotel_id: UUID | None = None
-    vehicle_id: UUID | None = None
+    hotel_category: HotelCategory | None = None
+    room_type: RoomType | None = None
+    vehicle_type: VehicleType | None = None
     room_count: int | None = Field(default=None, ge=0)
     vehicle_count: int | None = Field(default=None, ge=0)
     budget_min: float | None = Field(default=None, ge=0)
@@ -105,8 +115,9 @@ class EnquiryResponse(EnquiryBase):
     enquirer_name: str | None = None
     enquirer_phone: str | None = None
     enquirer_email: str | None = None
-    hotel_id: UUID | None = None
-    vehicle_id: UUID | None = None
+    hotel_category: HotelCategory | None = None
+    room_type: RoomType | None = None
+    vehicle_type: VehicleType | None = None
     travel_date: date | None = None
     travel_duration_day: int | None = None
     travel_duration_night: int | None = None
@@ -139,14 +150,9 @@ class CustomerEnquiryResponse(EnquiryBase):
     enquirer_name: str | None = None
     enquirer_phone: str | None = None
     enquirer_email: str | None = None
-    hotel_id: UUID | None = None
-    hotel_name: str | None = Field(default=None, validation_alias=AliasPath("hotel", "name"))
-    vehicle_id: UUID | None = None
-    vehicle_name: str | None = Field(default=None, validation_alias=AliasPath("vehicle", "name"))
-    vehicle_registration_number: str | None = Field(
-        default=None,
-        validation_alias=AliasPath("vehicle", "registration_number"),
-    )
+    hotel_category: HotelCategory | None = None
+    room_type: RoomType | None = None
+    vehicle_type: VehicleType | None = None
     travel_date: date | None = None
     travel_duration_day: int | None = None
     travel_duration_night: int | None = None

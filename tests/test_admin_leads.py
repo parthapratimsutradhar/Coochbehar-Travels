@@ -10,9 +10,17 @@ from sqlalchemy.pool import StaticPool
 
 compiles(JSONB, "sqlite")(lambda type_, compiler, **kw: "JSON")
 
-from app.core.enums import AccountRole, EnquiryChannel, EnquiryType, LeadStatus
+from app.core.enums import (
+    AccountRole,
+    EnquiryChannel,
+    EnquiryType,
+    HotelCategory,
+    LeadStatus,
+    RoomType,
+    VehicleType,
+)
 from app.db.database import get_db
-from app.main import app
+from app.main import fastapi_app as app
 from app.models.account import Account
 from app.models.base import Base
 from app.models.enquiry import Enquiry
@@ -146,6 +154,9 @@ def test_admin_enquiry_list_filters_by_customer(client, db_session):
         customer_id=customer.id,
         enquiry_type=EnquiryType.FIXED_TOUR,
         channel=EnquiryChannel.WEBSITE,
+        hotel_category=HotelCategory.DELUXE,
+        room_type=RoomType.TWIN,
+        vehicle_type=VehicleType.TEMPO,
     )
     other_enquiry = Enquiry(
         enquiry_code="ENQ-CUSTOMER2",
@@ -166,6 +177,9 @@ def test_admin_enquiry_list_filters_by_customer(client, db_session):
     payload = response.json()
     assert payload["pagination"]["total_items"] == 1
     assert [enquiry["id"] for enquiry in payload["data"]] == [str(matching_enquiry.id)]
+    assert payload["data"][0]["hotel_category"] == "DELUXE"
+    assert payload["data"][0]["room_type"] == "TWIN"
+    assert payload["data"][0]["vehicle_type"] == "Tempo"
 
 
 def test_admin_can_unassign_lead(client, db_session):

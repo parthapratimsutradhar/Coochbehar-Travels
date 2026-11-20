@@ -1,7 +1,14 @@
 from datetime import date, datetime
 from uuid import UUID
 from typing import Literal
-from app.core.enums import EnquiryChannel, EnquiryType, VehicleType, MealPlan
+from app.core.enums import (
+    EnquiryChannel,
+    EnquiryType,
+    HotelCategory,
+    MealPlan,
+    RoomType,
+    VehicleType,
+)
 from pydantic import Field, ConfigDict
 from app.schemas.base import SchemaBase
 
@@ -20,7 +27,9 @@ class CustomTourRequestBase(SchemaBase):
     room_count: int | None = Field(default=None, ge=0)
     pax_no: int | None = Field(default=4, ge=1)
     no_room: int | None = Field(default=2, ge=1)
-    vehicle_type: str | None = Field(default=None, max_length=50)
+    hotel_category: HotelCategory | None = None
+    room_type: RoomType | None = None
+    vehicle_type: VehicleType | None = None
     meal_plan: str | None = Field(default=None, max_length=50)
     special_requirements: str | None = None
 
@@ -40,8 +49,10 @@ class CustomTourRequestCreate(SchemaBase):
     room_count: int | None = None
     pax_no: int | None = 4
     no_room: int | None = 2
-    vehicle_type: VehicleType | str | None = None
-    meal_plan: MealPlan | str | None = None
+    hotel_category: HotelCategory | None = None
+    room_type: RoomType | None = None
+    vehicle_type: VehicleType | None = None
+    meal_plan: MealPlan | None = None
     special_requirements: str | None = None
     enquiry_type: EnquiryType | None = None
     channel: Literal[EnquiryChannel.WEBSITE, EnquiryChannel.APP] = EnquiryChannel.WEBSITE
