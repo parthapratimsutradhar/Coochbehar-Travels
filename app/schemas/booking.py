@@ -84,8 +84,14 @@ class OfflineBookingCreate(SchemaBase):
     special_notes: str | None = None
     travellers: list[BookingTravelerCreate] = Field(default_factory=list)
     items: list[QuotationItemCreate] = Field(default_factory=list)
-    hotels: list[QuotationHotelCreate] = Field(default_factory=list)
-    vehicles: list[QuotationVehicleCreate] = Field(default_factory=list)
+    hotels: list[QuotationHotelCreate] = Field(
+        default_factory=list,
+        description="Optional hotel details; they can be added after the booking is created.",
+    )
+    vehicles: list[QuotationVehicleCreate] = Field(
+        default_factory=list,
+        description="Optional vehicle details; they can be added after the booking is created.",
+    )
     itinerary: list[QuotationItineraryCreate] = Field(default_factory=list)
 
 
@@ -294,7 +300,7 @@ class BookingTripItemResponse(SchemaBase):
     booking_id: UUID
     item_type: str
     name: str
-    description: str | None
+    description: str | None = None
     quantity: int
     unit_price: Decimal
     total_price: Decimal

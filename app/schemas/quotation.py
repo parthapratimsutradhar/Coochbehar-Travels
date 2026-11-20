@@ -121,8 +121,14 @@ class QuotationBase(SchemaBase):
 
 class QuotationCreate(QuotationBase):
     items: list[QuotationItemCreate] = Field(default_factory=list)
-    hotels: list[QuotationHotelCreate] = Field(default_factory=list)
-    vehicles: list[QuotationVehicleCreate] = Field(default_factory=list)
+    hotels: list[QuotationHotelCreate] = Field(
+        default_factory=list,
+        description="Optional details for hotel cost items; add them later when the hotel is selected.",
+    )
+    vehicles: list[QuotationVehicleCreate] = Field(
+        default_factory=list,
+        description="Optional details for transport/transfer cost items; add them later when the vehicle is selected.",
+    )
     itinerary: list[QuotationItineraryCreate] = Field(default_factory=list)
 
 
@@ -144,8 +150,14 @@ class QuotationVersionCreate(SchemaBase):
     inclusion: str | None = None
     exclusion: str | None = None
     items: list[QuotationItemCreate] | None = None
-    hotels: list[QuotationHotelCreate] | None = None
-    vehicles: list[QuotationVehicleCreate] | None = None
+    hotels: list[QuotationHotelCreate] | None = Field(
+        default=None,
+        description="Optional hotel confirmation details; omit or pass an empty list until known.",
+    )
+    vehicles: list[QuotationVehicleCreate] | None = Field(
+        default=None,
+        description="Optional vehicle confirmation details; omit or pass an empty list until known.",
+    )
     itinerary: list[QuotationItineraryCreate] | None = None
 
 
@@ -168,8 +180,14 @@ class QuotationUpdate(SchemaBase):
     inclusion: str | None = None
     exclusion: str | None = None
     items: list[QuotationItemCreate] | None = None
-    hotels: list[QuotationHotelCreate] | None = None
-    vehicles: list[QuotationVehicleCreate] | None = None
+    hotels: list[QuotationHotelCreate] | None = Field(
+        default=None,
+        description="Optional hotel confirmation details; omit or pass an empty list until known.",
+    )
+    vehicles: list[QuotationVehicleCreate] | None = Field(
+        default=None,
+        description="Optional vehicle confirmation details; omit or pass an empty list until known.",
+    )
     itinerary: list[QuotationItineraryCreate] | None = None
 
 

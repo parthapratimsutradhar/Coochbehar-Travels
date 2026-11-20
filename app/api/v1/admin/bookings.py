@@ -21,6 +21,12 @@ from app.schemas.booking import (
     OfflineBookingCreate,
 )
 from app.schemas.pagination import PaginatedResponse, PaginationMeta
+from app.schemas.quotation import (
+    QuotationHotelCreate,
+    QuotationHotelResponse,
+    QuotationVehicleCreate,
+    QuotationVehicleResponse,
+)
 from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
 from app.services.booking_service import BookingService
 
@@ -182,6 +188,48 @@ def get_booking(
     return SuccessResponse(
         message="Booking details fetched successfully",
         data=BookingService(db).get_booking_detail(booking_id),
+    )
+
+
+@router.put(
+    "/{booking_id}/trip-items/{trip_item_id}/hotel",
+    response_model=SuccessResponse[QuotationHotelResponse],
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Add or update hotel details for a booking trip item",
+)
+def upsert_booking_hotel_details(
+    booking_id: uuid.UUID,
+    trip_item_id: uuid.UUID,
+    payload: QuotationHotelCreate,
+    db: Session = Depends(get_db),
+    current_user: Account = Depends(get_current_admin_or_staff),
+) -> SuccessResponse[QuotationHotelResponse]:
+    del current_user
+    hotel = BookingService(db).upsert_booking_hotel_details(booking_id, trip_item_id, payload)
+    return SuccessResponse(
+        message="Booking hotel details saved successfully",
+        data=QuotationHotelResponse.model_validate(hotel),
+    )
+
+
+@router.put(
+    "/{booking_id}/trip-items/{trip_item_id}/vehicle",
+    response_model=SuccessResponse[QuotationVehicleResponse],
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Add or update vehicle details for a booking trip item",
+)
+def upsert_booking_vehicle_details(
+    booking_id: uuid.UUID,
+    trip_item_id: uuid.UUID,
+    payload: QuotationVehicleCreate,
+    db: Session = Depends(get_db),
+    current_user: Account = Depends(get_current_admin_or_staff),
+) -> SuccessResponse[QuotationVehicleResponse]:
+    del current_user
+    vehicle = BookingService(db).upsert_booking_vehicle_details(booking_id, trip_item_id, payload)
+    return SuccessResponse(
+        message="Booking vehicle details saved successfully",
+        data=QuotationVehicleResponse.model_validate(vehicle),
     )
 
 

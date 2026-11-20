@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.enums import BookingSource, BookingStatus, EnquiryStatus, QuotationStatus, TourType
+from app.core.enums import BookingSource, BookingStatus, CostItemType, EnquiryStatus, QuotationStatus, TourType
 from app.models.account import Account
 from app.models.destination import Destination
 from app.models.quotation import Quotation
@@ -34,10 +34,38 @@ class QuotationService:
         self.quotation_repo = QuotationRepository(db)
         self.enquiry_repo = EnquiryRepository(db)
 
+    @staticmethod
+    def _validate_trip_detail_counts(
+        item_types: list[CostItemType],
+        hotel_count: int,
+        vehicle_count: int,
+    ) -> None:
+        hotel_item_count = sum(item_type == CostItemType.HOTEL for item_type in item_types)
+        vehicle_item_count = sum(
+            item_type in {CostItemType.TRANSPORT, CostItemType.TRANSFER}
+            for item_type in item_types
+        )
+        if hotel_count > hotel_item_count:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Hotel details can only be supplied for hotel quotation items.",
+            )
+        if vehicle_count > vehicle_item_count:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Vehicle details can only be supplied for transport or transfer quotation items.",
+            )
+
     def create_quotation(self, payload: QuotationCreate, staff_user: Account) -> Quotation:
         enquiry = self.enquiry_repo.get_by_id(payload.enquiry_id)
         if not enquiry:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enquiry not found.")
+
+        self._validate_trip_detail_counts(
+            [item.item_type for item in payload.items],
+            len(payload.hotels),
+            len(payload.vehicles),
+        )
 
         # Version calculation
         enquiry_id = payload.enquiry_id
@@ -223,6 +251,12 @@ class QuotationService:
                 for day in previous.itinerary
             ]
 
+        self._validate_trip_detail_counts(
+            [item["item_type"] for item in items_data],
+            len(hotels_data),
+            len(vehicles_data),
+        )
+
         if "subtotal" not in values and items_data:
             values["subtotal"] = sum(
                 (item["unit_price"] * item["quantity"] for item in items_data),
@@ -284,6 +318,16 @@ class QuotationService:
         hotels = values.pop("hotels", None)
         vehicles = values.pop("vehicles", None)
         itinerary = values.pop("itinerary", None)
+        item_types = (
+            [item.item_type for item in payload.items]
+            if items is not None
+            else [item.item_type for item in quotation.items]
+        )
+        self._validate_trip_detail_counts(
+            item_types,
+            len(hotels) if hotels is not None else 0,
+            len(vehicles) if vehicles is not None else 0,
+        )
 
         if items is not None:
             for item in items:

@@ -13,6 +13,27 @@ class QuotationRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    @staticmethod
+    def _replace_trip_details(
+        items: list[TripItem],
+        details: list[dict],
+        relationship_name: str,
+        detail_model: type[TripHotel] | type[TripVehicle],
+    ) -> None:
+        for index, item in enumerate(items):
+            current = getattr(item, relationship_name)
+            if index >= len(details):
+                setattr(item, relationship_name, None)
+            elif current is None:
+                setattr(
+                    item,
+                    relationship_name,
+                    detail_model(trip_item_id=item.id, **details[index]),
+                )
+            else:
+                for field, value in details[index].items():
+                    setattr(current, field, value)
+
     def get_by_id(self, quotation_id: uuid.UUID) -> Quotation | None:
         stmt = (
             select(Quotation)
@@ -128,11 +149,9 @@ class QuotationRepository:
                 self.db.flush()
                 created_items.append(q_item)
         hotel_items = [item for item in created_items if item.item_type.value == "hotel"]
-        for item, hotel_data in zip(hotel_items, hotels or []):
-            self.db.add(TripHotel(trip_item_id=item.id, **hotel_data))
+        self._replace_trip_details(hotel_items, hotels or [], "hotel", TripHotel)
         vehicle_items = [item for item in created_items if item.item_type.value in {"transport", "transfer"}]
-        for item, vehicle_data in zip(vehicle_items, vehicles or []):
-            self.db.add(TripVehicle(trip_item_id=item.id, **vehicle_data))
+        self._replace_trip_details(vehicle_items, vehicles or [], "vehicle", TripVehicle)
         if itinerary:
             for it in itinerary:
                 self.db.add(TripItinerary(quotation_id=quotation.id, **it))
@@ -167,13 +186,16 @@ class QuotationRepository:
                 self.db.flush()
                 created_items.append(q_item)
 
-            hotel_items = [item for item in created_items if item.item_type.value == "hotel"]
-            for item, hotel_data in zip(hotel_items, hotels or []):
-                self.db.add(TripHotel(trip_item_id=item.id, **hotel_data))
+        else:
+            created_items = list(quotation.items)
 
+        if hotels is not None:
+            hotel_items = [item for item in created_items if item.item_type.value == "hotel"]
+            self._replace_trip_details(hotel_items, hotels, "hotel", TripHotel)
+
+        if vehicles is not None:
             vehicle_items = [item for item in created_items if item.item_type.value in {"transport", "transfer"}]
-            for item, vehicle_data in zip(vehicle_items, vehicles or []):
-                self.db.add(TripVehicle(trip_item_id=item.id, **vehicle_data))
+            self._replace_trip_details(vehicle_items, vehicles, "vehicle", TripVehicle)
 
         if itinerary is not None:
             for old_itinerary in quotation.itinerary:

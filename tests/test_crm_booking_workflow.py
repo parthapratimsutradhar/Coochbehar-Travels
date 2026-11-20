@@ -683,6 +683,87 @@ def test_admin_create_booking_returns_payload_dates(client, superadmin_auth_head
     assert set(detail_booking) == (set(day_booking) - {"enquiry"}) | {"enquiry_id"}
 
 
+def test_booking_can_be_created_without_hotel_or_vehicle_details_then_filled_later(
+    client,
+    superadmin_auth_header,
+    test_customer,
+):
+    create_response = client.post(
+        "/api/v1/admin/bookings",
+        headers=superadmin_auth_header,
+        json={
+            "customer_id": str(test_customer.id),
+            "total_selling_price": 25000,
+            "items": [
+                {
+                    "item_type": "hotel",
+                    "name": "Accommodation",
+                    "unit_price": 10000,
+                    "total_price": 10000,
+                },
+                {
+                    "item_type": "transport",
+                    "name": "Ground transport",
+                    "unit_price": 5000,
+                    "total_price": 5000,
+                },
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201, create_response.text
+    booking = create_response.json()["data"]
+    hotel_item, vehicle_item = booking["items"]
+    assert hotel_item["hotel"] == []
+    assert vehicle_item["vehicle"] == []
+
+    hotel_response = client.put(
+        f"/api/v1/admin/bookings/{booking['id']}/trip-items/{hotel_item['id']}/hotel",
+        headers=superadmin_auth_header,
+        json={
+            "hotel_name": "Hotel Jagdamba",
+            "check_in": "2026-12-01T00:00:00Z",
+            "check_out": "2026-12-03T00:00:00Z",
+            "nights": 2,
+            "room_type": "DOUBLE",
+            "place": "Katra",
+            "address": "Railway Road",
+        },
+    )
+    vehicle_response = client.put(
+        f"/api/v1/admin/bookings/{booking['id']}/trip-items/{vehicle_item['id']}/vehicle",
+        headers=superadmin_auth_header,
+        json={
+            "vehicle_name": "Innova",
+            "vehicle_type": "Tempo",
+            "start_date": "2026-12-01T00:00:00Z",
+            "end_date": "2026-12-03T00:00:00Z",
+            "rental_minutes": 60,
+            "pickup_location": "Katra Railway Station",
+            "registration_number": "WB01A1234",
+        },
+    )
+
+    assert hotel_response.status_code == 200, hotel_response.text
+    assert vehicle_response.status_code == 200, vehicle_response.text
+    assert hotel_response.json()["data"]["hotel_name"] == "Hotel Jagdamba"
+    assert vehicle_response.json()["data"]["vehicle_name"] == "Innova"
+
+    voucher = client.get(
+        f"/api/v1/admin/bookings/{booking['id']}/vouchers/hotel.pdf",
+        headers=superadmin_auth_header,
+    )
+    assert voucher.status_code == 200, voucher.text
+    assert voucher.headers["content-type"] == "application/pdf"
+
+    vehicle_voucher = client.get(
+        f"/api/v1/admin/bookings/{booking['id']}/vouchers/vehicle.pdf",
+        headers=superadmin_auth_header,
+    )
+    assert vehicle_voucher.status_code == 200, vehicle_voucher.text
+    assert vehicle_voucher.headers["content-type"] == "application/pdf"
+
+
 def test_offline_booking_service_uses_package_id_schema_contract(db_session, test_customer, superadmin_user):
     package_id = uuid.uuid4()
     payload = OfflineBookingCreate(
@@ -1373,6 +1454,79 @@ def test_customer_accepts_quotation_with_traveller_form(client, test_customer, d
     assert len(booking.travellers) == 1
     assert booking.travellers[0].full_name == "John Traveler"
     assert booking.travellers[0].is_primary is True
+
+
+def test_quotation_hotel_vehicle_details_can_be_added_after_creation(
+    client,
+    superadmin_auth_header,
+    test_customer,
+    db_session,
+):
+    enquiry = Enquiry(
+        enquiry_code="ENQ-LATER-DETAILS",
+        customer_id=test_customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+    )
+    db_session.add(enquiry)
+    db_session.commit()
+
+    create_response = client.post(
+        "/api/v1/admin/quotations/",
+        headers=superadmin_auth_header,
+        json={
+            "enquiry_id": str(enquiry.id),
+            "tour_name": "Hotel and transport details later",
+            "items": [
+                {"item_type": "hotel", "name": "Accommodation"},
+                {"item_type": "transport", "name": "Ground transport"},
+            ],
+        },
+    )
+    assert create_response.status_code == 201, create_response.text
+    quotation = db_session.query(Quotation).filter_by(enquiry_id=enquiry.id).one()
+    quotation_id = quotation.id
+
+    blank_details_response = client.get(
+        f"/api/v1/admin/quotations/{quotation_id}",
+        headers=superadmin_auth_header,
+    )
+    assert blank_details_response.status_code == 200, blank_details_response.text
+    assert blank_details_response.json()["data"]["hotels"] == []
+    assert blank_details_response.json()["data"]["vehicles"] == []
+
+    update_response = client.patch(
+        f"/api/v1/admin/quotations/{quotation_id}",
+        headers=superadmin_auth_header,
+        json={
+            "hotels": [
+                {
+                    "hotel_name": "Hotel Jagdamba",
+                    "check_in": "2026-12-01T00:00:00Z",
+                    "check_out": "2026-12-03T00:00:00Z",
+                    "nights": 2,
+                }
+            ],
+            "vehicles": [
+                {
+                    "vehicle_name": "Innova",
+                    "vehicle_type": "Tempo",
+                    "start_date": "2026-12-01T00:00:00Z",
+                    "end_date": "2026-12-03T00:00:00Z",
+                    "rental_minutes": 60,
+                }
+            ],
+        },
+    )
+    assert update_response.status_code == 200, update_response.text
+
+    detail_response = client.get(
+        f"/api/v1/admin/quotations/{quotation_id}",
+        headers=superadmin_auth_header,
+    )
+    assert detail_response.status_code == 200, detail_response.text
+    assert detail_response.json()["data"]["hotels"][0]["hotel_name"] == "Hotel Jagdamba"
+    assert detail_response.json()["data"]["vehicles"][0]["vehicle_name"] == "Innova"
 
 
 def test_admin_quotation_send_marks_status_sent(client, superadmin_auth_header, test_customer, db_session, monkeypatch):

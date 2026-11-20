@@ -4,9 +4,11 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.enums import BookingSource, BookingStatus, LeadSource, PaymentStatus, TourType
+from app.core.enums import BookingSource, BookingStatus, CostItemType, LeadSource, PaymentStatus, TourType
 from app.models.account import Account
 from app.models.booking import Booking
+from app.models.trip_hotel import TripHotel
+from app.models.trip_vehicle import TripVehicle
 from app.models.destination import Destination
 from app.repository.booking_repo import BookingRepository
 from app.repository.customer_repo import CustomerRepository
@@ -27,6 +29,7 @@ from app.schemas.booking import (
     OfflineBookingCreate,
     OnlineBookingCreate,
 )
+from app.schemas.quotation import QuotationHotelCreate, QuotationVehicleCreate
 
 
 class BookingService:
@@ -168,6 +171,22 @@ class BookingService:
         travellers_data = [traveller.model_dump(exclude_none=True) for traveller in payload.travellers]
 
         cost_items = payload.items
+        hotel_item_count = sum(item.item_type == CostItemType.HOTEL for item in cost_items)
+        vehicle_item_count = sum(
+            item.item_type in {CostItemType.TRANSPORT, CostItemType.TRANSFER}
+            for item in cost_items
+        )
+        if len(payload.hotels) > hotel_item_count:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Hotel details can only be supplied for hotel booking items.",
+            )
+        if len(payload.vehicles) > vehicle_item_count:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Vehicle details can only be supplied for transport or transfer booking items.",
+            )
+
         itinerary_data = [day.model_dump(exclude_none=True) for day in payload.itinerary]
         if departure_date or return_date:
             itinerary_dates = {
@@ -267,6 +286,64 @@ class BookingService:
         if not booking:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
         return booking
+
+    def upsert_booking_hotel_details(
+        self,
+        booking_id: uuid.UUID,
+        trip_item_id: uuid.UUID,
+        payload: QuotationHotelCreate,
+    ) -> TripHotel:
+        booking = self.get_booking(booking_id)
+        item = next((item for item in booking.trip_items if item.id == trip_item_id), None)
+        if item is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip item not found.")
+        if item.item_type != CostItemType.HOTEL:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Hotel details can only be added to a hotel trip item.",
+            )
+
+        values = payload.model_dump()
+        hotel = item.hotel
+        if hotel is None:
+            hotel = TripHotel(trip_item_id=item.id, **values)
+            item.hotel = hotel
+            self.db.add(hotel)
+        else:
+            for field, value in values.items():
+                setattr(hotel, field, value)
+        self.db.commit()
+        self.db.refresh(hotel)
+        return hotel
+
+    def upsert_booking_vehicle_details(
+        self,
+        booking_id: uuid.UUID,
+        trip_item_id: uuid.UUID,
+        payload: QuotationVehicleCreate,
+    ) -> TripVehicle:
+        booking = self.get_booking(booking_id)
+        item = next((item for item in booking.trip_items if item.id == trip_item_id), None)
+        if item is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip item not found.")
+        if item.item_type not in {CostItemType.TRANSPORT, CostItemType.TRANSFER}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Vehicle details can only be added to a transport or transfer trip item.",
+            )
+
+        values = payload.model_dump()
+        vehicle = item.vehicle
+        if vehicle is None:
+            vehicle = TripVehicle(trip_item_id=item.id, **values)
+            item.vehicle = vehicle
+            self.db.add(vehicle)
+        else:
+            for field, value in values.items():
+                setattr(vehicle, field, value)
+        self.db.commit()
+        self.db.refresh(vehicle)
+        return vehicle
 
     def get_booking_detail(
         self,
