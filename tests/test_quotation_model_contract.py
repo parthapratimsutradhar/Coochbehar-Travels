@@ -1,4 +1,5 @@
 from app.models.quotation import Quotation
+from app.schemas.quotation import QuotationCreate
 
 
 def test_quotation_model_uses_final_minimal_contract():
@@ -18,3 +19,18 @@ def test_quotation_model_uses_final_minimal_contract():
     assert not hasattr(Quotation, "room_count")
     assert not hasattr(Quotation, "vehicle_count")
     assert not hasattr(Quotation, "meal_plan")
+
+
+def test_draft_quotation_create_contract_allows_incomplete_details():
+    payload = QuotationCreate.model_validate(
+        {
+            "enquiry_id": "4f58e4cc-5a4b-4a6d-a82f-c09f7baf6eb8",
+            "save_as_draft": True,
+        }
+    )
+
+    assert payload.status.value == "DRAFT"
+    assert payload.save_as_draft is True
+    assert payload.tour_name is None
+    assert payload.hotels is None
+    assert payload.vehicles is None

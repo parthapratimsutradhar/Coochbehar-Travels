@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from pypdf import PdfReader
 
-from app.schemas.quotation import QuotationPdfResponse, QuotationResponse
+from app.schemas.quotation import QuotationResponse
 from app.main import fastapi_app
 from app.services.quotation_pdf_service import build_quotation_pdf
 
@@ -13,23 +13,18 @@ from app.services.quotation_pdf_service import build_quotation_pdf
 def test_quotation_response_schema_exposes_hotel_and_vehicle_details():
     assert "hotels" in QuotationResponse.model_fields
     assert "vehicles" in QuotationResponse.model_fields
-    assert "url" in QuotationPdfResponse.model_fields
-    assert "path" in QuotationPdfResponse.model_fields
 
 
-def test_quotation_pdf_openapi_schema_documents_response_fields():
+def test_quotation_pdf_openapi_schema_documents_download_response():
     schema = fastapi_app.openapi()
     operation = schema["paths"]["/api/v1/admin/quotations/{quotation_id}/pdf"]["get"]
-    response_ref = operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
-    response_name = response_ref.rsplit("/", 1)[-1]
-    response_schema = schema["components"]["schemas"][response_name]
-    data_ref = response_schema["properties"]["data"]["$ref"]
-    pdf_response_name = data_ref.rsplit("/", 1)[-1]
-    pdf_response_schema = schema["components"]["schemas"][pdf_response_name]
+    pdf_response = operation["responses"]["200"]
 
-    assert set(pdf_response_schema["properties"]) == {"url", "path"}
-    assert "hotel or vehicle details" in pdf_response_schema["properties"]["url"]["description"]
-    assert "Hotel and vehicle details are excluded." in operation["description"]
+    assert pdf_response["content"]["application/pdf"]["schema"] == {
+        "type": "string",
+        "format": "binary",
+    }
+    assert "Hotel and vehicle details are excluded from the PDF." in operation["description"]
 
 
 def test_quotation_pdf_omits_hotel_and_vehicle_details_but_keeps_totals():

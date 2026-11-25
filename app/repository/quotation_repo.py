@@ -65,6 +65,15 @@ class QuotationRepository:
         max_v = self.db.execute(stmt).scalar_one_or_none()
         return max_v or 0
 
+    def get_latest_for_enquiry(self, enquiry_id: uuid.UUID) -> Quotation | None:
+        stmt = (
+            select(Quotation)
+            .where(Quotation.enquiry_id == enquiry_id)
+            .order_by(Quotation.version.desc())
+            .limit(1)
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def list_for_enquiry(self, enquiry_id: uuid.UUID) -> list[Quotation]:
         stmt = (
             select(Quotation)

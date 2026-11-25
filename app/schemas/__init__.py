@@ -13,10 +13,6 @@ from app.schemas.auth import (
     RefreshResponse,
     UserResponse,
 )
-from app.schemas.custom_tour_request import (
-    CustomTourRequestCreate,
-    CustomTourRequestResponse,
-)
 from app.schemas.customer import CustomerCreate, CustomerResponse, CustomerUpdate
 from app.schemas.customer_tour import CustomerTourResponse
 from app.schemas.enquiry import EnquiryCreate, EnquiryResponse, EnquiryUpdate
@@ -56,8 +52,6 @@ __all__ = [
     "MessageResponse",
     "RefreshResponse",
     "UserResponse",
-    "CustomTourRequestCreate",
-    "CustomTourRequestResponse",
     "CustomerCreate",
     "CustomerResponse",
     "CustomerUpdate",

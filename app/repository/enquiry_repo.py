@@ -1,8 +1,9 @@
 import uuid
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
-from app.core.enums import EnquiryStatus
+from app.core.enums import EnquiryStatus, QuotationStatus
 from app.models.enquiry import Enquiry
+from app.models.quotation import Quotation
 
 
 class EnquiryRepository:
@@ -85,6 +86,51 @@ class EnquiryRepository:
         total = self.db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
         enquiries = self.db.execute(
             stmt.order_by(Enquiry.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        ).scalars().all()
+        return list(enquiries), total
+
+    def list_quotation_eligible(
+        self,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> tuple[list[Enquiry], int]:
+        latest_quotation_version = (
+            select(func.max(Quotation.version))
+            .where(Quotation.enquiry_id == Enquiry.id)
+            .correlate(Enquiry)
+            .scalar_subquery()
+        )
+        eligible_quotation = (
+            select(Quotation.id)
+            .where(
+                Quotation.enquiry_id == Enquiry.id,
+                Quotation.version == latest_quotation_version,
+                Quotation.status.in_(
+                    (
+                        QuotationStatus.REJECTED,
+                        QuotationStatus.EXPIRED,
+                        QuotationStatus.CANCELLED,
+                    )
+                ),
+            )
+            .exists()
+        )
+        has_quotation = (
+            select(Quotation.id)
+            .where(Quotation.enquiry_id == Enquiry.id)
+            .exists()
+        )
+        stmt = select(Enquiry).where(
+            or_(~has_quotation, eligible_quotation),
+        )
+
+        total = self.db.execute(
+            select(func.count()).select_from(stmt.subquery())
+        ).scalar_one()
+        enquiries = self.db.execute(
+            stmt.order_by(Enquiry.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
         ).scalars().all()
         return list(enquiries), total
 

@@ -298,11 +298,59 @@ End-user enquiry routes are grouped under `/api/v1/enquiries`:
 | :--- | :--- | :--- |
 | `POST` | `/api/v1/enquiries` | Submit an enquiry and create its sales lead. |
 | `POST` | `/api/v1/enquiries/custom` | Submit a custom tour request and create its sales lead. |
+| `PATCH` | `/api/v1/enquiries/{enquiry_id}` | Update the customer's own enquiry details, including hotel category, room type, vehicle type, traveller counts, dates, budget, and contact fields. Enquiry status is not editable here. |
 | `GET` | `/api/v1/admin/enquiries` | List enquiries with optional status and type filters. |
+| `GET` | `/api/v1/admin/quotations/enquiries` | List enquiries with no quotation or whose latest quotation is `REJECTED`, `EXPIRED`, or `CANCELLED`, regardless of enquiry status. |
 | `GET` | `/api/v1/admin/enquiries/{enquiry_id}` | Retrieve an enquiry, including custom tour and requester contact fields. |
 | `PATCH` | `/api/v1/admin/enquiries/{enquiry_id}` | Update enquiry status, subject, or message. |
 
 Fixed and custom requests accept `name` and `mobile` contact fields. They are persisted as `enquirer_name` and `enquirer_phone`, which preserves anonymous visitor contact details, and the linked `leads` row is created automatically. Custom requests are stored with `enquiry_type=CUSTOM_TOUR`.
+
+The customer PATCH route requires authentication and only updates enquiries owned by the authenticated customer. It accepts a partial JSON body; omitted fields remain unchanged. Contact names and phone numbers also accept the legacy aliases `enquirer_name`, `enquirer_phone`, and `mobile`.
+
+The quotation-enquiry endpoint is restricted to admin/staff users. An enquiry is eligible if it has no quotation, or its latest quotation was rejected, expired, or cancelled. A draft, sent, viewed, or accepted latest quotation blocks another quotation. Enquiry status does not affect eligibility. The endpoint returns the standard paginated response and accepts `page` (default `1`) and `page_size` (default and maximum `100`).
+
+### Quotation API
+
+Quotation routes are split by audience:
+
+| Audience | Base path | Authentication |
+| :--- | :--- | :--- |
+| Admin/staff | `/api/v1/admin/quotations` | Bearer JWT for an active `ADMIN` or `STAFF` account |
+| Customer | `/api/v1/quotations` | Bearer JWT for the quotation owner |
+
+#### Admin/staff quotation endpoints
+
+| Method | Path | Purpose |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/quotations` | List quotations with optional `status`, `search`, `enquiry_id`, `page`, and `page_size` filters. |
+| `GET` | `/api/v1/admin/quotations/enquiries` | List enquiries eligible for a new or revised quotation. |
+| `POST` | `/api/v1/admin/quotations` | Create a draft quotation and return the created quotation in `data`. |
+| `GET` | `/api/v1/admin/quotations/{quotation_id}` | Retrieve the full quotation. |
+| `POST` | `/api/v1/admin/quotations/{quotation_id}/versions` | Create the next version and return it in `data`. |
+| `PATCH` | `/api/v1/admin/quotations/{quotation_id}` | Partially update a draft or rejected quotation and return the updated quotation in `data`. |
+| `PATCH` | `/api/v1/admin/quotations/{quotation_id}/status` | Change the quotation status and, for selected statuses, its status timestamp. |
+| `GET` | `/api/v1/admin/quotations/{quotation_id}/pdf` | Download the quotation PDF as a protected file attachment; hotel and vehicle details are excluded. |
+| `POST` | `/api/v1/admin/quotations/{quotation_id}/send` | Email the quotation PDF and mark it as sent. |
+| `POST` | `/api/v1/admin/quotations/{quotation_id}/convert` | Convert a customer-linked quotation into an offline confirmed booking. The optional legacy `booking_type` label is ignored; the booking type is derived from the package or destination. |
+| `DELETE` | `/api/v1/admin/quotations/{quotation_id}` | Permanently delete a quotation. |
+
+Valid quotation statuses are `DRAFT`, `SENT`, `VIEWED`, `ACCEPTED`, `REJECTED`, `EXPIRED`, and `CANCELLED`. A new quotation is allowed only after the latest quotation is `REJECTED`, `EXPIRED`, or `CANCELLED`; otherwise the API returns `409 Conflict`.
+
+Quotation cost items use `item_type` values `hotel`, `transport`, `flight`, `train`, `activity`, `guide`, `permit`, `transfer`, or `other`. Hotel records may be supplied only alongside hotel items, and vehicle records only alongside `transport` or `transfer` items.
+New quotations may be saved as drafts with incomplete information. `tour_name`, `hotels`, `vehicles`, `items`, and `itinerary` are optional on creation; `save_as_draft` defaults to `true`. Hotel and vehicle details can be added through quotation updates after the matching cost items are available.
+
+The create payload requires `enquiry_id` and `tour_name`. Item totals are calculated as `unit_price * quantity` by the server. Package totals are `subtotal - discount_amount + tax_amount`, with a minimum total of zero. `subtotal`, `discount_amount`, `tax_amount`, and `total_amount` may be omitted where their defaults or recalculation rules apply.
+
+#### Customer quotation endpoints
+
+| Method | Path | Purpose |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/quotations/enquiry/{enquiry_id}` | List quotation versions for the customer's own enquiry. |
+| `POST` | `/api/v1/quotations/{quotation_id}/accept` | Accept a sent/viewed quotation and create a booking using 1-50 traveller records. |
+| `POST` | `/api/v1/quotations/{quotation_id}/reject` | Reject a quotation with a reason from 1-2000 characters. |
+
+Acceptance and rejection require the authenticated customer to own the quotation. Accepting is allowed only for `SENT` or `VIEWED` quotations; rejecting is blocked for `ACCEPTED`, `REJECTED`, and `CANCELLED` quotations.
 
 ### Promotional Contact Admin API
 

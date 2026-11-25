@@ -185,6 +185,18 @@ def _filter_schema(
         }
     schema["paths"] = paths
 
+    for path_data in schema["paths"].values():
+        for operation in path_data.values():
+            if not isinstance(operation, dict):
+                continue
+            for response in operation.get("responses", {}).values():
+                media = response.get("content", {}).get("application/json", {})
+                example = media.get("example")
+                if isinstance(example, dict) and example.get("success") is False:
+                    error = example.get("error")
+                    if isinstance(error, dict):
+                        error.setdefault("details", None)
+
     # Prune unused tags
     used_tags: set[str] = set()
     for path_data in schema["paths"].values():

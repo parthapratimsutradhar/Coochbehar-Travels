@@ -34,8 +34,26 @@ class PaginationMeta(BaseModel):
 class PaginatedResponse(BaseModel, Generic[T]):
     """Generic paginated response wrapper."""
 
-    success: bool = Field(default=True)
-    message: str = Field(default="Items fetched successfully")
-    data: list[T] = Field(..., description="List of items for the current page")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "message": "Items fetched successfully.",
+                "data": [],
+                "pagination": {
+                    "current_page": 1,
+                    "page_size": 20,
+                    "total_items": 0,
+                    "total_pages": 0,
+                    "has_next": False,
+                    "has_previous": False,
+                },
+            }
+        }
+    )
+
+    success: bool = Field(default=True, description="Always true for a successful paginated response.")
+    message: str = Field(default="Items fetched successfully.", description="Human-readable success message.")
+    data: list[T] = Field(..., description="List of resources for the current page.")
     pagination: PaginationMeta = Field(..., description="Pagination metadata")
 

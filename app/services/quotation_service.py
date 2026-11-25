@@ -19,10 +19,14 @@ from app.repository.quotation_repo import QuotationRepository
 from app.schemas.quotation import QuotationCreate, QuotationUpdate, QuotationVersionCreate
 from app.email.service import EmailService
 from app.email.templates.quotation import render_quotation_email
-from app.services.quotation_pdf_service import (
-    build_quotation_pdf,
-    generate_and_upload_quotation_pdf,
-)
+from app.services.quotation_pdf_service import build_quotation_pdf
+
+REISSUABLE_QUOTATION_STATUSES = {
+    QuotationStatus.REJECTED,
+    QuotationStatus.EXPIRED,
+    QuotationStatus.CANCELLED,
+}
+
 
 if TYPE_CHECKING:
     from app.models.booking import Booking
@@ -61,15 +65,22 @@ class QuotationService:
         if not enquiry:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enquiry not found.")
 
+        latest_quotation = self.quotation_repo.get_latest_for_enquiry(payload.enquiry_id)
+        if latest_quotation and latest_quotation.status not in REISSUABLE_QUOTATION_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A new quotation can only be created after the latest quotation is rejected, expired, or cancelled.",
+            )
+
+        hotels = payload.hotels or []
+        vehicles = payload.vehicles or []
         self._validate_trip_detail_counts(
             [item.item_type for item in payload.items],
-            len(payload.hotels),
-            len(payload.vehicles),
+            len(hotels),
+            len(vehicles),
         )
 
-        # Version calculation
-        enquiry_id = payload.enquiry_id
-        version = self.quotation_repo.get_latest_version(enquiry_id) + 1
+        version = (latest_quotation.version if latest_quotation else 0) + 1
         quotation_code = f"QT-{enquiry.enquiry_code}-V{version}"
 
         # Calculate totals from items if provided
@@ -90,7 +101,7 @@ class QuotationService:
             "variant_id": payload.variant_id,
             "departure_id": payload.departure_id,
             "destination_id": payload.destination_id,
-            "tour_name": payload.tour_name,
+            "tour_name": payload.tour_name or "Untitled quotation",
             "travel_date": payload.travel_date,
             "return_date": payload.return_date,
             "subtotal": subtotal,
@@ -109,8 +120,8 @@ class QuotationService:
         quotation = self.quotation_repo.create(
             quotation_data,
             items=items_data,
-            hotels=[hotel.model_dump() for hotel in payload.hotels],
-            vehicles=[vehicle.model_dump() for vehicle in payload.vehicles],
+            hotels=[hotel.model_dump() for hotel in hotels],
+            vehicles=[vehicle.model_dump() for vehicle in vehicles],
             itinerary=[item.model_dump() for item in payload.itinerary],
         )
 
@@ -162,10 +173,15 @@ class QuotationService:
         staff_user: Account,
     ) -> Quotation:
         previous = self.get_quotation(quotation_id)
-        if previous.status != QuotationStatus.REJECTED:
+        latest_quotation = self.quotation_repo.get_latest_for_enquiry(previous.enquiry_id)
+        if (
+            previous.status not in REISSUABLE_QUOTATION_STATUSES
+            or latest_quotation is None
+            or latest_quotation.id != previous.id
+        ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Only a rejected quotation can be revised into a new version.",
+                detail="Only the latest rejected, expired, or cancelled quotation can be revised into a new version.",
             )
         if not previous.enquiry:
             raise HTTPException(
@@ -369,8 +385,9 @@ class QuotationService:
     def delete_quotation(self, quotation_id: uuid.UUID) -> None:
         self.quotation_repo.delete(self.get_quotation(quotation_id))
 
-    async def generate_quotation_pdf(self, quotation_id: uuid.UUID) -> dict:
-        return await generate_and_upload_quotation_pdf(self.get_quotation(quotation_id))
+    def generate_quotation_pdf(self, quotation_id: uuid.UUID) -> tuple[str, bytes]:
+        quotation = self.get_quotation(quotation_id)
+        return quotation.quotation_code, build_quotation_pdf(quotation)
 
     async def email_quotation(self, quotation_id: uuid.UUID, recipient_email: str) -> None:
         quotation = self.get_quotation(quotation_id)
@@ -634,10 +651,23 @@ class QuotationService:
                 detail="Quotation must be linked to a customer account before converting to a booking.",
             )
 
+        package = self.db.get(TourPackage, quotation.package_id) if quotation.package_id else None
+        if package is None and quotation.variant_id:
+            variant = self.db.get(TourVariant, quotation.variant_id)
+            package = self.db.get(TourPackage, variant.package_id) if variant else None
+        destination = self.db.get(Destination, quotation.destination_id) if quotation.destination_id else None
+        resolved_booking_type = (
+            package.type
+            if package
+            else TourType.DOMESTIC
+            if destination is None or destination.is_domestic
+            else TourType.INTERNATIONAL
+        )
+
         return self._create_booking_from_quotation(
             quotation,
             {
-                "booking_type": booking_type,
+                "booking_type": resolved_booking_type,
                 "source": BookingSource.OFFLINE,
                 "sales_account_id": staff_user.id,
                 "status": BookingStatus.CONFIRMED,

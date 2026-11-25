@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
-from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import AliasChoices, ConfigDict, EmailStr, Field, model_validator
 from app.core.enums import CostItemType, QuotationStatus, RoomType, VehicleType
 from app.schemas.base import SchemaBase
 
@@ -105,7 +105,12 @@ class QuotationBase(SchemaBase):
     variant_id: UUID | None = None
     departure_id: UUID | None = None
     destination_id: UUID | None = None
-    tour_name: str = Field(..., min_length=1, max_length=255)
+    tour_name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=255,
+        description="Optional while the quotation is being prepared as a draft.",
+    )
     travel_date: datetime | None = None
     return_date: datetime | None = None
     subtotal: Decimal = Field(default=Decimal(0), ge=0)
@@ -121,15 +126,28 @@ class QuotationBase(SchemaBase):
 
 class QuotationCreate(QuotationBase):
     items: list[QuotationItemCreate] = Field(default_factory=list)
-    hotels: list[QuotationHotelCreate] = Field(
-        default_factory=list,
+    hotels: list[QuotationHotelCreate] | None = Field(
+        default=None,
         description="Optional details for hotel cost items; add them later when the hotel is selected.",
     )
-    vehicles: list[QuotationVehicleCreate] = Field(
-        default_factory=list,
+    vehicles: list[QuotationVehicleCreate] | None = Field(
+        default=None,
         description="Optional details for transport/transfer cost items; add them later when the vehicle is selected.",
     )
     itinerary: list[QuotationItineraryCreate] = Field(default_factory=list)
+    status: QuotationStatus = Field(
+        default=QuotationStatus.DRAFT,
+        description="Read as draft on creation; use save_as_draft for explicit draft intent.",
+    )
+    save_as_draft: bool = Field(
+        default=True,
+        description="Set true to save an incomplete quotation as a draft.",
+    )
+
+    @model_validator(mode="after")
+    def enforce_draft_creation(self):
+        self.status = QuotationStatus.DRAFT
+        return self
 
 
 class QuotationVersionCreate(SchemaBase):
@@ -266,14 +284,6 @@ class QuotationEmailRequest(SchemaBase):
     recipient_email: EmailStr
 
 
-class QuotationPdfResponse(BaseModel):
-    url: str | None = Field(
-        default=None,
-        description="Temporary URL for a quotation PDF without hotel or vehicle details.",
-    )
-    path: str | None = None
-
-
 class QuotationResponse(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -357,5 +367,8 @@ class QuotationResponse(SchemaBase):
 
 
 class QuotationConvertToBookingRequest(SchemaBase):
-    booking_type: str = "PACKAGE"
-    notes: str | None = None
+    booking_type: str = Field(
+        default="PACKAGE",
+        description="Legacy booking-category label. The booking uses the quotation package or destination tour type.",
+    )
+    notes: str | None = Field(default=None, description="Optional notes for the converted booking.")

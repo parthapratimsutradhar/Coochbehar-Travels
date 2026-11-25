@@ -290,13 +290,19 @@ def test_visitor_submits_enquiry_creates_scored_lead(client: TestClient, db_sess
     )
     assert event_res.status_code == 201
 
+    admin = Account(
+        account_code="ADM-LEADSCORE01",
+        name="Lead Score Admin",
+        role=AccountRole.ADMIN,
+        is_active=True,
+    )
+    app.dependency_overrides[get_current_admin_or_staff] = lambda: admin
     res = client.post(
-        "/api/v1/enquiries",
+        "/api/v1/admin/enquiries",
         json={
             "visitor_id": str(visitor.id),
             "name": "Jane Explorer",
             "mobile": "+919876500000",
-            "subject": "Sikkim Explorer",
             "message": "Looking for 5-day package",
             "channel": "WEBSITE",
             "hotel_category": "STANDARD",
@@ -305,18 +311,6 @@ def test_visitor_submits_enquiry_creates_scored_lead(client: TestClient, db_sess
         },
     )
     assert res.status_code == 201, res.text
-    assert res.json()["data"]["lead"]["lead_score"] == 45
-    assert res.json()["data"]["hotel_category"] == "STANDARD"
-    assert res.json()["data"]["room_type"] == "DOUBLE"
-    assert res.json()["data"]["vehicle_type"] == "6-seater"
-
-    admin = Account(
-        account_code="ADM-LEADSCORE01",
-        name="Lead Score Admin",
-        role=AccountRole.ADMIN,
-        is_active=True,
-    )
-    app.dependency_overrides[get_current_admin_or_staff] = lambda: admin
     list_res = client.get("/api/v1/admin/enquiries")
     assert list_res.status_code == 200
     assert list_res.json()["data"][0]["lead"]["lead_score"] == 45
@@ -331,55 +325,6 @@ def test_visitor_submits_enquiry_creates_scored_lead(client: TestClient, db_sess
         select(Lead).where(Lead.enquiry_id == enquiry.id)
     ).scalar_one()
     assert lead.lead_score == 45
-
-
-def test_customer_submits_custom_tour_creates_lead(client: TestClient, db_session, monkeypatch):
-    """Customer submits custom tour -> Enquiry + Lead created linked to Customer."""
-    emitted_events = []
-
-    def mock_emit_lead_created(lead):
-        emitted_events.append(("lead:created", lead.lead_code, lead.lead_score))
-
-    monkeypatch.setattr("app.api.v1.enduser.enquiries.emit_lead_created", mock_emit_lead_created)
-
-    customer = Account(
-        account_code="CUS-SCORE01",
-        name="Alice Wonderland",
-        role=AccountRole.CUSTOMER,
-        is_active=True,
-    )
-    db_session.add(customer)
-    db_session.flush()
-    profile = CustomerProfile(
-        account_id=customer.id,
-        referral_code="REF-ALICE01",
-    )
-    db_session.add(profile)
-    db_session.commit()
-    db_session.refresh(customer)
-
-    res = client.post(
-        "/api/v1/enquiries/custom",
-        json={
-            "customer_id": str(customer.id),
-            "name": "Alice Wonderland",
-            "mobile": "+919876511111",
-            "destination": "Dooars Wildlife",
-            "travel_date": "2026-11-20",
-            "pax_no": 6,
-            "no_room": 3,
-            "special_requirements": "Jeep safari included",
-            "channel": "WEBSITE",
-        },
-    )
-    assert res.status_code == 201
-
-    lead = db_session.execute(select(Lead).where(Lead.customer_id == customer.id)).scalar_one_or_none()
-    assert lead is not None
-    assert lead.customer_id == customer.id
-    # Base (20) + date (10) + dest (5) + pax (5) + phone (10) + name (5) + msg (5) = 60
-    assert lead.lead_score == 60
-    assert len(emitted_events) == 1
 
 
 # ── 4. Visitor Telemetry -> Lead Score Synchronization ────────────────

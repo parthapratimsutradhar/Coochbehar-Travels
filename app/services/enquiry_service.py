@@ -11,8 +11,7 @@ from app.models.tour_package import TourPackage
 from app.repository.customer_repo import CustomerRepository
 from app.repository.enquiry_repo import EnquiryRepository
 from app.repository.lead_repo import LeadRepository
-from app.schemas.custom_tour_request import CustomTourRequestCreate
-from app.schemas.enquiry import CustomerEnquiryUpdate, EnquiryCreate, EnquiryUpdate
+from app.schemas.enquiry import EnquiryCreate, EnquiryUpdate
 from app.services.lead_scoring_service import LeadScoringService
 from app.services.notification_service import NotificationService
 from app.services.socket_service import (
@@ -115,78 +114,6 @@ class EnquiryService:
             )
         return enquiry
 
-    async def create_custom_tour_enquiry(self, payload: CustomTourRequestCreate) -> Enquiry:
-        customer = self._resolve_customer(payload.mobile, payload.email)
-        enquiry_code = f"ENQ-{uuid.uuid4().hex[:8].upper()}"
-        adults = payload.adult_count or payload.pax_no or 1
-        rooms = payload.room_count or payload.no_room or 1
-        enquiry = self.enquiry_repo.create(
-            enquiry_code=enquiry_code,
-            visitor_id=payload.visitor_id,
-            customer_id=customer.id if customer else None,
-            enquiry_type=payload.enquiry_type or EnquiryType.CUSTOM_TOUR,
-            channel=payload.channel,
-            message=payload.special_requirements,
-            enquirer_name=payload.name,
-            enquirer_phone=payload.mobile,
-            enquirer_email=payload.email.strip().lower() if payload.email else None,
-            destination_id=payload.destination_id,
-            travel_date=payload.travel_date,
-            travel_duration_day=payload.travel_duration_day,
-            travel_duration_night=payload.travel_duration_night,
-            adult_count=adults,
-            child_count=payload.child_count or 0,
-            senior_count=payload.senior_count or 0,
-            room_count=rooms,
-            hotel_category=payload.hotel_category,
-            room_type=payload.room_type,
-            vehicle_type=payload.vehicle_type,
-            meal_plan=payload.meal_plan,
-            special_requirements=payload.special_requirements,
-        )
-
-        initial_score = self.scoring_service.calculate_initial_score(enquiry)
-        initial_score += self.scoring_service.calculate_history_score(
-            visitor_id=enquiry.visitor_id,
-            customer_id=customer.id if customer else None,
-            exclude_enquiry_id=enquiry.id,
-        )
-        initial_score = min(100, initial_score)
-        lead_code = f"LEAD-{uuid.uuid4().hex[:8].upper()}"
-        lead = self.lead_repo.create(
-            lead_code=lead_code,
-            enquiry_id=enquiry.id,
-            lead_score=initial_score,
-            status=LeadStatus.NEW,
-        )
-
-        emit_enquiry_created(enquiry)
-        emit_lead_created(lead)
-
-        enquiry_date = enquiry.created_at.isoformat() if enquiry.created_at else None
-        tour_name = f"custom tour to {payload.destination}"
-        await self.notification_service.notify_admins(
-            notification_type="ENQUIRY_CREATED",
-            title="New custom tour enquiry",
-            message=f"{payload.name or 'A customer'} enquired about {tour_name} on {enquiry_date}.",
-            data={
-                "customer_id": str(payload.customer_id) if payload.customer_id else None,
-                "customer_name": payload.name,
-                "tour_name": tour_name,
-                "enquiry_id": str(enquiry.id),
-                "enquiry_date": enquiry_date,
-            },
-        )
-        if customer:
-            await self.notification_service.notify_customer(
-            customer.id,
-                notification_type="ENQUIRY_CONFIRMED",
-                title="Enquiry received",
-                message=f"Your enquiry about {tour_name} was received. Our team will follow up with the next steps.",
-                data={"tour_name": tour_name, "enquiry_id": str(enquiry.id)},
-            )
-        return enquiry
-
     def _resolve_customer(self, mobile: str | None, email: str | None):
         if mobile:
             customer = self.customer_repo.get_by_mobile(mobile)
@@ -217,6 +144,24 @@ class EnquiryService:
         for enquiry in items:
             if enquiry.lead is None:
                 self.ensure_lead_for_enquiry(enquiry)
+        total_pages = (total + page_size - 1) // page_size if total else 0
+        return {
+            "items": items,
+            "page": page,
+            "page_size": page_size,
+            "total_items": total,
+            "total_pages": total_pages,
+        }
+
+    def list_quotation_eligible_enquiries(
+        self,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> dict:
+        items, total = self.enquiry_repo.list_quotation_eligible(
+            page=page,
+            page_size=page_size,
+        )
         total_pages = (total + page_size - 1) // page_size if total else 0
         return {
             "items": items,
@@ -283,23 +228,3 @@ class EnquiryService:
             )
         return enquiry
 
-    def update_customer_enquiry(
-        self,
-        enquiry_id: uuid.UUID,
-        customer_id: uuid.UUID,
-        payload: CustomerEnquiryUpdate,
-    ) -> Enquiry:
-        enquiry = self.get_enquiry(enquiry_id)
-        if enquiry.customer_id != customer_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enquiry not found.")
-
-        update_data = payload.model_dump(exclude_unset=True)
-        enquiry = self.enquiry_repo.update(enquiry, **update_data)
-        emit_enquiry_updated(enquiry)
-        return enquiry
-
-    def delete_customer_enquiry(self, enquiry_id: uuid.UUID, customer_id: uuid.UUID) -> None:
-        enquiry = self.get_enquiry(enquiry_id)
-        if enquiry.customer_id != customer_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enquiry not found.")
-        self.enquiry_repo.delete(enquiry)

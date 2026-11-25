@@ -24,36 +24,96 @@ class EnquiryBase(SchemaBase):
 
 
 class EnquiryCreate(SchemaBase):
-    enquiry_type: EnquiryType = EnquiryType.FIXED_TOUR
-    visitor_id: UUID | None = None
-    customer_id: UUID | None = None
-    package_id: UUID | None = None
-    variant_id: UUID | None = None
-    destination_id: UUID | None = None
-    channel: EnquiryChannel = EnquiryChannel.WEBSITE
-    message: str | None = None
-    name: str | None = Field(default=None, max_length=100)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "enquiry_type": "FIXED_TOUR",
+                    "channel": "WEBSITE",
+                    "name": "Asha Roy",
+                    "mobile": "+919876543210",
+                    "email": "asha@example.com",
+                    "destination_id": "c4e91a73-8b26-4d5f-a9c1-7e3b62d84510",
+                    "travel_date": "2026-12-10",
+                    "travel_duration_day": 5,
+                    "travel_duration_night": 4,
+                    "adult_count": 2,
+                    "child_count": 1,
+                    "senior_count": 0,
+                    "room_count": 1,
+                    "meal_plan": "ANY",
+                    "budget_min": 25000,
+                    "budget_max": 40000,
+                    "special_requirements": "Vegetarian meals preferred.",
+                },
+                {
+                    "enquiry_type": "CUSTOM_TOUR",
+                    "channel": "WHATSAPP",
+                    "name": "Rahul Sen",
+                    "mobile": "+919876543211",
+                    "destination_id": "c4e91a73-8b26-4d5f-a9c1-7e3b62d84510",
+                    "travel_date": "2026-12-20",
+                    "travel_duration_day": 4,
+                    "travel_duration_night": 3,
+                    "adult_count": 2,
+                    "message": "Please suggest a relaxed itinerary.",
+                    "special_requirements": "Prefer a private vehicle.",
+                }
+            ]
+        }
+    )
+
+    enquiry_type: EnquiryType = Field(
+        default=EnquiryType.FIXED_TOUR,
+        description="Type of trip requested: fixed tour or custom tour.",
+    )
+    visitor_id: UUID | None = Field(default=None, description="Optional visitor UUID for an anonymous enquiry.")
+    customer_id: UUID | None = Field(
+        default=None,
+        description="Optional customer UUID supplied with the request; mobile/email are used to resolve an account.",
+    )
+    package_id: UUID | None = Field(default=None, description="Tour package UUID, when the enquiry is for a package.")
+    variant_id: UUID | None = Field(default=None, description="Tour variant UUID, when applicable.")
+    destination_id: UUID | None = Field(default=None, description="Destination UUID requested by the traveller.")
+    channel: EnquiryChannel = Field(
+        default=EnquiryChannel.WEBSITE,
+        description="Channel through which the enquiry was received.",
+    )
+    message: str | None = Field(default=None, description="Free-form message submitted with the enquiry.")
+    name: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Name of the person making the enquiry.",
+    )
     mobile: str | None = Field(
         default=None,
         max_length=20,
         validation_alias=AliasChoices("phone", "mobile"),
+        description="Contact phone number. The request accepts either `mobile` or `phone`.",
     )
-    email: str | None = Field(default=None, max_length=255)
-    travel_date: date | None = None
-    travel_duration_day: int | None = Field(default=None, ge=0)
-    travel_duration_night: int | None = Field(default=None, ge=0)
-    adult_count: int | None = Field(default=None, ge=0)
-    child_count: int | None = Field(default=None, ge=0)
-    senior_count: int | None = Field(default=None, ge=0)
-    hotel_category: HotelCategory | None = None
-    room_type: RoomType | None = None
-    vehicle_type: VehicleType | None = None
-    room_count: int | None = Field(default=None, ge=0)
-    vehicle_count: int | None = Field(default=None, ge=0)
-    budget_min: float | None = Field(default=None, ge=0)
-    budget_max: float | None = Field(default=None, ge=0)
-    special_requirements: str | None = None
-    meal_plan: MealPlan | None = None
+    email: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Contact email address. A matching account may be linked to the enquiry.",
+    )
+    travel_date: date | None = Field(default=None, description="Requested travel start date (YYYY-MM-DD).")
+    travel_duration_day: int | None = Field(default=None, ge=0, description="Trip duration in days; must be non-negative.")
+    travel_duration_night: int | None = Field(default=None, ge=0, description="Trip duration in nights; must be non-negative.")
+    adult_count: int | None = Field(default=None, ge=0, description="Number of adult travellers.")
+    child_count: int | None = Field(default=None, ge=0, description="Number of child travellers.")
+    senior_count: int | None = Field(default=None, ge=0, description="Number of senior travellers.")
+    hotel_category: HotelCategory | None = Field(default=None, description="Preferred hotel category.")
+    room_type: RoomType | None = Field(default=None, description="Preferred room configuration.")
+    vehicle_type: VehicleType | None = Field(default=None, description="Preferred vehicle type.")
+    room_count: int | None = Field(default=None, ge=0, description="Number of rooms requested.")
+    vehicle_count: int | None = Field(default=None, ge=0, description="Number of vehicles requested.")
+    budget_min: float | None = Field(default=None, ge=0, description="Minimum trip budget; must be non-negative.")
+    budget_max: float | None = Field(default=None, ge=0, description="Maximum trip budget; must be non-negative.")
+    special_requirements: str | None = Field(
+        default=None,
+        description="Additional traveller, accessibility, or trip requirements.",
+    )
+    meal_plan: MealPlan | None = Field(default=None, description="Preferred meal plan.")
 
     @model_validator(mode="before")
     @classmethod
@@ -65,41 +125,23 @@ class EnquiryCreate(SchemaBase):
 
 
 class EnquiryUpdate(SchemaBase):
-    status: EnquiryStatus | None = None
-    message: str | None = None
-
-
-class CustomerEnquiryUpdate(SchemaBase):
-    package_id: UUID | None = None
-    variant_id: UUID | None = None
-    destination_id: UUID | None = None
-    message: str | None = None
-    enquirer_name: str | None = Field(default=None, max_length=100, validation_alias=AliasChoices("name", "enquirer_name"))
-    enquirer_phone: str | None = Field(
-        default=None,
-        max_length=20,
-        validation_alias=AliasChoices("phone", "mobile", "enquirer_phone"),
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"status": "IN_PROGRESS"},
+                {"message": "Customer requested a call after 6 PM."},
+            ]
+        }
     )
-    enquirer_email: str | None = Field(
+
+    status: EnquiryStatus | None = Field(
         default=None,
-        max_length=255,
-        validation_alias=AliasChoices("email", "enquirer_email"),
+        description="New enquiry status. Omit this field to keep the current status.",
     )
-    travel_date: date | None = None
-    travel_duration_day: int | None = Field(default=None, ge=0)
-    travel_duration_night: int | None = Field(default=None, ge=0)
-    adult_count: int | None = Field(default=None, ge=0)
-    child_count: int | None = Field(default=None, ge=0)
-    senior_count: int | None = Field(default=None, ge=0)
-    hotel_category: HotelCategory | None = None
-    room_type: RoomType | None = None
-    vehicle_type: VehicleType | None = None
-    room_count: int | None = Field(default=None, ge=0)
-    vehicle_count: int | None = Field(default=None, ge=0)
-    budget_min: float | None = Field(default=None, ge=0)
-    budget_max: float | None = Field(default=None, ge=0)
-    special_requirements: str | None = None
-    meal_plan: MealPlan | None = None
+    message: str | None = Field(
+        default=None,
+        description="Updated enquiry message. Omit this field to keep the current message.",
+    )
 
 
 class EnquiryResponse(EnquiryBase):
@@ -132,6 +174,10 @@ class EnquiryResponse(EnquiryBase):
     special_requirements: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class EnquiryForQuotationResponse(EnquiryResponse):
+    lead: LeadSummaryResponse | None = Field(default=None, exclude=True)
 
 
 class CustomerEnquiryResponse(EnquiryBase):

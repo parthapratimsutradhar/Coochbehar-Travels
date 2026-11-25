@@ -1204,6 +1204,102 @@ def test_admin_quotation_detail_response_contract():
         assert [entry.name for entry in response.data.items] == ["Local Guide"]
 
 
+def test_quotation_without_hotel_or_vehicle_is_visible_to_enduser(
+    client,
+    superadmin_auth_header,
+    test_customer,
+    db_session,
+):
+    enquiry = Enquiry(
+        enquiry_code="ENQ-QUOT-DRAFT-001",
+        customer_id=test_customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WHATSAPP,
+        status=EnquiryStatus.NEW,
+        enquirer_name="John Traveler",
+        enquirer_phone="+919876543210",
+        enquirer_email="john@example.com",
+    )
+    db_session.add(enquiry)
+    db_session.commit()
+    db_session.refresh(enquiry)
+
+    response = client.post(
+        "/api/v1/admin/quotations/",
+        headers=superadmin_auth_header,
+        json={"enquiry_id": str(enquiry.id)},
+    )
+
+    assert response.status_code == 201, response.text
+    data = response.json()["data"]
+    assert data["status"] == QuotationStatus.DRAFT.value
+    assert data["hotels"] == []
+    assert data["vehicles"] == []
+
+    status_response = client.patch(
+        f"/api/v1/admin/quotations/{data['id']}/status",
+        headers=superadmin_auth_header,
+        json={"status": QuotationStatus.SENT.value},
+    )
+    assert status_response.status_code == 200, status_response.text
+
+    customer_token = create_access_token(
+        subject=test_customer.id,
+        role=AccountRole.CUSTOMER.value,
+    )
+    enduser_response = client.get(
+        f"/api/v1/quotations/enquiry/{enquiry.id}",
+        headers={"Authorization": f"Bearer {customer_token}"},
+    )
+
+    assert enduser_response.status_code == 200, enduser_response.text
+    quotation = enduser_response.json()["data"][0]
+    assert quotation["status"] == QuotationStatus.SENT.value
+    assert quotation["hotels"] == []
+    assert quotation["vehicles"] == []
+
+
+def test_admin_quotation_pdf_endpoint_returns_downloadable_pdf(
+    client,
+    superadmin_auth_header,
+    test_customer,
+    db_session,
+):
+    enquiry = Enquiry(
+        enquiry_code="ENQ-QUOT-PDF-001",
+        customer_id=test_customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WHATSAPP,
+        status=EnquiryStatus.NEW,
+        enquirer_name=test_customer.name,
+        enquirer_phone=test_customer.mobile,
+        enquirer_email=test_customer.email,
+    )
+    db_session.add(enquiry)
+    db_session.commit()
+    db_session.refresh(enquiry)
+
+    create_response = client.post(
+        "/api/v1/admin/quotations/",
+        headers=superadmin_auth_header,
+        json={"enquiry_id": str(enquiry.id)},
+    )
+    assert create_response.status_code == 201, create_response.text
+    quotation = create_response.json()["data"]
+
+    pdf_response = client.get(
+        f"/api/v1/admin/quotations/{quotation['id']}/pdf",
+        headers=superadmin_auth_header,
+    )
+
+    assert pdf_response.status_code == 200, pdf_response.text
+    assert pdf_response.headers["content-type"] == "application/pdf"
+    assert pdf_response.headers["content-disposition"] == (
+        f'attachment; filename="{quotation["quotation_code"]}.pdf"'
+    )
+    assert pdf_response.content.startswith(b"%PDF-")
+
+
 def test_quotation_and_booking_pipeline(client, superadmin_auth_header, test_customer, db_session):
     enquiry = Enquiry(
         enquiry_code="ENQ-QUOT-1001",
@@ -1477,6 +1573,8 @@ def test_quotation_hotel_vehicle_details_can_be_added_after_creation(
         json={
             "enquiry_id": str(enquiry.id),
             "tour_name": "Hotel and transport details later",
+            "hotels": None,
+            "vehicles": None,
             "items": [
                 {"item_type": "hotel", "name": "Accommodation"},
                 {"item_type": "transport", "name": "Ground transport"},
@@ -1647,3 +1745,268 @@ def test_admin_quotation_update_and_status_flow(client, superadmin_auth_header, 
         json={"tour_name": "This update should be blocked"},
     )
     assert locked_update.status_code == 409, locked_update.text
+
+
+def test_admin_quotation_enquiries_only_returns_without_open_latest_quotation(
+    client,
+    superadmin_auth_header,
+    db_session,
+):
+    terminal_statuses = (
+        QuotationStatus.REJECTED,
+        QuotationStatus.EXPIRED,
+        QuotationStatus.CANCELLED,
+    )
+    eligible_enquiries = [
+        Enquiry(
+            enquiry_code=f"ENQ-QELIG-{quotation_status.value}",
+            enquiry_type=EnquiryType.FIXED_TOUR,
+            channel=EnquiryChannel.WEBSITE,
+            status=(
+                EnquiryStatus.NEW,
+                EnquiryStatus.IN_PROGRESS,
+                EnquiryStatus.QUOTED,
+            )[index],
+            enquirer_name=f"Eligible {quotation_status.value}",
+        )
+        for index, quotation_status in enumerate(terminal_statuses)
+    ]
+    no_quotation = Enquiry(
+        enquiry_code="ENQ-QELIG-NOQUOTE",
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        status=EnquiryStatus.CLOSED,
+    )
+    wrong_quotation_status = Enquiry(
+        enquiry_code="ENQ-QELIG-DRAFT",
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        status=EnquiryStatus.IN_PROGRESS,
+    )
+    sent_quotation = Enquiry(
+        enquiry_code="ENQ-QELIG-SENT",
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        status=EnquiryStatus.NEW,
+    )
+    viewed_quotation = Enquiry(
+        enquiry_code="ENQ-QELIG-VIEWED",
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        status=EnquiryStatus.NEW,
+    )
+    accepted_quotation = Enquiry(
+        enquiry_code="ENQ-QELIG-ACCEPTED",
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        status=EnquiryStatus.NEW,
+    )
+    superseded_rejection = Enquiry(
+        enquiry_code="ENQ-QELIG-SUPERSEDED",
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        status=EnquiryStatus.NEW,
+    )
+    enquiries = [
+        *eligible_enquiries,
+        no_quotation,
+        wrong_quotation_status,
+        sent_quotation,
+        viewed_quotation,
+        accepted_quotation,
+        superseded_rejection,
+    ]
+    db_session.add_all(enquiries)
+    db_session.flush()
+
+    def quotation(code, enquiry, quotation_status, version=1):
+        return Quotation(
+            quotation_code=code,
+            version=version,
+            enquiry_id=enquiry.id,
+            tour_name="Sample tour",
+            subtotal=1000,
+            discount_amount=0,
+            tax_amount=0,
+            total_amount=1000,
+            status=quotation_status,
+        )
+
+    quotation_records = [
+        quotation(
+            f"QT-QELIG-{quotation_status.value}",
+            eligible_enquiries[index],
+            quotation_status,
+        )
+        for index, quotation_status in enumerate(terminal_statuses)
+    ]
+    quotation_records.extend(
+        [
+            quotation("QT-QELIG-DRAFT", wrong_quotation_status, QuotationStatus.DRAFT),
+            quotation("QT-QELIG-SENT", sent_quotation, QuotationStatus.SENT),
+            quotation("QT-QELIG-VIEWED", viewed_quotation, QuotationStatus.VIEWED),
+            quotation("QT-QELIG-ACCEPTED", accepted_quotation, QuotationStatus.ACCEPTED),
+            quotation("QT-QELIG-SUPERSEDED-V1", superseded_rejection, QuotationStatus.REJECTED),
+            quotation("QT-QELIG-SUPERSEDED-V2", superseded_rejection, QuotationStatus.SENT, version=2),
+        ]
+    )
+    db_session.add_all(quotation_records)
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/admin/quotations/enquiries",
+        headers=superadmin_auth_header,
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["message"] == "Enquiries fetched successfully."
+    assert {item["id"] for item in payload["data"]} == {
+        str(enquiry.id) for enquiry in [*eligible_enquiries, no_quotation]
+    }
+    assert payload["pagination"] == {
+        "current_page": 1,
+        "page_size": 100,
+        "total_items": 4,
+        "total_pages": 1,
+        "has_next": False,
+        "has_previous": False,
+    }
+    assert set(payload["data"][0]) == {
+        "enquiry_type",
+        "channel",
+        "package_id",
+        "variant_id",
+        "message",
+        "id",
+        "enquiry_code",
+        "visitor_id",
+        "customer_id",
+        "destination_id",
+        "status",
+        "enquirer_name",
+        "enquirer_phone",
+        "enquirer_email",
+        "hotel_category",
+        "room_type",
+        "vehicle_type",
+        "travel_date",
+        "travel_duration_day",
+        "travel_duration_night",
+        "adult_count",
+        "child_count",
+        "senior_count",
+        "room_count",
+        "vehicle_count",
+        "meal_plan",
+        "budget_min",
+        "budget_max",
+        "special_requirements",
+        "created_at",
+        "updated_at",
+    }
+    assert "lead" not in payload["data"][0]
+
+
+def test_admin_quotation_enquiries_supports_pagination(
+    client,
+    superadmin_auth_header,
+    db_session,
+):
+    for index in range(2):
+        enquiry = Enquiry(
+            enquiry_code=f"ENQ-QPAGE-{index}",
+            enquiry_type=EnquiryType.FIXED_TOUR,
+            channel=EnquiryChannel.WEBSITE,
+            status=EnquiryStatus.NEW,
+        )
+        db_session.add(enquiry)
+        db_session.flush()
+        db_session.add(
+            Quotation(
+                quotation_code=f"QT-QPAGE-{index}",
+                version=1,
+                enquiry_id=enquiry.id,
+                tour_name="Sample tour",
+                subtotal=1000,
+                discount_amount=0,
+                tax_amount=0,
+                total_amount=1000,
+                status=QuotationStatus.REJECTED,
+            )
+        )
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/admin/quotations/enquiries?page=2&page_size=1",
+        headers=superadmin_auth_header,
+    )
+
+    assert response.status_code == 200, response.text
+    assert len(response.json()["data"]) == 1
+    assert response.json()["pagination"] == {
+        "current_page": 2,
+        "page_size": 1,
+        "total_items": 2,
+        "total_pages": 2,
+        "has_next": False,
+        "has_previous": True,
+    }
+
+
+def test_admin_cannot_create_another_quotation_until_latest_is_terminal(
+    client,
+    superadmin_auth_header,
+    db_session,
+):
+    enquiry = Enquiry(
+        enquiry_code="ENQ-QLOCK-001",
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        status=EnquiryStatus.CLOSED,
+    )
+    db_session.add(enquiry)
+    db_session.commit()
+
+    payload = {
+        "enquiry_id": str(enquiry.id),
+        "tour_name": "Quotation lock test",
+    }
+    create_response = client.post(
+        "/api/v1/admin/quotations/",
+        headers=superadmin_auth_header,
+        json=payload,
+    )
+    assert create_response.status_code == 201, create_response.text
+
+    for quotation_status in (
+        QuotationStatus.DRAFT,
+        QuotationStatus.SENT,
+        QuotationStatus.VIEWED,
+        QuotationStatus.ACCEPTED,
+    ):
+        latest = (
+            db_session.query(Quotation)
+            .filter_by(enquiry_id=enquiry.id)
+            .order_by(Quotation.version.desc())
+            .first()
+        )
+        latest.status = quotation_status
+        db_session.commit()
+
+        blocked_response = client.post(
+            "/api/v1/admin/quotations/",
+            headers=superadmin_auth_header,
+            json=payload,
+        )
+        assert blocked_response.status_code == 409, blocked_response.text
+
+    latest.status = QuotationStatus.REJECTED
+    db_session.commit()
+    retry_response = client.post(
+        "/api/v1/admin/quotations/",
+        headers=superadmin_auth_header,
+        json=payload,
+    )
+    assert retry_response.status_code == 201, retry_response.text

@@ -1,19 +1,12 @@
-import uuid
-
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_customer, get_optional_customer
+from app.api.deps import get_current_customer
 from app.db.database import get_db
 from app.core.messages.success import EnquirySuccess
 from app.models.account import Account
-from app.schemas.enquiry import (
-    CustomerEnquiryResponse,
-    CustomerEnquiryUpdate,
-    EnquiryCreate,
-    EnquiryResponse,
-)
-from app.schemas.response import ActionResponse, ErrorResponse, SuccessResponse
+from app.schemas.enquiry import CustomerEnquiryResponse
+from app.schemas.response import SuccessResponse
 from app.services.enquiry_service import EnquiryService
 
 router = APIRouter(
@@ -42,63 +35,3 @@ def list_my_enquiries(
         message=EnquirySuccess.RETRIEVED,
         data=[CustomerEnquiryResponse.model_validate(enquiry) for enquiry in enquiries],
     )
-
-
-@router.post(
-    "",
-    response_model=SuccessResponse[EnquiryResponse],
-    status_code=status.HTTP_201_CREATED,
-    summary="Submit an enquiry",
-)
-async def create_enquiry(
-    payload: EnquiryCreate,
-    current_customer: Account | None = Depends(get_optional_customer),
-    db: Session = Depends(get_db),
-) -> SuccessResponse[EnquiryResponse]:
-    enquiry = await EnquiryService(db).create_fixed_tour_enquiry(
-        payload,
-        create_lead=True,
-        trusted_customer_id=current_customer.id if current_customer else None,
-    )
-    return SuccessResponse(
-        message=EnquirySuccess.CREATED,
-        data=EnquiryResponse.model_validate(enquiry),
-    )
-
-
-@router.patch(
-    "/{enquiry_id}",
-    response_model=SuccessResponse[CustomerEnquiryResponse],
-    summary="Update my enquiry",
-)
-def update_my_enquiry(
-    enquiry_id: uuid.UUID,
-    payload: CustomerEnquiryUpdate,
-    current_customer: Account = Depends(get_current_customer),
-    db: Session = Depends(get_db),
-) -> SuccessResponse[CustomerEnquiryResponse]:
-    enquiry = EnquiryService(db).update_customer_enquiry(
-        enquiry_id,
-        current_customer.id,
-        payload,
-    )
-    return SuccessResponse(
-        message=EnquirySuccess.UPDATED,
-        data=CustomerEnquiryResponse.model_validate(enquiry),
-    )
-
-
-@router.delete(
-    "/{enquiry_id}",
-    response_model=ActionResponse,
-    responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
-    summary="Delete my enquiry",
-)
-def delete_my_enquiry(
-    enquiry_id: uuid.UUID,
-    current_customer: Account = Depends(get_current_customer),
-    db: Session = Depends(get_db),
-) -> ActionResponse:
-    EnquiryService(db).delete_customer_enquiry(enquiry_id, current_customer.id)
-    return ActionResponse(message=EnquirySuccess.DELETED)
-
