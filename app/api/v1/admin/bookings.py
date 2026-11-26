@@ -196,16 +196,21 @@ def get_booking(
     response_model=SuccessResponse[QuotationHotelResponse],
     responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
     summary="Add or update hotel details for a booking trip item",
+    description="Use trip_item_id='new' to create the first hotel trip item. Pass an existing UUID to update its details.",
 )
 def upsert_booking_hotel_details(
     booking_id: uuid.UUID,
-    trip_item_id: uuid.UUID,
+    trip_item_id: uuid.UUID | Literal["new"],
     payload: QuotationHotelCreate,
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ) -> SuccessResponse[QuotationHotelResponse]:
     del current_user
-    hotel = BookingService(db).upsert_booking_hotel_details(booking_id, trip_item_id, payload)
+    hotel = BookingService(db).upsert_booking_hotel_details(
+        booking_id,
+        None if trip_item_id == "new" else trip_item_id,
+        payload,
+    )
     return SuccessResponse(
         message="Booking hotel details saved successfully",
         data=QuotationHotelResponse.model_validate(hotel),
@@ -217,16 +222,21 @@ def upsert_booking_hotel_details(
     response_model=SuccessResponse[QuotationVehicleResponse],
     responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
     summary="Add or update vehicle details for a booking trip item",
+    description="Use trip_item_id='new' to create the first transport trip item. Pass an existing UUID to update its details.",
 )
 def upsert_booking_vehicle_details(
     booking_id: uuid.UUID,
-    trip_item_id: uuid.UUID,
+    trip_item_id: uuid.UUID | Literal["new"],
     payload: QuotationVehicleCreate,
     db: Session = Depends(get_db),
     current_user: Account = Depends(get_current_admin_or_staff),
 ) -> SuccessResponse[QuotationVehicleResponse]:
     del current_user
-    vehicle = BookingService(db).upsert_booking_vehicle_details(booking_id, trip_item_id, payload)
+    vehicle = BookingService(db).upsert_booking_vehicle_details(
+        booking_id,
+        None if trip_item_id == "new" else trip_item_id,
+        payload,
+    )
     return SuccessResponse(
         message="Booking vehicle details saved successfully",
         data=QuotationVehicleResponse.model_validate(vehicle),

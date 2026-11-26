@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.enums import BookingSource, BookingStatus, CostItemType, LeadSource, PaymentStatus, TourType
 from app.models.account import Account
 from app.models.booking import Booking
+from app.models.trip_items import TripItem
 from app.models.trip_hotel import TripHotel
 from app.models.trip_vehicle import TripVehicle
 from app.models.destination import Destination
@@ -287,14 +288,43 @@ class BookingService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
         return booking
 
+    def _create_booking_trip_item(
+        self,
+        booking: Booking,
+        item_type: CostItemType,
+        name: str,
+        quantity: int,
+    ) -> TripItem:
+        item = TripItem(
+            booking_id=booking.id,
+            item_type=item_type,
+            name=name,
+            quantity=quantity,
+            unit_price=Decimal(0),
+            total_price=Decimal(0),
+            sort_order=max((trip_item.sort_order for trip_item in booking.trip_items), default=-1) + 1,
+        )
+        self.db.add(item)
+        self.db.flush()
+        return item
+
     def upsert_booking_hotel_details(
         self,
         booking_id: uuid.UUID,
-        trip_item_id: uuid.UUID,
+        trip_item_id: uuid.UUID | None,
         payload: QuotationHotelCreate,
     ) -> TripHotel:
         booking = self.get_booking(booking_id)
-        item = next((item for item in booking.trip_items if item.id == trip_item_id), None)
+        item = (
+            self._create_booking_trip_item(
+                booking,
+                CostItemType.HOTEL,
+                payload.hotel_name,
+                payload.room_count,
+            )
+            if trip_item_id is None
+            else next((item for item in booking.trip_items if item.id == trip_item_id), None)
+        )
         if item is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip item not found.")
         if item.item_type != CostItemType.HOTEL:
@@ -319,11 +349,20 @@ class BookingService:
     def upsert_booking_vehicle_details(
         self,
         booking_id: uuid.UUID,
-        trip_item_id: uuid.UUID,
+        trip_item_id: uuid.UUID | None,
         payload: QuotationVehicleCreate,
     ) -> TripVehicle:
         booking = self.get_booking(booking_id)
-        item = next((item for item in booking.trip_items if item.id == trip_item_id), None)
+        item = (
+            self._create_booking_trip_item(
+                booking,
+                CostItemType.TRANSPORT,
+                payload.vehicle_name,
+                payload.quantity,
+            )
+            if trip_item_id is None
+            else next((item for item in booking.trip_items if item.id == trip_item_id), None)
+        )
         if item is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip item not found.")
         if item.item_type not in {CostItemType.TRANSPORT, CostItemType.TRANSFER}:

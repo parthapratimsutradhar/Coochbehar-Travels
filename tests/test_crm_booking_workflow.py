@@ -764,6 +764,59 @@ def test_booking_can_be_created_without_hotel_or_vehicle_details_then_filled_lat
     assert vehicle_voucher.headers["content-type"] == "application/pdf"
 
 
+def test_booking_hotel_and_vehicle_put_routes_create_first_trip_items(
+    client,
+    superadmin_auth_header,
+    test_customer,
+):
+    create_response = client.post(
+        "/api/v1/admin/bookings",
+        headers=superadmin_auth_header,
+        json={"customer_id": str(test_customer.id), "total_selling_price": 25000},
+    )
+    assert create_response.status_code == 201, create_response.text
+    booking_id = create_response.json()["data"]["id"]
+    assert create_response.json()["data"]["items"] == []
+
+    hotel_response = client.put(
+        f"/api/v1/admin/bookings/{booking_id}/trip-items/new/hotel",
+        headers=superadmin_auth_header,
+        json={
+            "hotel_name": "Hotel Jagdamba",
+            "check_in": "2026-12-01T00:00:00Z",
+            "check_out": "2026-12-03T00:00:00Z",
+            "nights": 2,
+            "room_count": 1,
+        },
+    )
+    vehicle_response = client.put(
+        f"/api/v1/admin/bookings/{booking_id}/trip-items/new/vehicle",
+        headers=superadmin_auth_header,
+        json={
+            "vehicle_name": "Innova",
+            "start_date": "2026-12-01T00:00:00Z",
+            "end_date": "2026-12-03T00:00:00Z",
+            "rental_minutes": 60,
+            "quantity": 1,
+        },
+    )
+
+    assert hotel_response.status_code == 200, hotel_response.text
+    assert vehicle_response.status_code == 200, vehicle_response.text
+    assert hotel_response.json()["data"]["hotel_name"] == "Hotel Jagdamba"
+    assert vehicle_response.json()["data"]["vehicle_name"] == "Innova"
+
+    detail_response = client.get(
+        f"/api/v1/admin/bookings/{booking_id}",
+        headers=superadmin_auth_header,
+    )
+    assert detail_response.status_code == 200, detail_response.text
+    items = detail_response.json()["data"]["items"]
+    assert [item["item_type"] for item in items] == ["hotel", "transport"]
+    assert items[0]["hotel"][0]["hotel_name"] == "Hotel Jagdamba"
+    assert items[1]["vehicle"][0]["vehicle_name"] == "Innova"
+
+
 def test_offline_booking_service_uses_package_id_schema_contract(db_session, test_customer, superadmin_user):
     package_id = uuid.uuid4()
     payload = OfflineBookingCreate(
