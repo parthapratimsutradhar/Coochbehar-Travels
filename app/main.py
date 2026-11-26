@@ -43,7 +43,7 @@ async def _scheduled_calendar_task(
             )
             logger.info("Next %s scheduled for %s", job_name, scheduled_time.isoformat())
             await asyncio.sleep(delay)
-            summary = await cleanup()
+            summary = await task()
             logger.info("%s completed: %s", job_name, summary)
         except asyncio.CancelledError:
             break

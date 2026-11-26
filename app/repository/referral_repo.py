@@ -43,8 +43,11 @@ class ReferralRepository:
             .first()
         )
 
-    def list_reward_candidate_ids(self) -> list[uuid.UUID]:
-        rows = (
+    def list_reward_candidate_ids(
+        self,
+        referral_id: uuid.UUID | None = None,
+    ) -> list[uuid.UUID]:
+        query = (
             self.db.query(Referral.id)
             .join(Booking, Booking.customer_id == Referral.referred_customer_id)
             .filter(
@@ -58,9 +61,10 @@ class ReferralRepository:
                     )
                 )
             )
-            .distinct()
-            .all()
         )
+        if referral_id is not None:
+            query = query.filter(Referral.id == referral_id)
+        rows = query.distinct().all()
         return [row[0] for row in rows]
 
     def get_for_reward_processing(self, referral_id: uuid.UUID) -> Referral | None:

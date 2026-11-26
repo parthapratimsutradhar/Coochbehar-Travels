@@ -326,6 +326,14 @@ class ReferralService:
         current_user: Account,
     ) -> None:
         referral = self.get_referral_or_404(referral_id)
+        if (
+            payload.status == ReferralStatus.REWARD_CREDITED
+            and referral.status != ReferralStatus.REWARD_CREDITED
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Referral rewards are credited only after approval and eligibility checks.",
+            )
         latest_history = self._latest_reward_history(referral)
         if payload.status is not None:
             referral.status = payload.status
@@ -360,9 +368,14 @@ class ReferralService:
             self._credit_referral_reward(referral, current_user.id)
             return
         self.db.commit()
+        if payload.status == ReferralStatus.REWARD_APPROVED:
+            self.process_eligible_rewards(referral_id=referral.id)
 
-    def process_eligible_rewards(self) -> dict[str, int]:
-        candidate_ids = self.repo.list_reward_candidate_ids()
+    def process_eligible_rewards(
+        self,
+        referral_id: uuid.UUID | None = None,
+    ) -> dict[str, int]:
+        candidate_ids = self.repo.list_reward_candidate_ids(referral_id=referral_id)
         credited = 0
         skipped = 0
         failed = 0
@@ -406,7 +419,11 @@ class ReferralService:
                 )
                 if referral.converted_at is None:
                     referral.converted_at = referral.booking_completed_at
-                referral.status = ReferralStatus.REWARD_ELIGIBLE
+                if referral.status != ReferralStatus.REWARD_APPROVED:
+                    referral.status = ReferralStatus.REWARD_ELIGIBLE
+                    self.db.commit()
+                    skipped += 1
+                    continue
                 self.db.commit()
 
                 self._credit_referral_reward(referral)
