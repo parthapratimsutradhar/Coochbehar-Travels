@@ -50,8 +50,9 @@ INVALID_REQUEST = documented_error_response(
     summary="List quotations for my enquiry",
     description=(
         "Returns every quotation version for an enquiry owned by the authenticated customer, "
-        "ordered by the service's current quotation order. Hotel and vehicle details are optional, "
-        "including for sent quotations; the corresponding arrays are empty when no details exist. "
+        "ordered by the service's current quotation order. Linked package, variant, and destination "
+        "names are included. Hotel and vehicle details are optional, including for sent quotations; "
+        "the corresponding arrays are empty when no details exist. "
         "Returns 404 when the enquiry does not exist or belongs to another customer."
     ),
 )
@@ -60,14 +61,20 @@ def list_enquiry_quotations(
     current_customer: Account = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ) -> SuccessResponse[list[CustomerQuotationResponse]]:
+    service = QuotationService(db)
     enquiry = EnquiryService(db).get_enquiry_by_code(enquiry_code)
     if enquiry.customer_id != current_customer.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enquiry not found.")
 
-    quotations = QuotationService(db).list_enquiry_quotations(enquiry.id)
+    quotations = service.list_enquiry_quotations(enquiry.id)
     return SuccessResponse(
         message=QuotationSuccess.RETRIEVED,
-        data=[CustomerQuotationResponse.model_validate(quotation) for quotation in quotations],
+        data=[
+            CustomerQuotationResponse.model_validate(
+                service.customer_quotation_response_data(quotation)
+            )
+            for quotation in quotations
+        ],
     )
 
 
@@ -85,8 +92,8 @@ def list_enquiry_quotations(
     summary="Get my quotation by quotation code",
     description=(
         "Returns a quotation owned by the authenticated customer, addressed by its quotation "
-        "code. Opening a sent quotation changes its status to `VIEWED`; an expired quotation "
-        "is returned as `EXPIRED`."
+        "code, including linked package, variant, and destination names. Opening a sent "
+        "quotation changes its status to `VIEWED`; an expired quotation is returned as `EXPIRED`."
     ),
 )
 def get_customer_quotation(
@@ -102,7 +109,9 @@ def get_customer_quotation(
     quotation = service.mark_quotation_viewed(quotation)
     return SuccessResponse(
         message=QuotationSuccess.RETRIEVED,
-        data=CustomerQuotationResponse.model_validate(quotation),
+        data=CustomerQuotationResponse.model_validate(
+            service.customer_quotation_response_data(quotation)
+        ),
     )
 
 

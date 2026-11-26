@@ -17,7 +17,12 @@ from app.models.tour_variant import TourVariant
 from app.repository.tour_departure_repo import TourDepartureRepository
 from app.repository.enquiry_repo import EnquiryRepository
 from app.repository.quotation_repo import QuotationRepository
-from app.schemas.quotation import QuotationCreate, QuotationUpdate, QuotationVersionCreate
+from app.schemas.quotation import (
+    QuotationCreate,
+    QuotationResponse,
+    QuotationUpdate,
+    QuotationVersionCreate,
+)
 from app.email.service import EmailService
 from app.email.templates.quotation import render_quotation_email
 from app.services.quotation_pdf_service import build_quotation_pdf
@@ -186,6 +191,50 @@ class QuotationService:
     def mark_quotation_viewed(self, quotation: Quotation) -> Quotation:
         self._apply_customer_view_status([quotation])
         return quotation
+
+    def customer_quotation_response_data(self, quotation: Quotation) -> dict:
+        variant = self.db.get(TourVariant, quotation.variant_id) if quotation.variant_id else None
+        package = self.db.get(TourPackage, quotation.package_id) if quotation.package_id else None
+        if package is None and variant is not None:
+            package = self.db.get(TourPackage, variant.package_id)
+        destination = self.db.get(Destination, quotation.destination_id) if quotation.destination_id else None
+        if destination is None and package is not None and package.destination_id is not None:
+            destination = self.db.get(Destination, package.destination_id)
+
+        items = list(quotation.items or [])
+        nested_fields = {
+            "customer",
+            "package",
+            "variant",
+            "destination",
+            "created_by",
+            "items",
+            "hotels",
+            "vehicles",
+            "itinerary",
+        }
+        data = {
+            field: getattr(quotation, field, None)
+            for field in QuotationResponse.model_fields
+            if field not in nested_fields
+        }
+        data.update(
+            customer=quotation.customer,
+            package={"name": package.title} if package is not None else None,
+            variant={"name": variant.name} if variant is not None else None,
+            destination={"name": destination.name} if destination is not None else None,
+            created_by=getattr(quotation, "created_by", None),
+            items=[
+                item
+                for item in items
+                if getattr(item, "hotel", None) is None
+                and getattr(item, "vehicle", None) is None
+            ],
+            hotels=[item.hotel for item in items if getattr(item, "hotel", None) is not None],
+            vehicles=[item.vehicle for item in items if getattr(item, "vehicle", None) is not None],
+            itinerary=list(quotation.itinerary or []),
+        )
+        return data
 
     def _apply_customer_view_status(self, quotations: list[Quotation]) -> None:
         now = datetime.now(timezone.utc)

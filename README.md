@@ -346,9 +346,10 @@ The create payload requires `enquiry_id` and `tour_name`. Item totals are calcul
 
 | Method | Path | Purpose |
 | :--- | :--- | :--- |
-| `GET` | `/api/v1/quotations/enquiry/{enquiry_id}` | List quotation versions for the customer's own enquiry. |
-| `POST` | `/api/v1/quotations/{quotation_id}/accept` | Accept a sent/viewed quotation and create a booking using 1-50 traveller records. |
-| `POST` | `/api/v1/quotations/{quotation_id}/reject` | Reject a quotation with a reason from 1-2000 characters. |
+| `GET` | `/api/v1/quotations/enquiry/{enquiry_code}` | List quotation versions for the customer's own enquiry; linked package, variant, and destination names are included. |
+| `GET` | `/api/v1/quotations/{quotation_code}` | Retrieve a quotation by code, including linked package, variant, and destination names. |
+| `POST` | `/api/v1/quotations/{quotation_code}/accept` | Accept a sent/viewed quotation and create a booking using 1-50 traveller records. |
+| `POST` | `/api/v1/quotations/{quotation_code}/reject` | Reject a quotation with a reason from 1-2000 characters. |
 
 Acceptance and rejection require the authenticated customer to own the quotation. Accepting is allowed only for `SENT` or `VIEWED` quotations; rejecting is blocked for `ACCEPTED`, `REJECTED`, and `CANCELLED` quotations.
 

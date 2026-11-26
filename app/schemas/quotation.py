@@ -228,26 +228,14 @@ class QuotationCustomerSummaryResponse(SchemaBase):
 
 
 class QuotationPackageSummaryResponse(SchemaBase):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    name: str = Field(validation_alias=AliasChoices("name", "title"))
-    description: str | None = None
+    name: str
 
 
 class QuotationVariantSummaryResponse(SchemaBase):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
     name: str
-    banner: dict[str, str | None] | None = None
-    season_name: str | None = None
 
 
 class QuotationDestinationSummaryResponse(SchemaBase):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
     name: str
 
 

@@ -27,6 +27,7 @@ from app.models.enquiry import Enquiry
 from app.models.hotel import Hotel
 from app.models.quotation import Quotation
 from app.models.tour_package import TourPackage
+from app.models.tour_variant import TourVariant
 from app.schemas.booking import (
     BookingDetailResponse,
     BookingTravelerCreate,
@@ -1331,6 +1332,90 @@ def test_quotation_without_hotel_or_vehicle_is_visible_to_enduser(
         headers={"Authorization": f"Bearer {customer_token}"},
     )
     assert id_based_response.status_code == 422
+
+
+def test_enduser_quotation_includes_linked_package_variant_and_destination(
+    client,
+    test_customer,
+    db_session,
+):
+    destination = Destination(
+        name="Thailand",
+        slug="thailand-quotation-summary",
+        is_domestic=False,
+    )
+    db_session.add(destination)
+    db_session.flush()
+    package = TourPackage(
+        tour_code="THAI-SUMMARY",
+        slug="thai-summary-package",
+        title="Thailand Highlights",
+        destination_id=destination.id,
+        type=TourType.INTERNATIONAL,
+    )
+    db_session.add(package)
+    db_session.flush()
+    variant = TourVariant(
+        package_id=package.id,
+        slug="thai-summary-variant",
+        name="Winter departure",
+        valid_from=date(2026, 12, 1),
+        valid_to=date(2027, 3, 31),
+        duration_days=8,
+        duration_nights=7,
+        list_price=1000,
+        selling_price=900,
+    )
+    db_session.add(variant)
+    db_session.flush()
+    enquiry = Enquiry(
+        enquiry_code="ENQ-SUMMARY-001",
+        customer_id=test_customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+    )
+    db_session.add(enquiry)
+    db_session.flush()
+    quotation = Quotation(
+        quotation_code="QT-SUMMARY-001",
+        version=1,
+        enquiry_id=enquiry.id,
+        customer_id=test_customer.id,
+        variant_id=variant.id,
+        tour_name="Thailand Highlights",
+        subtotal=900,
+        discount_amount=0,
+        tax_amount=0,
+        total_amount=900,
+        status=QuotationStatus.SENT,
+    )
+    db_session.add(quotation)
+    db_session.commit()
+
+    customer_token = create_access_token(
+        subject=test_customer.id,
+        role=AccountRole.CUSTOMER.value,
+    )
+    response = client.get(
+        f"/api/v1/quotations/enquiry/{enquiry.enquiry_code}",
+        headers={"Authorization": f"Bearer {customer_token}"},
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()["data"][0]
+    assert data["package"] == {"name": "Thailand Highlights"}
+    assert data["variant"] == {"name": "Winter departure"}
+    assert data["destination"] == {"name": "Thailand"}
+
+    detail_response = client.get(
+        f"/api/v1/quotations/{quotation.quotation_code}",
+        headers={"Authorization": f"Bearer {customer_token}"},
+    )
+    assert detail_response.status_code == 200, detail_response.text
+    detail_data = detail_response.json()["data"]
+    assert detail_data["package"] == {"name": "Thailand Highlights"}
+    assert detail_data["variant"] == {"name": "Winter departure"}
+    assert detail_data["destination"] == {"name": "Thailand"}
 
 
 def test_admin_quotation_pdf_endpoint_returns_downloadable_pdf(
