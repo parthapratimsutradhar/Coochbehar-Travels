@@ -36,6 +36,7 @@ from app.schemas.booking import (
 )
 from app.services.auth_service import AuthService
 from app.services.booking_service import BookingService
+from app.services.quotation_service import QuotationService
 from app.utils.security import create_access_token
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -1307,7 +1308,9 @@ def test_quotation_without_hotel_or_vehicle_is_visible_to_enduser(
 
     assert enduser_response.status_code == 200, enduser_response.text
     quotation = enduser_response.json()["data"][0]
-    assert quotation["status"] == QuotationStatus.SENT.value
+    assert quotation["status"] == QuotationStatus.VIEWED.value
+    db_session.refresh(enquiry)
+    assert enquiry.status == EnquiryStatus.QUOTED
     assert quotation["hotels"] == []
     assert quotation["vehicles"] == []
 
@@ -1775,6 +1778,8 @@ def test_admin_quotation_update_and_status_flow(client, superadmin_auth_header, 
     assert create_resp.status_code == 201, create_resp.text
     quotation = db_session.query(Quotation).order_by(Quotation.created_at.desc()).first()
     quotation_id = quotation.id
+    db_session.refresh(enquiry)
+    assert enquiry.status == EnquiryStatus.NEW
 
     update_resp = client.patch(
         f"/api/v1/admin/quotations/{quotation_id}",
@@ -1791,6 +1796,28 @@ def test_admin_quotation_update_and_status_flow(client, superadmin_auth_header, 
     )
     assert status_resp.status_code == 200, status_resp.text
     assert status_resp.json()["message"] in {"User updated successfully.", "Quotation updated successfully."}
+    db_session.refresh(enquiry)
+    assert enquiry.status == EnquiryStatus.QUOTED
+
+    for disallowed_status in (
+        QuotationStatus.VIEWED,
+        QuotationStatus.ACCEPTED,
+        QuotationStatus.REJECTED,
+        QuotationStatus.EXPIRED,
+    ):
+        disallowed_response = client.patch(
+            f"/api/v1/admin/quotations/{quotation_id}/status",
+            headers=superadmin_auth_header,
+            json={"status": disallowed_status.value},
+        )
+        assert disallowed_response.status_code == 409, disallowed_response.text
+
+    cancel_response = client.patch(
+        f"/api/v1/admin/quotations/{quotation_id}/status",
+        headers=superadmin_auth_header,
+        json={"status": QuotationStatus.CANCELLED.value},
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
 
     locked_update = client.patch(
         f"/api/v1/admin/quotations/{quotation_id}",
@@ -1798,6 +1825,131 @@ def test_admin_quotation_update_and_status_flow(client, superadmin_auth_header, 
         json={"tour_name": "This update should be blocked"},
     )
     assert locked_update.status_code == 409, locked_update.text
+
+
+def test_due_sent_quotations_expire_without_expiring_drafts_or_future_quotes(
+    test_customer,
+    db_session,
+):
+    enquiry = Enquiry(
+        enquiry_code="ENQ-EXPIRE-AUTO",
+        customer_id=test_customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+    )
+    db_session.add(enquiry)
+    db_session.flush()
+
+    cutoff = datetime(2026, 11, 26, 12, 0, tzinfo=timezone.utc)
+    quotations = [
+        Quotation(
+            quotation_code=f"QT-EXPIRE-{index}",
+            version=index,
+            enquiry_id=enquiry.id,
+            customer_id=test_customer.id,
+            tour_name="Expiry test",
+            subtotal=100,
+            discount_amount=0,
+            tax_amount=0,
+            total_amount=100,
+            status=status,
+            valid_until=valid_until,
+        )
+        for index, (status, valid_until) in enumerate(
+            (
+                (QuotationStatus.SENT, datetime(2026, 11, 26, 11, 59, tzinfo=timezone.utc)),
+                (QuotationStatus.VIEWED, datetime(2026, 11, 26, 11, 59, tzinfo=timezone.utc)),
+                (QuotationStatus.DRAFT, datetime(2026, 11, 26, 11, 59, tzinfo=timezone.utc)),
+                (QuotationStatus.SENT, datetime(2026, 11, 26, 12, 1, tzinfo=timezone.utc)),
+            ),
+            start=1,
+        )
+    ]
+    db_session.add_all(quotations)
+    db_session.commit()
+
+    expired_count = QuotationService(db_session).expire_due_quotations(now=cutoff)
+
+    assert expired_count == 2
+    for quotation, expected_status in zip(
+        quotations,
+        (
+            QuotationStatus.EXPIRED,
+            QuotationStatus.EXPIRED,
+            QuotationStatus.DRAFT,
+            QuotationStatus.SENT,
+        ),
+    ):
+        db_session.refresh(quotation)
+        assert quotation.status == expected_status
+
+
+def test_completed_quotation_booking_closes_enquiry_for_customer(
+    client,
+    test_customer,
+    superadmin_auth_header,
+    db_session,
+):
+    enquiry = Enquiry(
+        enquiry_code="ENQ-CLOSE-ON-COMPLETE",
+        customer_id=test_customer.id,
+        enquiry_type=EnquiryType.FIXED_TOUR,
+        channel=EnquiryChannel.WEBSITE,
+        status=EnquiryStatus.QUOTED,
+    )
+    db_session.add(enquiry)
+    db_session.flush()
+    quotation = Quotation(
+        quotation_code="QT-CLOSE-ON-COMPLETE",
+        version=1,
+        enquiry_id=enquiry.id,
+        customer_id=test_customer.id,
+        tour_name="Completed booking test",
+        subtotal=100,
+        discount_amount=0,
+        tax_amount=0,
+        total_amount=100,
+        status=QuotationStatus.SENT,
+    )
+    db_session.add(quotation)
+    db_session.commit()
+
+    conversion_response = client.post(
+        f"/api/v1/admin/quotations/{quotation.id}/convert",
+        headers=superadmin_auth_header,
+        json={},
+    )
+    assert conversion_response.status_code == 201, conversion_response.text
+    booking_id = conversion_response.json()["data"]["id"]
+    db_session.refresh(quotation)
+    db_session.refresh(enquiry)
+    assert quotation.status == QuotationStatus.ACCEPTED
+    assert enquiry.status == EnquiryStatus.CONVERTED
+
+    customer_token = create_access_token(
+        subject=test_customer.id,
+        role=AccountRole.CUSTOMER.value,
+    )
+    customer_quotations = client.get(
+        f"/api/v1/quotations/enquiry/{enquiry.id}",
+        headers={"Authorization": f"Bearer {customer_token}"},
+    )
+    assert customer_quotations.status_code == 200, customer_quotations.text
+    assert customer_quotations.json()["data"][0]["status"] == QuotationStatus.ACCEPTED.value
+
+    BookingService(db_session).update_booking_status(
+        uuid.UUID(booking_id),
+        BookingStatus.COMPLETED,
+    )
+    db_session.refresh(enquiry)
+    assert enquiry.status == EnquiryStatus.CLOSED
+
+    response = client.get(
+        "/api/v1/enquiries",
+        headers={"Authorization": f"Bearer {customer_token}"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["data"][0]["status"] == EnquiryStatus.CLOSED.value
 
 
 def test_admin_quotation_enquiries_only_returns_without_open_latest_quotation(

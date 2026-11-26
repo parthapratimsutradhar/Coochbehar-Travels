@@ -87,6 +87,13 @@ class QuotationRepository:
         )
         return list(self.db.execute(stmt).unique().scalars().all())
 
+    def list_expirable(self) -> list[Quotation]:
+        stmt = select(Quotation).where(
+            Quotation.status.in_((QuotationStatus.SENT, QuotationStatus.VIEWED)),
+            Quotation.valid_until.is_not(None),
+        )
+        return list(self.db.execute(stmt).scalars().all())
+
     def list_for_customer(
         self,
         customer_id: uuid.UUID,

@@ -153,9 +153,10 @@ def list_quotation_eligible_enquiries(
 		"`tour_name`, hotel details, vehicle details, cost items, and itinerary are optional. "
 		"`save_as_draft` defaults to `true`; the server generates the "
 		"quotation code and version, links it to the enquiry's customer where available, "
-		"calculates item and total values, and marks the enquiry as `QUOTED`. A new quotation "
-		"is allowed only when the enquiry has no quotation or the latest quotation is "
-		"`REJECTED`, `EXPIRED`, or `CANCELLED`. Hotel details require a `hotel` cost item and "
+		"calculates item and total values, and leaves the enquiry status unchanged until the "
+		"quotation is sent. A new quotation is allowed only when the enquiry has no quotation "
+		"or the latest quotation is `REJECTED`, `EXPIRED`, or `CANCELLED`. Hotel details require "
+		"a `hotel` cost item and "
 		"vehicle details require a `transport` or `transfer` cost item."
 	),
 )
@@ -320,9 +321,10 @@ def update_quotation(
 	},
 	summary="Update quotation status (Admin)",
 	description=(
-		"Changes a quotation status directly. Valid values are `DRAFT`, `SENT`, `VIEWED`, "
-		"`ACCEPTED`, `REJECTED`, `EXPIRED`, and `CANCELLED`. Setting `SENT`, `ACCEPTED`, or "
-		"`REJECTED` also records its corresponding status timestamp."
+		"Admins may change `DRAFT` to `SENT` or `SENT` to `CANCELLED`. The system changes "
+		"`SENT` to `VIEWED` when the customer opens the quotation and changes sent/viewed "
+		"quotations to `EXPIRED` when their validity ends. Customers change quotations to "
+		"`ACCEPTED` or `REJECTED`."
 	),
 )
 def update_quotation_status(
@@ -395,6 +397,11 @@ def download_quotation_pdf(
 			code="NOT_FOUND",
 			message="Quotation not found.",
 		),
+		409: documented_error_response(
+			description="Only a draft quotation can be sent.",
+			code="CONFLICT",
+			message="Admins can only send draft quotations or cancel sent quotations.",
+		),
 		422: INVALID_REQUEST,
 	},
 	summary="Email a quotation to its customer (Admin)",
@@ -437,11 +444,12 @@ async def send_quotation(
 		),
 		422: INVALID_REQUEST,
 	},
-	summary="Convert an accepted quotation to a booking (Admin)",
+	summary="Convert a quotation to a booking (Admin)",
 	description=(
 		"Converts a customer-linked quotation into an offline confirmed booking, copying "
-		"quotation, package, cost-item, hotel, vehicle, and itinerary details. The optional "
-		"`booking_type` and `notes` fields customize the new booking."
+		"quotation, package, cost-item, hotel, vehicle, and itinerary details. The quotation "
+		"is marked `ACCEPTED` and its enquiry `CONVERTED`. The optional `booking_type` and "
+		"`notes` fields customize the new booking."
 	),
 )
 def convert_quotation(

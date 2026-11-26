@@ -52,6 +52,18 @@ async def _scheduled_calendar_task(
             await asyncio.sleep(60)
 
 
+async def _scheduled_interval_task(job_name: str, task, interval_seconds: int) -> None:
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            summary = await task()
+            logger.info("%s completed: %s", job_name, summary)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception("Scheduled %s task error", job_name)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from app.services.cdn_service import check_antivirus_available
@@ -65,6 +77,7 @@ async def lifespan(app: FastAPI):
 
     from app.scheduler.cleanup_service import run_analytics_cleanup, run_cleanup
     from app.scheduler.booking_document_cleanup import run_booking_document_cleanup
+    from app.scheduler.quotation_expiry import run_quotation_expiry_check
     from app.scheduler.referral_rewards import run_referral_reward_check
 
     tasks = [
@@ -102,6 +115,13 @@ async def lifespan(app: FastAPI):
                 1,
                 4,
                 0,
+            )
+        ),
+        asyncio.create_task(
+            _scheduled_interval_task(
+                "quotation expiry check",
+                run_quotation_expiry_check,
+                60,
             )
         ),
     ]

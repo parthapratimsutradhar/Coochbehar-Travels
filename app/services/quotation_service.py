@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.enums import BookingSource, BookingStatus, CostItemType, EnquiryStatus, QuotationStatus, TourType
 from app.models.account import Account
 from app.models.destination import Destination
+from app.models.enquiry import Enquiry
 from app.models.quotation import Quotation
 from app.models.tour_package import TourPackage
 from app.models.tour_variant import TourVariant
@@ -20,6 +21,7 @@ from app.schemas.quotation import QuotationCreate, QuotationUpdate, QuotationVer
 from app.email.service import EmailService
 from app.email.templates.quotation import render_quotation_email
 from app.services.quotation_pdf_service import build_quotation_pdf
+from app.services.socket_service import emit_enquiry_status_updated
 
 REISSUABLE_QUOTATION_STATUSES = {
     QuotationStatus.REJECTED,
@@ -125,9 +127,6 @@ class QuotationService:
             itinerary=[item.model_dump() for item in payload.itinerary],
         )
 
-        if enquiry:
-            self.enquiry_repo.update_status(enquiry, EnquiryStatus.QUOTED)
-
         return quotation
 
     def get_quotation(self, quotation_id: uuid.UUID) -> Quotation:
@@ -161,7 +160,24 @@ class QuotationService:
         }
 
     def list_enquiry_quotations(self, enquiry_id: uuid.UUID) -> list[Quotation]:
-        return self.quotation_repo.list_for_enquiry(enquiry_id)
+        quotations = self.quotation_repo.list_for_enquiry(enquiry_id)
+        now = datetime.now(timezone.utc)
+        changed = False
+        for quotation in quotations:
+            if (
+                quotation.status in {QuotationStatus.SENT, QuotationStatus.VIEWED}
+                and self._is_past_validity(quotation, now)
+            ):
+                quotation.status = QuotationStatus.EXPIRED
+                changed = True
+            elif quotation.status == QuotationStatus.SENT:
+                quotation.status = QuotationStatus.VIEWED
+                changed = True
+        if changed:
+            self.db.commit()
+            for quotation in quotations:
+                self.db.refresh(quotation)
+        return quotations
 
     def list_customer_quotations(self, customer_id: uuid.UUID, skip: int = 0, limit: int = 50) -> list[Quotation]:
         return self.quotation_repo.list_for_customer(customer_id, skip=skip, limit=limit)
@@ -372,15 +388,75 @@ class QuotationService:
         )
         return self.get_quotation(quotation_id)
 
+    @staticmethod
+    def _validate_admin_status_change(
+        quotation: Quotation,
+        new_status: QuotationStatus,
+    ) -> None:
+        allowed_transitions = {
+            (QuotationStatus.DRAFT, QuotationStatus.SENT),
+            (QuotationStatus.SENT, QuotationStatus.CANCELLED),
+        }
+        if (quotation.status, new_status) not in allowed_transitions:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Admins can only send draft quotations or cancel sent quotations.",
+            )
+
     def update_quotation_status(self, quotation_id: uuid.UUID, status: QuotationStatus) -> Quotation:
         quotation = self.get_quotation(quotation_id)
+        self._validate_admin_status_change(quotation, status)
+        enquiry = None
+        previous_enquiry_status = None
         if status == QuotationStatus.SENT:
             quotation.sent_at = datetime.now(timezone.utc)
-        elif status == QuotationStatus.ACCEPTED:
-            quotation.accepted_at = datetime.now(timezone.utc)
-        elif status == QuotationStatus.REJECTED:
-            quotation.rejected_at = datetime.now(timezone.utc)
-        return self.quotation_repo.update_status(quotation, status)
+            enquiry = self.db.get(Enquiry, quotation.enquiry_id)
+            if (
+                enquiry is not None
+                and enquiry.status not in {
+                    EnquiryStatus.CONVERTED,
+                    EnquiryStatus.CANCELLED,
+                    EnquiryStatus.CLOSED,
+                }
+            ):
+                previous_enquiry_status = enquiry.status
+                enquiry.status = EnquiryStatus.QUOTED
+
+        updated = self.quotation_repo.update_status(quotation, status)
+        if enquiry is not None and previous_enquiry_status is not None:
+            emit_enquiry_status_updated(
+                enquiry,
+                previous_status=previous_enquiry_status.value,
+                new_status=EnquiryStatus.QUOTED.value,
+            )
+        return updated
+
+    @staticmethod
+    def _is_past_validity(quotation: Quotation, now: datetime) -> bool:
+        if quotation.valid_until is None:
+            return False
+        valid_until = quotation.valid_until
+        if valid_until.tzinfo is None:
+            valid_until = valid_until.replace(tzinfo=timezone.utc)
+        else:
+            valid_until = valid_until.astimezone(timezone.utc)
+        return valid_until <= now
+
+    def expire_due_quotations(self, now: datetime | None = None) -> int:
+        current_time = now or datetime.now(timezone.utc)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+        else:
+            current_time = current_time.astimezone(timezone.utc)
+
+        expired_count = 0
+        for quotation in self.quotation_repo.list_expirable():
+            if self._is_past_validity(quotation, current_time):
+                quotation.status = QuotationStatus.EXPIRED
+                expired_count += 1
+        if expired_count:
+            self.db.commit()
+        return expired_count
 
     def delete_quotation(self, quotation_id: uuid.UUID) -> None:
         self.quotation_repo.delete(self.get_quotation(quotation_id))
@@ -391,6 +467,7 @@ class QuotationService:
 
     async def email_quotation(self, quotation_id: uuid.UUID, recipient_email: str) -> None:
         quotation = self.get_quotation(quotation_id)
+        self._validate_admin_status_change(quotation, QuotationStatus.SENT)
         customer_name = quotation.customer.name if quotation.customer else "Customer"
         body, html_body = render_quotation_email(
             customer_name,
@@ -506,19 +583,41 @@ class QuotationService:
             }
             for day in quotation.itinerary or []
         ]
-        booking = BookingRepository(self.db).create(
-            booking_data,
-            travellers=travellers,
-            items=items,
-            hotels=hotels,
-            vehicles=vehicles,
-            itinerary=itinerary,
-            commit=False,
-        )
-        from app.services.tour_points_service import TourPointsService
-        TourPointsService(self.db).award_booking_points(booking)
-        self.db.commit()
-        self.db.refresh(booking)
+        enquiry = self.db.get(Enquiry, quotation.enquiry_id) if quotation.enquiry_id else None
+        previous_enquiry_status = enquiry.status if enquiry else None
+        if booking_data["status"] == BookingStatus.CONFIRMED:
+            quotation.status = QuotationStatus.ACCEPTED
+            quotation.accepted_at = quotation.accepted_at or datetime.now(timezone.utc)
+        if enquiry is not None:
+            enquiry.status = EnquiryStatus.CONVERTED
+
+        try:
+            booking = BookingRepository(self.db).create(
+                booking_data,
+                travellers=travellers,
+                items=items,
+                hotels=hotels,
+                vehicles=vehicles,
+                itinerary=itinerary,
+                commit=False,
+            )
+            from app.services.tour_points_service import TourPointsService
+            TourPointsService(self.db).award_booking_points(booking)
+            self.db.commit()
+            self.db.refresh(booking)
+        except Exception:
+            self.db.rollback()
+            raise
+
+        if (
+            enquiry is not None
+            and previous_enquiry_status != EnquiryStatus.CONVERTED
+        ):
+            emit_enquiry_status_updated(
+                enquiry,
+                previous_status=previous_enquiry_status.value,
+                new_status=EnquiryStatus.CONVERTED.value,
+            )
         return booking
 
     def _resolve_quotation_departure_id(
@@ -566,6 +665,8 @@ class QuotationService:
         if quotation.customer_id != customer.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only accept your own quotation.")
 
+        self.expire_due_quotations()
+        self.db.refresh(quotation)
         if quotation.status not in {QuotationStatus.SENT, QuotationStatus.VIEWED}:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -623,7 +724,9 @@ class QuotationService:
         if quotation.customer_id != customer.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only reject your own quotation.")
 
-        if quotation.status in {QuotationStatus.ACCEPTED, QuotationStatus.REJECTED, QuotationStatus.CANCELLED}:
+        self.expire_due_quotations()
+        self.db.refresh(quotation)
+        if quotation.status not in {QuotationStatus.SENT, QuotationStatus.VIEWED}:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="This quotation can no longer be rejected.",
@@ -641,9 +744,6 @@ class QuotationService:
         notes: str | None = None,
     ) -> Booking:
         quotation = self.get_quotation(quotation_id)
-        if quotation.status != QuotationStatus.ACCEPTED:
-            # Allow conversion with a note if admin chooses
-            pass
 
         if not quotation.customer_id:
             raise HTTPException(

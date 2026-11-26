@@ -4,9 +4,10 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.enums import BookingSource, BookingStatus, CostItemType, LeadSource, PaymentStatus, TourType
+from app.core.enums import BookingSource, BookingStatus, CostItemType, EnquiryStatus, LeadSource, PaymentStatus, TourType
 from app.models.account import Account
 from app.models.booking import Booking
+from app.models.enquiry import Enquiry
 from app.models.trip_items import TripItem
 from app.models.trip_hotel import TripHotel
 from app.models.trip_vehicle import TripVehicle
@@ -14,6 +15,7 @@ from app.models.destination import Destination
 from app.repository.booking_repo import BookingRepository
 from app.repository.customer_repo import CustomerRepository
 from app.services.financial_service import FinancialService
+from app.services.socket_service import emit_enquiry_status_updated
 from app.email.service import EmailService
 from app.email.templates.booking import render_booking_email
 from app.services.booking_pdf_service import (
@@ -464,6 +466,8 @@ class BookingService:
         booking = self.booking_repo.get_for_update(booking_id)
         if booking is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
+        enquiry = None
+        previous_enquiry_status = None
         try:
             self.booking_repo.update_status(
                 booking,
@@ -472,16 +476,27 @@ class BookingService:
                 changed_by_id=changed_by_id,
                 commit=False,
             )
+            if new_status == BookingStatus.COMPLETED and booking.enquiry_id is not None:
+                enquiry = self.db.get(Enquiry, booking.enquiry_id)
+                if enquiry is not None and enquiry.status != EnquiryStatus.CLOSED:
+                    previous_enquiry_status = enquiry.status
+                    enquiry.status = EnquiryStatus.CLOSED
             from app.services.tour_points_service import TourPointsService
             points_service = TourPointsService(self.db)
             points_service.award_booking_points(booking)
             points_service.reverse_booking_points(booking)
             self.db.commit()
             self.db.refresh(booking)
-            return booking
         except Exception:
             self.db.rollback()
             raise
+        if enquiry is not None and previous_enquiry_status is not None:
+            emit_enquiry_status_updated(
+                enquiry,
+                previous_status=previous_enquiry_status.value,
+                new_status=EnquiryStatus.CLOSED.value,
+            )
+        return booking
 
     def delete_booking(self, booking_id: uuid.UUID) -> None:
         booking = self.booking_repo.get_for_update(booking_id)
