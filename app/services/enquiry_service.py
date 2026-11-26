@@ -209,6 +209,12 @@ class EnquiryService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enquiry not found.")
         return enquiry
 
+    def get_enquiry_by_code(self, enquiry_code: str) -> Enquiry:
+        enquiry = self.enquiry_repo.get_by_code(enquiry_code)
+        if not enquiry:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enquiry not found.")
+        return enquiry
+
     def update_enquiry_status(self, enquiry_id: uuid.UUID, new_status: EnquiryStatus) -> Enquiry:
         enquiry = self.get_enquiry(enquiry_id)
         return self.enquiry_repo.update_status(enquiry, new_status)

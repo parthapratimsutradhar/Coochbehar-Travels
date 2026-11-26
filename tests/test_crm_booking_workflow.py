@@ -1301,18 +1301,36 @@ def test_quotation_without_hotel_or_vehicle_is_visible_to_enduser(
         subject=test_customer.id,
         role=AccountRole.CUSTOMER.value,
     )
+    quotation_code = data["quotation_code"]
+    detail_response = client.get(
+        f"/api/v1/quotations/{quotation_code}",
+        headers={"Authorization": f"Bearer {customer_token}"},
+    )
+    assert detail_response.status_code == 200, detail_response.text
+    detail_data = detail_response.json()["data"]
+    assert detail_data["quotation_code"] == quotation_code
+    assert "id" not in detail_data
+
     enduser_response = client.get(
-        f"/api/v1/quotations/enquiry/{enquiry.id}",
+        f"/api/v1/quotations/enquiry/{enquiry.enquiry_code}",
         headers={"Authorization": f"Bearer {customer_token}"},
     )
 
     assert enduser_response.status_code == 200, enduser_response.text
     quotation = enduser_response.json()["data"][0]
+    assert quotation["quotation_code"] == quotation_code
+    assert "id" not in quotation
     assert quotation["status"] == QuotationStatus.VIEWED.value
     db_session.refresh(enquiry)
     assert enquiry.status == EnquiryStatus.QUOTED
     assert quotation["hotels"] == []
     assert quotation["vehicles"] == []
+
+    id_based_response = client.get(
+        f"/api/v1/quotations/enquiry/{enquiry.id}",
+        headers={"Authorization": f"Bearer {customer_token}"},
+    )
+    assert id_based_response.status_code == 422
 
 
 def test_admin_quotation_pdf_endpoint_returns_downloadable_pdf(
@@ -1518,7 +1536,7 @@ def test_customer_can_reject_owned_sent_quotation_with_reason(client, test_custo
     headers = {"Authorization": f"Bearer {token}"}
     reason = "  The travel dates do not work for me.  "
     response = client.post(
-        f"/api/v1/quotations/{quotations[0].id}/reject",
+        f"/api/v1/quotations/{quotations[0].quotation_code}/reject",
         headers=headers,
         json={"reason": reason},
     )
@@ -1531,14 +1549,14 @@ def test_customer_can_reject_owned_sent_quotation_with_reason(client, test_custo
     assert quotations[0].rejected_at is not None
 
     foreign_response = client.post(
-        f"/api/v1/quotations/{quotations[1].id}/reject",
+        f"/api/v1/quotations/{quotations[1].quotation_code}/reject",
         headers=headers,
         json={"reason": "Not mine."},
     )
     assert foreign_response.status_code == 403
 
     invalid_reason_response = client.post(
-        f"/api/v1/quotations/{quotations[1].id}/reject",
+        f"/api/v1/quotations/{quotations[1].quotation_code}/reject",
         headers=headers,
         json={"reason": "   "},
     )
@@ -1578,7 +1596,7 @@ def test_customer_accepts_quotation_with_traveller_form(client, test_customer, d
 
     token = create_access_token(subject=test_customer.id, role=AccountRole.CUSTOMER.value)
     response = client.post(
-        f"/api/v1/quotations/{quotation.id}/accept",
+        f"/api/v1/quotations/{quotation.quotation_code}/accept",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "travellers": [
@@ -1891,7 +1909,7 @@ def test_completed_quotation_booking_closes_enquiry_for_customer(
     db_session,
 ):
     enquiry = Enquiry(
-        enquiry_code="ENQ-CLOSE-ON-COMPLETE",
+        enquiry_code="ENQ-CLOSE-001",
         customer_id=test_customer.id,
         enquiry_type=EnquiryType.FIXED_TOUR,
         channel=EnquiryChannel.WEBSITE,
@@ -1931,7 +1949,7 @@ def test_completed_quotation_booking_closes_enquiry_for_customer(
         role=AccountRole.CUSTOMER.value,
     )
     customer_quotations = client.get(
-        f"/api/v1/quotations/enquiry/{enquiry.id}",
+        f"/api/v1/quotations/enquiry/{enquiry.enquiry_code}",
         headers={"Authorization": f"Bearer {customer_token}"},
     )
     assert customer_quotations.status_code == 200, customer_quotations.text

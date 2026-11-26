@@ -135,6 +135,25 @@ class QuotationService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found.")
         return q
 
+    def get_quotation_by_code(self, quotation_code: str) -> Quotation:
+        quotation = self.quotation_repo.get_by_code(quotation_code)
+        if not quotation:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found.")
+        return quotation
+
+    def get_quotation_by_reference(self, quotation_reference: str) -> Quotation:
+        quotation = self.quotation_repo.get_by_code(quotation_reference)
+        if quotation is None:
+            try:
+                quotation_id = uuid.UUID(quotation_reference)
+            except ValueError:
+                quotation_id = None
+            if quotation_id is not None:
+                quotation = self.quotation_repo.get_by_id(quotation_id)
+        if not quotation:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found.")
+        return quotation
+
     def list_all_quotations(
         self,
         page: int = 1,
@@ -161,23 +180,30 @@ class QuotationService:
 
     def list_enquiry_quotations(self, enquiry_id: uuid.UUID) -> list[Quotation]:
         quotations = self.quotation_repo.list_for_enquiry(enquiry_id)
+        self._apply_customer_view_status(quotations)
+        return quotations
+
+    def mark_quotation_viewed(self, quotation: Quotation) -> Quotation:
+        self._apply_customer_view_status([quotation])
+        return quotation
+
+    def _apply_customer_view_status(self, quotations: list[Quotation]) -> None:
         now = datetime.now(timezone.utc)
-        changed = False
+        changed_quotations = []
         for quotation in quotations:
             if (
                 quotation.status in {QuotationStatus.SENT, QuotationStatus.VIEWED}
                 and self._is_past_validity(quotation, now)
             ):
                 quotation.status = QuotationStatus.EXPIRED
-                changed = True
+                changed_quotations.append(quotation)
             elif quotation.status == QuotationStatus.SENT:
                 quotation.status = QuotationStatus.VIEWED
-                changed = True
-        if changed:
+                changed_quotations.append(quotation)
+        if changed_quotations:
             self.db.commit()
-            for quotation in quotations:
+            for quotation in changed_quotations:
                 self.db.refresh(quotation)
-        return quotations
 
     def list_customer_quotations(self, customer_id: uuid.UUID, skip: int = 0, limit: int = 50) -> list[Quotation]:
         return self.quotation_repo.list_for_customer(customer_id, skip=skip, limit=limit)

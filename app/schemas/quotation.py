@@ -357,6 +357,10 @@ class QuotationResponse(SchemaBase):
         return data
 
 
+class CustomerQuotationResponse(QuotationResponse):
+    id: UUID = Field(exclude=True)
+
+
 class QuotationConvertToBookingRequest(SchemaBase):
     booking_type: str = Field(
         default="PACKAGE",

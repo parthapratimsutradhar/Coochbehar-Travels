@@ -54,6 +54,8 @@ class QuotationRepository:
             .options(
                 joinedload(Quotation.items).joinedload(TripItem.hotel),
                 joinedload(Quotation.items).joinedload(TripItem.vehicle),
+                joinedload(Quotation.customer),
+                joinedload(Quotation.enquiry),
                 joinedload(Quotation.itinerary),
             )
             .where(Quotation.quotation_code == quotation_code)
