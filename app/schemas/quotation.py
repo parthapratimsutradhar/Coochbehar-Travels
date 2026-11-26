@@ -135,19 +135,10 @@ class QuotationCreate(QuotationBase):
         description="Optional details for transport/transfer cost items; add them later when the vehicle is selected.",
     )
     itinerary: list[QuotationItineraryCreate] = Field(default_factory=list)
-    status: QuotationStatus = Field(
-        default=QuotationStatus.DRAFT,
-        description="Read as draft on creation; use save_as_draft for explicit draft intent.",
-    )
     save_as_draft: bool = Field(
         default=True,
         description="Set true to save an incomplete quotation as a draft.",
     )
-
-    @model_validator(mode="after")
-    def enforce_draft_creation(self):
-        self.status = QuotationStatus.DRAFT
-        return self
 
 
 class QuotationVersionCreate(SchemaBase):

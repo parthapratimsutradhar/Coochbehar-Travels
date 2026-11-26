@@ -29,7 +29,7 @@ def test_draft_quotation_create_contract_allows_incomplete_details():
         }
     )
 
-    assert payload.status.value == "DRAFT"
+    assert "status" not in QuotationCreate.model_fields
     assert payload.save_as_draft is True
     assert payload.tour_name is None
     assert payload.hotels is None
